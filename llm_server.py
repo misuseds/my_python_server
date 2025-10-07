@@ -112,14 +112,17 @@ class LLMService:
 # 创建 LLMService 实例
 llm_service = LLMService()
 
-@app.route('/chat', methods=['POST'])
+@app.route('/chat', methods=['GET'])
 def chat_endpoint():
     try:
         logger.info("收到聊天请求")
-        # 从请求中获取 messages
-        data = request.get_json()
-        messages = data.get('messages', [])
-        tools = data.get('tools', None)
+        # 从查询参数中获取 messages 和 tools
+        messages_json = request.args.get('messages', '[]')
+        tools_json = request.args.get('tools', None)
+        
+        # 解析 JSON 字符串
+        messages = json.loads(messages_json) if messages_json else []
+        tools = json.loads(tools_json) if tools_json else None
         
         logger.debug(f"请求参数 - 消息数量: {len(messages)}, 工具数量: {len(tools) if tools else 0}")
         
@@ -127,6 +130,9 @@ def chat_endpoint():
         result = llm_service.create(messages, tools)
         logger.info("聊天请求处理完成")
         return jsonify(result)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON解析失败: {str(e)}")
+        return jsonify({"error": f"JSON解析失败: {str(e)}"}), 400
     except Exception as e:
         logger.error(f"聊天请求处理失败: {str(e)}")
         return jsonify({"error": str(e)}), 500

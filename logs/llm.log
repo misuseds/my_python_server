@@ -1,0 +1,16 @@
+INFO:__main__:LLM服务初始化完成，模型: deepseek-chat
+INFO:__main__:启动LLM API服务...
+INFO:__main__:访问端口: 5003
+ * Serving Flask app 'llm_server'
+ * Debug mode: off
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5003
+ * Running on http://192.168.10.3:5003
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [07/Oct/2025 11:40:03] "GET /chat?messages=[{"role":"user","content":"你好"}]&tools=null HTTP/1.1" 200 -
