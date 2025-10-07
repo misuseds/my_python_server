@@ -1,0 +1,11 @@
+{
+    "configurations": [
+        {
+            "name": "启动所有服务",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal"
+        }
+    ]
+}

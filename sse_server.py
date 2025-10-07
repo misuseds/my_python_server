@@ -31,11 +31,12 @@ async def read_excel_data(filepath, sheet_name=None):
                     "preview_only": True
                 }
             )
+            print("已读取数据：", result)
             # 将结果转换为可序列化的格式
             return convert_result_to_serializable(result)
 
 def convert_result_to_serializable(result):
-    """将 CallToolResult 转换为可序列化的字典格式"""
+    """将 CallToolResult 转换为可序列化的字典格式，并避免重复内容"""
     if hasattr(result, '__dict__'):
         # 如果结果对象有 __dict__ 属性，尝试转换其属性
         serializable = {}
@@ -49,6 +50,22 @@ def convert_result_to_serializable(result):
             else:
                 # 对于其他对象，转换为字符串表示
                 serializable[key] = str(value)
+        
+        # 特殊处理 content 和 structuredContent 字段，避免重复数据
+        if 'content' in serializable and 'structuredContent' in serializable:
+            # 如果 structuredContent 中的 result 与 content 的 text 相同，则移除其中一个
+            if (isinstance(serializable['content'], list) and 
+                len(serializable['content']) > 0 and
+                isinstance(serializable['content'][0], dict) and
+                'text' in serializable['content'][0] and
+                isinstance(serializable['structuredContent'], dict) and
+                'result' in serializable['structuredContent']):
+                
+                # 比较内容是否重复
+                if serializable['content'][0]['text'] == serializable['structuredContent']['result']:
+                    # 移除重复的 structuredContent，只保留 content
+                    del serializable['structuredContent']
+        
         return serializable
     else:
         return str(result)

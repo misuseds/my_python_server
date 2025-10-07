@@ -55,6 +55,12 @@ def start_servers():
             "command": "micromambavenv\\python llm_server.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/llm.log"
+        },
+        {
+            "name": "Thick Part JSON Server",
+            "command": "micromambavenv\\python get_thick_part_json.py",
+            "cwd": "E:\\code\\my_python_server",
+            "log_file": "logs/thick_part.log"
         }
     ]
     

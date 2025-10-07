@@ -1,4 +1,3 @@
-# llm_server.py
 import os
 from dotenv import load_dotenv
 import json
@@ -112,17 +111,29 @@ class LLMService:
 # 创建 LLMService 实例
 llm_service = LLMService()
 
-@app.route('/chat', methods=['GET'])
+@app.route('/chat', methods=['GET', 'POST'])
 def chat_endpoint():
     try:
         logger.info("收到聊天请求")
-        # 从查询参数中获取 messages 和 tools
-        messages_json = request.args.get('messages', '[]')
-        tools_json = request.args.get('tools', None)
         
-        # 解析 JSON 字符串
-        messages = json.loads(messages_json) if messages_json else []
-        tools = json.loads(tools_json) if tools_json else None
+        if request.method == 'GET':
+            # 从查询参数中获取 messages 和 tools
+            messages_json = request.args.get('messages', '[]')
+            tools_json = request.args.get('tools', None)
+            
+            # 解析 JSON 字符串
+            messages = json.loads(messages_json) if messages_json else []
+            tools = json.loads(tools_json) if tools_json else None
+            
+        elif request.method == 'POST':
+            # 从请求体中获取数据
+            data = request.get_json()
+            if not data:
+                logger.error("POST请求缺少JSON数据")
+                return jsonify({"error": "请求体必须包含JSON数据"}), 400
+                
+            messages = data.get('messages', [])
+            tools = data.get('tools', None)
         
         logger.debug(f"请求参数 - 消息数量: {len(messages)}, 工具数量: {len(tools) if tools else 0}")
         

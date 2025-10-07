@@ -1,0 +1,80 @@
+{
+  "groups": [
+    {
+      "thickness": "14mm",
+      "parts": [
+        {
+          "name": "K-1",
+          "thickness": "14mm"
+        }
+      ]
+    },
+    {
+      "thickness": "6mm",
+      "parts": [
+        {
+          "name": "K-2",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-3",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-4",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-5",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-6",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-7",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-8",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-9",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-10",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-11",
+          "thickness": "6mm"
+        },
+        {
+          "name": "S-1",
+          "thickness": "6mm"
+        }
+      ]
+    },
+    {
+      "thickness": "4mm",
+      "parts": [
+        {
+          "name": "K-12",
+          "thickness": "4mm"
+        }
+      ]
+    },
+    {
+      "thickness": "6mm(BLL)",
+      "parts": [
+        {
+          "name": "L-1",
+          "thickness": "6mm"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+ * Serving Flask app 'get_thick_part_json'
+ * Debug mode: on
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://192.168.10.3:5001
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: {
+  "groups": [
+    {
+      "thickness": "14mm",
+      "parts": [
+        {
+          "name": "K-1",
+          "thickness": "14mm"
+        }
+      ]
+    },
+    {
+      "thickness": "6mm",
+      "parts": [
+        {
+          "name": "K-2",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-3",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-4",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-5",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-6",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-7",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-8",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-9",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-10",
+          "thickness": "6mm"
+        },
+        {
+          "name": "K-11",
+          "thickness": "6mm"
+        },
+        {
+          "name": "S-1",
+          "thickness": "6mm"
+        }
+      ]
+    },
+    {
+      "thickness": "4mm",
+      "parts": [
+        {
+          "name": "K-12",
+          "thickness": "4mm"
+        }
+      ]
+    },
+    {
+      "thickness": "6mm(BLL)",
+      "parts": [
+        {
+          "name": "L-1",
+          "thickness": "6mm"
+        }
+      ]
+    }
+  ]
+}
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [07/Oct/2025 14:31:13] "GET /process_excel?filepath=F:\\陈启鸿\\暂存\\车棚样品---20251005\\处理\\车棚样品---20251005零件清单.xlsx&sheet_name=零件清单 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
