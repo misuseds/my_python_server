@@ -8,7 +8,8 @@ http://localhost:5200/process_image?image_path=E:\code\dinov3\图片\white.png
 # 获取图像信息
 http://localhost:5200/image_info?image_path=E:\code\dinov3\图片\white.png
 
-
+http://localhost:5300/delete-area?min_x=10&min_y=10&max_x=80&max_y=80
+http://localhost:5300/screenshot/view
 https://help.autodesk.com/view/OARX/2018/CHS/
 
 https://deepwiki.com/reclosedev/pyautocad

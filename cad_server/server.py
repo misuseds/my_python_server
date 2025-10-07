@@ -1,31 +1,180 @@
 # server.py
 from pyautocad import Autocad
 import win32gui
-from flask import Flask, jsonify
+import win32ui
+import win32con
+import ctypes
+from ctypes import wintypes
+from flask import Flask, jsonify, request, Response
+import sys
+import os
+import pythoncom
+import pyautogui
+import base64
+from io import BytesIO
+from PIL import Image
+import time
 
-# 初始化AutoCAD连接
-acad = Autocad()
-# 获取AutoCAD窗口句柄并激活
-hwnd = acad.app.HWND
-win32gui.SetForegroundWindow(hwnd)
+# 添加当前目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# 创建Flask应用实例
+# 导入删除区域功能
+from delete_area import change_objects_color_by_window
+
+# 定义PrintWindow常量
+PW_CLIENTONLY = 1
+PW_RENDERFULLCONTENT = 3
+
 app = Flask(__name__)
 
-
-@app.route('/bring-to-front', methods=['GET'])
-def bring_to_front():
+def capture_autocad_region():
     """
-    将AutoCAD窗口置于前台
+    截取AutoCAD窗口中指定区域的截图，类似于C#中的Util.SavePng()方法
     
     Returns:
-        JSON格式的操作结果
+        PIL Image对象
     """
     try:
-        win32gui.SetForegroundWindow(hwnd)
+        pythoncom.CoInitialize()
+        acad = Autocad()
+        hwnd = acad.app.HWND
+        
+        # 获取窗口位置和大小
+        rect = win32gui.GetWindowRect(hwnd)
+        window_x, window_y, window_right, window_bottom = rect
+        window_width = window_right - window_x
+        window_height = window_bottom - window_y
+        
+        # 尝试使用PrintWindow API
+        try:
+            # 创建设备上下文
+            wDC = win32gui.GetWindowDC(hwnd)
+            dcObj = win32ui.CreateDCFromHandle(wDC)
+            cDC = dcObj.CreateCompatibleDC()
+            dataBitMap = win32ui.CreateBitmap()
+            dataBitMap.CreateCompatibleBitmap(dcObj, window_width, window_height)
+            cDC.SelectObject(dataBitMap)
+            
+            # 使用ctypes调用PrintWindow
+            result = ctypes.windll.user32.PrintWindow(hwnd, cDC.GetSafeHdc(), PW_RENDERFULLCONTENT)
+            
+            # 转换为PIL图像
+            bmpinfo = dataBitMap.GetInfo()
+            bmpstr = dataBitMap.GetBitmapBits(True)
+            img = Image.frombuffer(
+                'RGB',
+                (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
+                bmpstr, 'raw', 'BGRX', 0, 1)
+            
+            # 清理资源
+            dcObj.DeleteDC()
+            cDC.DeleteDC()
+            win32gui.ReleaseDC(hwnd, wDC)
+            win32gui.DeleteObject(dataBitMap.GetHandle())
+            
+            if result == 0:
+                raise Exception("PrintWindow failed")
+                
+        except Exception as e:
+            # 如果PrintWindow失败，回退到屏幕截图方法
+            # 先激活窗口
+            win32gui.SetForegroundWindow(hwnd)
+            time.sleep(0.2)  # 给窗口更多时间来完全渲染
+            
+            # 使用pyautogui截取窗口区域
+            screenshot = pyautogui.screenshot(region=(window_x, window_y, window_width, window_height))
+            img = screenshot
+        
+        # 获取截图区域参数
+        min_x = float(request.args.get('min_x',  window_width*0.2))
+        min_y = float(request.args.get('min_y', window_height*0.2))
+        max_x = float(request.args.get('max_x', window_width))
+        max_y = float(request.args.get('max_y', window_height*0.9))
+        
+        min_point = (min_x, min_y)
+        max_point = (max_x, max_y)
+        
+        # 计算相对坐标并确保坐标顺序正确
+        left = int(min(min_point[0], max_point[0]))
+        top = int(min(min_point[1], max_point[1]))
+        right = int(max(min_point[0], max_point[0]))
+        bottom = int(max(min_point[1], max_point[1]))
+        
+        # 检查坐标是否有效
+        if left < 0:
+            left = 0
+        if top < 0:
+            top = 0
+        if right > window_width:
+            right = window_width
+        if bottom > window_height:
+            bottom = window_height
+            
+        # 裁剪指定区域
+        if right > left and bottom > top:
+            cropped_img = img.crop((left, top, right, bottom))
+            return cropped_img
+        else:
+            raise Exception("Invalid crop coordinates")
+            
+    except Exception as e:
+        raise Exception(f"Error capturing AutoCAD region: {str(e)}")
+
+
+@app.route('/screenshot/region', methods=['GET'])
+def screenshot_region():
+    """
+    截取AutoCAD指定区域截图，类似于C#中的Util.SavePng()方法
+    
+    Query Parameters:
+        min_x, min_y: 区域左下角点坐标
+        max_x, max_y: 区域右上角点坐标
+    
+    Returns:
+        PNG格式的图像数据
+    """
+    try:
+        # 截取指定区域
+        screenshot = capture_autocad_region()
+        
+        # 将截图转换为响应
+        buffered = BytesIO()
+        screenshot.save(buffered, format="PNG")
+        buffered.seek(0)
+        
+        return Response(buffered.getvalue(), mimetype='image/png')
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/screenshot/region/base64', methods=['GET'])
+def screenshot_region_base64():
+    """
+    截取AutoCAD指定区域截图并返回base64编码
+    
+    Query Parameters:
+        min_x, min_y: 区域左下角点坐标
+        max_x, max_y: 区域右上角点坐标
+    
+    Returns:
+        JSON格式的截图数据(base64编码)
+    """
+    try:
+        # 截取指定区域
+        screenshot = capture_autocad_region()
+        
+        # 将截图转换为base64编码
+        buffered = BytesIO()
+        screenshot.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        
         return jsonify({
             'status': 'success',
-            'message': 'AutoCAD window brought to front'
+            'message': 'Region screenshot captured',
+            'image': img_str,
+            'format': 'png'
         })
     except Exception as e:
         return jsonify({
@@ -33,6 +182,55 @@ def bring_to_front():
             'message': str(e)
         }), 500
 
+@app.route('/delete-area', methods=['GET'])
+def delete_area():
+    """
+    删除指定区域内的对象（GET方法便于调试）
+    
+    Query Parameters:
+        min_x, min_y, min_z: 窗口左下角点坐标
+        max_x, max_y, max_z: 窗口右上角点坐标
+    
+    Returns:
+        JSON格式的操作结果
+    """
+    try:
+        # 从查询参数获取坐标值，提供默认值
+        min_x = float(request.args.get('min_x', 0))
+        min_y = float(request.args.get('min_y', 0))
+        min_z = 0
+        max_x = float(request.args.get('max_x', 100))
+        max_y = float(request.args.get('max_y', 100))
+        max_z = 0
+        
+        # 构造坐标点
+        min_point = (min_x, min_y, min_z)
+        max_point = (max_x, max_y, max_z)
+        
+        # 执行删除操作
+        count = change_objects_color_by_window(min_point, max_point)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Deleted {count} objects',
+            'deleted_count': count,
+            'area': {
+                'min_point': min_point,
+                'max_point': max_point
+            }
+        })
+        
+    except ValueError as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid coordinate values. Please provide numeric values.'
+        }), 400
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 if __name__ == '__main__':
-    # 启动Flask服务器，默认端口5100
-    app.run(host='0.0.0.0', port=5100, debug=True)
+    # 启动Flask服务器，默认端口5300
+    app.run(host='0.0.0.0', port=5300, debug=True)
