@@ -8,4 +8,3 @@ Press CTRL+C to quit
  * Restarting with stat
  * Debugger is active!
  * Debugger PIN: 127-181-769
-127.0.0.1 - - [07/Oct/2025 14:46:26] "GET /bring-to-front HTTP/1.1" 500 -

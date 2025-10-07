@@ -37,7 +37,7 @@ def tail_file(log_path, name):
 
 def start_servers():
     # 定义服务器配置
-    servers = [
+    excel_servers = [
         {
             "name": "Python SSE Server",
             "command": "micromambavenv\\python sse_server.py",
@@ -62,14 +62,34 @@ def start_servers():
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/thick_part.log"
         }
+        
     ]
+    cad_servers = [
     
+        {
+            "name": "cad Server",
+            "command": "micromambavenv\\python cad_server\\server.py",
+            "cwd": "E:\\code\\my_python_server",
+            "log_file": "logs/cad_server.log"
+        }
+    ]
+    dino_servers = [
+    
+    
+            {
+            "name": "dino Server",
+            "command": "micromambavenv\\python dino_server.py",
+            "cwd": "E:\\code\\my_python_server",
+            "log_file": "logs/dino_server.log"
+        }
+    ]
+    start_servers=cad_servers 
     processes = []
     
     print("正在启动所有服务器...")
     
     # 启动每个服务器
-    for server in servers:
+    for server in start_servers:
         # 确保日志目录存在
         log_path = Path(server["log_file"])
         log_path.parent.mkdir(parents=True, exist_ok=True)
