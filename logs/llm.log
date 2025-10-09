@@ -98,3 +98,81 @@ INFO:__main__:LLM服务响应状态码: 200
 INFO:__main__:LLM服务调用完成
 INFO:__main__:聊天请求处理完成
 INFO:werkzeug:127.0.0.1 - - [07/Oct/2025 20:58:31] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 08:24:18] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 08:30:46] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 08:35:29] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 11:28:54] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 12:02:39] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:13:20] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:16:26] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:23:04] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:27:27] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:31:43] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:37:21] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:48:26] "POST /chat HTTP/1.1" 200 -
+INFO:__main__:收到聊天请求
+INFO:__main__:开始调用LLM服务
+INFO:__main__:LLM服务响应状态码: 200
+INFO:__main__:LLM服务调用完成
+INFO:__main__:聊天请求处理完成
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 15:06:20] "POST /chat HTTP/1.1" 200 -

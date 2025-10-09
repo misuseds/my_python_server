@@ -2368,3 +2368,2923 @@ INFO:__main__:提取到的JSON内容: {
 INFO:__main__:JSON解析成功
 INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
 INFO:werkzeug:127.0.0.1 - - [07/Oct/2025 20:58:31] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: {
+  "thickness_groups": [
+    {
+      "thickness": "10mm",
+      "area_required": 0.0,
+      "components": [
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-8PL10x50X80=112个",
+          "component": "钢板",
+          "thickness": "10mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-9PL10x50X360=112个",
+          "component": "钢板",
+          "thickness": "10mm"
+        }
+      ]
+    },
+    {
+      "thickness": "20mm",
+      "area_required": 0.0,
+      "components": [
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx7-4PL20x570X4810=12个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx7-5PL20x150X1920=18个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx7-6PL20x150X150=18个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx8-4PL20x570X4810=10个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx8-5PL20x150X2270=15个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx8-6PL20x150X150=15个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-2PL20x110X300=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-3PL20x300X350=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-4PL20x135X229=128个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-5PL20x135X62=128个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-6PL20x220X300=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-7PL20x300X700=64个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-8PL20x330X3400=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-9PL20x150X150=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-10PL20x150X720=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-13PL20x135X350=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx10-4PL20x805X1810=28个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx10-5PL20x150X1790=14个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx10-6PL20x150X150=14个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-13PL20x250X360=12个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-14PL20x250X2732=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-16PL20x250X3097=8个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-18PL20x500X2415=10个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-21PL20x250X7470=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-4PL20x100X150=132个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-10PL20x110X400=56个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-12PL20x312X169=64个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-13PL20x270X140=96个",
+          "component": "钢板",
+          "thickness": "20mm"
+        }
+      ]
+    },
+    {
+      "thickness": "25mm",
+      "area_required": 0.0,
+      "components": [
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-2PL25x120X250=20个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-3PL25x250X566=8个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-4PL25x250X800=32个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-5PL25x110X123=64个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-6PL25x110X267=64个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-7PL25x110X400=40个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-19PL25x740X2695=8个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-20PL25x560X2695=12个",
+          "component": "钢板",
+          "thickness": "25mm"
+        }
+      ]
+    },
+    {
+      "thickness": "30mm",
+      "area_required": 0.0,
+      "components": [
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-11PL30x350X676.2=32个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx9-12PL30x350X1432.4=16个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-8PL30x400X1505.6=12个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-9PL30x400X1212.8=8个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-26PL30x360X117=32个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-5PL30x180X330=12个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-16PL30x320X330=36个",
+          "component": "钢板",
+          "thickness": "30mm"
+        }
+      ]
+    },
+    {
+      "thickness": "40mm",
+      "area_required": 0.0,
+      "components": [
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-3PL40x100X140=24个",
+          "component": "钢板",
+          "thickness": "40mm"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx12-15PL40x100X300=72个",
+          "component": "钢板",
+          "thickness": "40mm"
+        }
+      ]
+    },
+    {
+      "thickness": "50mm",
+      "area_required": 0.0,
+      "components": [
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx11-17PL50x80X2415=20个",
+          "component": "钢板",
+          "thickness": "50mm"
+        }
+      ]
+    },
+    {
+      "thickness": "角钢",
+      "area_required": 0.0,
+      "components": [
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx7-2L45x6X420=24个",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx7-3L45x6X4520=24个",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx8-2L45x6X420=20个",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx8-3L45x6X4520=20个",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx10-2L45x6X660=56个",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx10-3L45x6X1520=56个",
+          "component": "角钢",
+          "thickness": "角钢"
+        }
+      ]
+    }
+  ]
+}
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 08:24:18] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: {
+  "thickness_groups": [
+    {
+      "thickness": "6mm",
+      "area_required": 0,
+      "kind_member": "1",
+      "components": [
+        {
+          "part_name": "三宝7-2L45*6*420=24个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝7-3L45*6*4520=24个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝8-2L45*6*420=20个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝8-3L45*6*4520=20个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝10-2L45*6*660=56个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝10-3L45*6*1520=56个",
+          "component": "角钢",
+          "thickness": "6mm"
+        }
+      ]
+    },
+    {
+      "thickness": "10mm",
+      "area_required": 0.896,
+      "kind_member": "2",
+      "components": [
+        {
+          "part_name": "三宝12-8PL10*50*80=112个",
+          "component": "钢板",
+          "thickness": "10mm"
+        },
+        {
+          "part_name": "三宝12-9PL10*50*360=112个",
+          "component": "钢板",
+          "thickness": "10mm"
+        }
+      ]
+    },
+    {
+      "thickness": "20mm",
+      "area_required": 166.076,
+      "kind_member": "15",
+      "components": [
+        {
+          "part_name": "三宝7-4PL20*570*4810=12个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-5PL20*150*1920=18个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-6PL20*150*150=18个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-4PL20*570*4810=10个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-5PL20*150*2270=15个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-6PL20*150*150=15个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-2PL20*110*300=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-3PL20*300*350=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-4PL20*135*229=128个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-5PL20*135*62=128个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-6PL20*220*300=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-7PL20*300*700=64个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-8PL20*330*3400=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-9PL20*150*150=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-10PL20*150*720=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-13PL20*135*350=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-4PL20*805*1810=28个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-5PL20*150*1790=14个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-6PL20*150*150=14个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-13PL20*250*360=12个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-14PL20*250*2732=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-16PL20*250*3097=8个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-18PL20*500*2415=10个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-21PL20*250*7470=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-4PL20*100*150=132个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-10PL20*110*400=56个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-12PL20*312*169=64个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-13PL20*270*140=96个",
+          "component": "钢板",
+          "thickness": "20mm"
+        }
+      ]
+    },
+    {
+      "thickness": "25mm",
+      "area_required": 8.148,
+      "kind_member": "7",
+      "components": [
+        {
+          "part_name": "三宝11-2PL25*120*250=20个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-3PL25*250*566=8个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-4PL25*250*800=32个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-5PL25*110*123=64个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-6PL25*110*267=64个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-7PL25*110*400=40个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-19PL25*740*2695=8个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-20PL25*560*2695=12个",
+          "component": "钢板",
+          "thickness": "25mm"
+        }
+      ]
+    },
+    {
+      "thickness": "30mm",
+      "area_required": 3.713,
+      "kind_member": "6",
+      "components": [
+        {
+          "part_name": "三宝9-11PL30*350*676.2=32个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝9-12PL30*350*1432.4=16个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-8PL30*400*1505.6=12个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-9PL30*400*1212.8=8个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-5PL30*180*330=12个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-26PL30*360*117=32个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-16PL30*320*330=36个",
+          "component": "钢板",
+          "thickness": "30mm"
+        }
+      ]
+    },
+    {
+      "thickness": "40mm",
+      "area_required": 1.008,
+      "kind_member": "2",
+      "components": [
+        {
+          "part_name": "三宝12-3PL40*100*140=24个",
+          "component": "钢板",
+          "thickness": "40mm"
+        },
+        {
+          "part_name": "三宝12-15PL40*100*300=72个",
+          "component": "钢板",
+          "thickness": "40mm"
+        }
+      ]
+    },
+    {
+      "thickness": "50mm",
+      "area_required": 0.386,
+      "kind_member": "1",
+      "components": [
+        {
+          "part_name": "三宝11-17PL50*80*2415=20个",
+          "component": "钢板",
+          "thickness": "50mm"
+        }
+      ]
+    }
+  ]
+}
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 08:30:46] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: {
+  "thickness_groups": [
+    {
+      "thickness": "6mm",
+      "area_required": 0,
+      "kind_member": "1",
+      "components": [
+        {
+          "part_name": "三宝7-2L45x6X420=24个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝7-3L45x6X4520=24个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝8-2L45x6X420=20个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝8-3L45x6X4520=20个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝10-2L45x6X660=56个",
+          "component": "角钢",
+          "thickness": "6mm"
+        },
+        {
+          "part_name": "三宝10-3L45x6X1520=56个",
+          "component": "角钢",
+          "thickness": "6mm"
+        }
+      ]
+    },
+    {
+      "thickness": "10mm",
+      "area_required": 0.8064,
+      "kind_member": "2",
+      "components": [
+        {
+          "part_name": "三宝12-8PL10x50X80=112个",
+          "component": "钢板",
+          "thickness": "10mm"
+        },
+        {
+          "part_name": "三宝12-9PL10x50X360=112个",
+          "component": "钢板",
+          "thickness": "10mm"
+        }
+      ]
+    },
+    {
+      "thickness": "20mm",
+      "area_required": 232.198,
+      "kind_member": "13",
+      "components": [
+        {
+          "part_name": "三宝7-4PL20x570X4810=12个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-5PL20x150X1920=18个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-6PL20x150X150=18个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-4PL20x570X4810=10个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-5PL20x150X2270=15个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-6PL20x150X150=15个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-2PL20x110X300=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-3PL20x300X350=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-4PL20x135X229=128个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-5PL20x135X62=128个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-6PL20x220X300=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-7PL20x300X700=64个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-8PL20x330X3400=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-9PL20x150X150=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-10PL20x150X720=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-13PL20x135X350=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-4PL20x805X1810=28个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-5PL20x150X1790=14个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-6PL20x150X150=14个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-13PL20x250X360=12个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-14PL20x250X2732=32个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-16PL20x250X3097=8个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-18PL20x500X2415=10个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-21PL20x250X7470=16个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-4PL20x100X150=132个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-10PL20x110X400=56个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-12PL20x312X169=64个",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-13PL20x270X140=96个",
+          "component": "钢板",
+          "thickness": "20mm"
+        }
+      ]
+    },
+    {
+      "thickness": "25mm",
+      "area_required": 7.862,
+      "kind_member": "8",
+      "components": [
+        {
+          "part_name": "三宝11-2PL25x120X250=20个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-3PL25x250X566=8个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-4PL25x250X800=32个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-5PL25x110X123=64个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-6PL25x110X267=64个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-7PL25x110X400=40个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-19PL25x740X2695=8个",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-20PL25x560X2695=12个",
+          "component": "钢板",
+          "thickness": "25mm"
+        }
+      ]
+    },
+    {
+      "thickness": "30mm",
+      "area_required": 4.578,
+      "kind_member": "7",
+      "components": [
+        {
+          "part_name": "三宝9-11PL30x350X676.2=32个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝9-12PL30x350X1432.4=16个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-8PL30x400X1505.6=12个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-9PL30x400X1212.8=8个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-26PL30x360X117=32个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-5PL30x180X330=12个",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-16PL30x320X330=36个",
+          "component": "钢板",
+          "thickness": "30mm"
+        }
+      ]
+    },
+    {
+      "thickness": "40mm",
+      "area_required": 1.512,
+      "kind_member": "2",
+      "components": [
+        {
+          "part_name": "三宝12-3PL40x100X140=24个",
+          "component": "钢板",
+          "thickness": "40mm"
+        },
+        {
+          "part_name": "三宝12-15PL40x100X300=72个",
+          "component": "钢板",
+          "thickness": "40mm"
+        }
+      ]
+    },
+    {
+      "thickness": "50mm",
+      "area_required": 1.932,
+      "kind_member": "1",
+      "components": [
+        {
+          "part_name": "三宝11-17PL50x80X2415=20个",
+          "component": "钢板",
+          "thickness": "50mm"
+        }
+      ]
+    }
+  ]
+}
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 08:35:29] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: {
+  "thickness_groups": [
+    {
+      "thickness": "10mm",
+      "toltal_area_required": 2.02,
+      "kind_member": "2",
+      "components": [
+        {
+          "part_name": "三宝12-8PL10x50X80=112件",
+          "area_required": "0.050x0.080x112=0.45",
+          "component": "钢板",
+          "thickness": "10mm"
+        },
+        {
+          "part_name": "三宝12-9PL10x50X360=112件",
+          "area_required": "0.050x0.360x112=2.02",
+          "component": "钢板",
+          "thickness": "10mm"
+        }
+      ]
+    },
+    {
+      "thickness": "20mm",
+      "toltal_area_required": 298.97,
+      "kind_member": "24",
+      "components": [
+        {
+          "part_name": "三宝7-4PL20x570X4810=12件",
+          "area_required": "0.570x4.810x12=32.90",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-5PL20x150X1920=18件",
+          "area_required": "0.150x1.920x18=5.18",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-6PL20x150X150=18件",
+          "area_required": "0.150x0.150x18=0.41",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-4PL20x570X4810=10件",
+          "area_required": "0.570x4.810x10=27.42",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-5PL20x150X2270=15件",
+          "area_required": "0.150x2.270x15=5.11",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-6PL20x150X150=15件",
+          "area_required": "0.150x0.150x15=0.34",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-2PL20x110X300=32件",
+          "area_required": "0.110x0.300x32=1.06",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-3PL20x300X350=32件",
+          "area_required": "0.300x0.350x32=3.36",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-4PL20x135X229=128件",
+          "area_required": "0.135x0.229x128=3.96",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-5PL20x135X62=128件",
+          "area_required": "0.135x0.062x128=1.07",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-6PL20x220X300=16件",
+          "area_required": "0.220x0.300x16=1.06",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-7PL20x300X700=64件",
+          "area_required": "0.300x0.700x64=13.44",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-8PL20x330X3400=16件",
+          "area_required": "0.330x3.400x16=17.95",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-9PL20x150X150=16件",
+          "area_required": "0.150x0.150x16=0.36",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-10PL20x150X720=16件",
+          "area_required": "0.150x0.720x16=1.73",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-13PL20x135X350=32件",
+          "area_required": "0.135x0.350x32=1.51",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-4PL20x805X1810=28件",
+          "area_required": "0.805x1.810x28=40.80",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-5PL20x150X1790=14件",
+          "area_required": "0.150x1.790x14=3.76",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-6PL20x150X150=14件",
+          "area_required": "0.150x0.150x14=0.32",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-13PL20x250X360=12件",
+          "area_required": "0.250x0.360x12=1.08",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-14PL20x250X2732=32件",
+          "area_required": "0.250x2.732x32=21.86",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-16PL20x250X3097=8件",
+          "area_required": "0.250x3.097x8=6.19",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-21PL20x250X7470=16件",
+          "area_required": "0.250x7.470x16=29.88",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-18PL20x500X2415=10件",
+          "area_required": "0.500x2.415x10=12.08",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-4PL20x100X150=132件",
+          "area_required": "0.100x0.150x132=1.98",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-10PL20x110X400=56件",
+          "area_required": "0.110x0.400x56=2.46",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-11PL20x312X169=64件",
+          "area_required": "0.312x0.169x64=3.38",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-12PL20x270X140=96件",
+          "area_required": "0.270x0.140x96=3.63",
+          "component": "钢板",
+          "thickness": "20mm"
+        }
+      ]
+    },
+    {
+      "thickness": "25mm",
+      "toltal_area_required": 31.31,
+      "kind_member": "8",
+      "components": [
+        {
+          "part_name": "三宝11-2PL25x120X250=20件",
+          "area_required": "0.120x0.250x20=0.60",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-3PL25x250X566=8件",
+          "area_required": "0.250x0.566x8=1.13",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-4PL25x250X800=32件",
+          "area_required": "0.250x0.800x32=6.40",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-5PL25x110X123=64件",
+          "area_required": "0.110x0.123x64=0.87",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-6PL25x110X267=64件",
+          "area_required": "0.110x0.267x64=1.88",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-7PL25x110X400=40件",
+          "area_required": "0.110x0.400x40=1.76",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-19PL25x740X2695=8件",
+          "area_required": "0.740x2.695x8=15.95",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-20PL25x560X2695=12件",
+          "area_required": "0.560x2.695x12=18.11",
+          "component": "钢板",
+          "thickness": "25mm"
+        }
+      ]
+    },
+    {
+      "thickness": "30mm",
+      "toltal_area_required": 13.03,
+      "kind_member": "7",
+      "components": [
+        {
+          "part_name": "三宝9-11PL30x350X676.2=32件",
+          "area_required": "0.350x0.676x32=7.57",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝9-12PL30x350X1432.4=16件",
+          "area_required": "0.350x1.432x16=8.02",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-8PL30x400X1505.6=12件",
+          "area_required": "0.400x1.506x12=7.23",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-9PL30x400X1212.8=8件",
+          "area_required": "0.400x1.213x8=3.88",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-26PL30x360X117=32件",
+          "area_required": "0.360x0.117x32=1.35",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-5PL30x180X330=12件",
+          "area_required": "0.180x0.330x12=0.71",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-16PL30x320X330=36件",
+          "area_required": "0.320x0.330x36=3.80",
+          "component": "钢板",
+          "thickness": "30mm"
+        }
+      ]
+    },
+    {
+      "thickness": "40mm",
+      "toltal_area_required": 1.58,
+      "kind_member": "3",
+      "components": [
+        {
+          "part_name": "三宝12-3PL40x100X140=24件",
+          "area_required": "0.100x0.140x24=0.34",
+          "component": "钢板",
+          "thickness": "40mm"
+        },
+        {
+          "part_name": "三宝12-15PL40x100X300=72件",
+          "area_required": "0.100x0.300x72=2.16",
+          "component": "钢板",
+          "thickness": "40mm"
+        }
+      ]
+    },
+    {
+      "thickness": "50mm",
+      "toltal_area_required": 3.86,
+      "kind_member": "1",
+      "components": [
+        {
+          "part_name": "三宝11-17PL50x80X2415=20件",
+          "area_required": "0.080x2.415x20=3.86",
+          "component": "钢板",
+          "thickness": "50mm"
+        }
+      ]
+    },
+    {
+      "thickness": "角钢",
+      "toltal_area_required": 0,
+      "kind_member": "6",
+      "components": [
+        {
+          "part_name": "三宝7-2L45x6X420=24件",
+          "area_required": "角钢不计面积",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "三宝7-3L45x6X4520=24件",
+          "area_required": "角钢不计面积",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "三宝8-2L45x6X420=20件",
+          "area_required": "角钢不计面积",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "三宝8-3L45x6X4520=20件",
+          "area_required": "角钢不计面积",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "三宝10-2L45x6X660=56件",
+          "area_required": "角钢不计面积",
+          "component": "角钢",
+          "thickness": "角钢"
+        },
+        {
+          "part_name": "三宝10-3L45x6X1520=56件",
+          "area_required": "角钢不计面积",
+          "component": "角钢",
+          "thickness": "角钢"
+        }
+      ]
+    }
+  ]
+}
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 11:28:54] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: {
+  "thickness_groups": [
+    {
+      "thickness": "6mm角钢",
+      "toltal_length_required": 0,
+      "kind_member": "5",
+      "components": [
+        {
+          "component": "角钢",
+          "part_name": "三宝7-2L45x6X420=24件",
+          "thickness": "6mm角钢",
+          "length_required": "0.420x24=10.08"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝7-3L45x6X4520=24件",
+          "thickness": "6mm角钢",
+          "length_required": "4.520x24=108.48"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝8-2L45x6X420=20件",
+          "thickness": "6mm角钢",
+          "length_required": "0.420x20=8.4"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝8-3L45x6X4520=20件",
+          "thickness": "6mm角钢",
+          "length_required": "4.520x20=90.4"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝10-2L45x6X660=56件",
+          "thickness": "6mm角钢",
+          "length_required": "0.660x56=36.96"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝10-3L45x6X1520=56件",
+          "thickness": "6mm角钢",
+          "length_required": "1.520x56=85.12"
+        }
+      ]
+    },
+    {
+      "thickness": "10mm",
+      "toltal_area_required": 0,
+      "kind_member": "3",
+      "components": [
+        {
+          "component": "钢板",
+          "part_name": "三宝12-8PL10x50X80=112件",
+          "thickness": "10mm",
+          "area_required": "0.050x0.080x112=0.448"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-9PL10x50X360=112件",
+          "thickness": "10mm",
+          "area_required": "0.050x0.360x112=2.016"
+        }
+      ]
+    },
+    {
+      "thickness": "20mm",
+      "toltal_area_required": 0,
+      "kind_member": "24",
+      "components": [
+        {
+          "component": "钢板",
+          "part_name": "三宝7-4PL20x570X4810=12件",
+          "thickness": "20mm",
+          "area_required": "0.570x4.810x12=32.9004"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝7-5PL20x150X1920=18件",
+          "thickness": "20mm",
+          "area_required": "0.150x1.920x18=5.184"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝7-6PL20x150X150=18件",
+          "thickness": "20mm",
+          "area_required": "0.150x0.150x18=0.405"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝8-4PL20x570X4810=10件",
+          "thickness": "20mm",
+          "area_required": "0.570x4.810x10=27.417"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝8-5PL20x150X2270=15件",
+          "thickness": "20mm",
+          "area_required": "0.150x2.270x15=5.1075"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝8-6PL20x150X150=15件",
+          "thickness": "20mm",
+          "area_required": "0.150x0.150x15=0.3375"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-2PL20x110X300=32件",
+          "thickness": "20mm",
+          "area_required": "0.110x0.300x32=1.056"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-3PL20x300X350=32件",
+          "thickness": "20mm",
+          "area_required": "0.300x0.350x32=3.36"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-4PL20x135X229=128件",
+          "thickness": "20mm",
+          "area_required": "0.135x0.229x128=3.95712"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-5PL20x135X62=128件",
+          "thickness": "20mm",
+          "area_required": "0.135x0.062x128=1.07136"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-6PL20x220X300=16件",
+          "thickness": "20mm",
+          "area_required": "0.220x0.300x16=1.056"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-7PL20x300X700=64件",
+          "thickness": "20mm",
+          "area_required": "0.300x0.700x64=13.44"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-8PL20x330X3400=16件",
+          "thickness": "20mm",
+          "area_required": "0.330x3.400x16=17.952"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-9PL20x150X150=16件",
+          "thickness": "20mm",
+          "area_required": "0.150x0.150x16=0.36"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-10PL20x150X720=16件",
+          "thickness": "20mm",
+          "area_required": "0.150x0.720x16=1.728"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-13PL20x135X350=32件",
+          "thickness": "20mm",
+          "area_required": "0.135x0.350x32=1.512"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝10-4PL20x805X1810=28件",
+          "thickness": "20mm",
+          "area_required": "0.805x1.810x28=40.7974"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝10-5PL20x150X1790=14件",
+          "thickness": "20mm",
+          "area_required": "0.150x1.790x14=3.759"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝10-6PL20x150X150=14件",
+          "thickness": "20mm",
+          "area_required": "0.150x0.150x14=0.315"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-13PL20x250X360=12件",
+          "thickness": "20mm",
+          "area_required": "0.250x0.360x12=1.08"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-14PL20x250X2732=32件",
+          "thickness": "20mm",
+          "area_required": "0.250x2.732x32=21.856"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-16PL20x250X3097=8件",
+          "thickness": "20mm",
+          "area_required": "0.250x3.097x8=6.194"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-18PL20x500X2415=10件",
+          "thickness": "20mm",
+          "area_required": "0.500x2.415x10=12.075"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-21PL20x250X7470=16件",
+          "thickness": "20mm",
+          "area_required": "0.250x7.470x16=29.88"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-4PL20x100X150=132件",
+          "thickness": "20mm",
+          "area_required": "0.100x0.150x132=1.98"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-10PL20x110X400=56件",
+          "thickness": "20mm",
+          "area_required": "0.110x0.400x56=2.464"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-12PL20x312X169=64件",
+          "thickness": "20mm",
+          "area_required": "0.312x0.169x64=3.374592"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-13PL20x270X140=96件",
+          "thickness": "20mm",
+          "area_required": "0.270x0.140x96=3.6288"
+        }
+      ]
+    },
+    {
+      "thickness": "25mm",
+      "toltal_area_required": 0,
+      "kind_member": "8",
+      "components": [
+        {
+          "component": "钢板",
+          "part_name": "三宝11-2PL25x120X250=20件",
+          "thickness": "25mm",
+          "area_required": "0.120x0.250x20=0.6"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-3PL25x250X566=8件",
+          "thickness": "25mm",
+          "area_required": "0.250x0.566x8=1.132"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-4PL25x250X800=32件",
+          "thickness": "25mm",
+          "area_required": "0.250x0.800x32=6.4"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-5PL25x110X123=64件",
+          "thickness": "25mm",
+          "area_required": "0.110x0.123x64=0.86592"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-6PL25x110X267=64件",
+          "thickness": "25mm",
+          "area_required": "0.110x0.267x64=1.87968"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-7PL25x110X400=40件",
+          "thickness": "25mm",
+          "area_required": "0.110x0.400x40=1.76"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-19PL25x740X2695=8件",
+          "thickness": "25mm",
+          "area_required": "0.740x2.695x8=15.9544"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-20PL25x560X2695=12件",
+          "thickness": "25mm",
+          "area_required": "0.560x2.695x12=18.1104"
+        }
+      ]
+    },
+    {
+      "thickness": "30mm",
+      "toltal_area_required": 0,
+      "kind_member": "7",
+      "components": [
+        {
+          "component": "钢板",
+          "part_name": "三宝9-11PL30x350X676.2=32件",
+          "thickness": "30mm",
+          "area_required": "0.350x0.676x32=7.5712"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝9-12PL30x350X1432.4=16件",
+          "thickness": "30mm",
+          "area_required": "0.350x1.432x16=8.0192"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-8PL30x400X1505.6=12件",
+          "thickness": "30mm",
+          "area_required": "0.400x1.506x12=7.2288"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-9PL30x400X1212.8=8件",
+          "thickness": "30mm",
+          "area_required": "0.400x1.213x8=3.8816"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝11-26PL30x360X117=32件",
+          "thickness": "30mm",
+          "area_required": "0.360x0.117x32=1.34784"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-5PL30x180X330=12件",
+          "thickness": "30mm",
+          "area_required": "0.180x0.330x12=0.7128"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-16PL30x320X330=36件",
+          "thickness": "30mm",
+          "area_required": "0.320x0.330x36=3.8016"
+        }
+      ]
+    },
+    {
+      "thickness": "40mm",
+      "toltal_area_required": 0,
+      "kind_member": "3",
+      "components": [
+        {
+          "component": "钢板",
+          "part_name": "三宝12-3PL40x100X140=24件",
+          "thickness": "40mm",
+          "area_required": "0.100x0.140x24=0.336"
+        },
+        {
+          "component": "钢板",
+          "part_name": "三宝12-15PL40x100X300=72件",
+          "thickness": "40mm",
+          "area_required": "0.100x0.300x72=2.16"
+        }
+      ]
+    },
+    {
+      "thickness": "50mm",
+      "toltal_area_required": 0,
+      "kind_member": "1",
+      "components": [
+        {
+          "component": "钢板",
+          "part_name": "三宝11-17PL50x80X2415=20件",
+          "thickness": "50mm",
+          "area_required": "0.080x2.415x20=3.864"
+        }
+      ]
+    }
+  ]
+}
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 12:02:39] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+WARNING:__main__:未在AI响应中找到JSON标记
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:13:20] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+WARNING:__main__:未在AI响应中找到JSON标记
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:16:26] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+WARNING:__main__:未在AI响应中找到JSON标记
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:23:04] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+AI Response:<Response [200]>
+WARNING:__main__:未在AI响应中找到JSON标记
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:27:27] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:AI Response:<Response [200]>
+WARNING:__main__:未在AI响应中找到JSON标记
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:31:43] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:AI Response:[START_JSON]
+{
+  "thickness_groups": [
+    {
+      "thickness": "6mm角钢",
+      "toltal_length_required": 0.42*24+4.52*24+0.42*20+4.52*20+0.66*56+1.52*56 = 10.08+108.48+8.4+90.4+36.96+85.12 = 339.44,
+      "kind_member": "6",
+      "components": [
+        {
+          "component": "角钢",
+          "part_name": "三宝7-2L45*6*420=24件",
+          "thickness": "6mm",
+          "length_required": "0.420x24=10.08"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝7-3L45*6*4520=24件",
+          "thickness": "6mm",
+          "length_required": "4.520x24=108.48"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝8-2L45*6*420=20件",
+          "thickness": "6mm",
+          "length_required": "0.420x20=8.4"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝8-3L45*6*4520=20件",
+          "thickness": "6mm",
+          "length_required": "4.520x20=90.4"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝10-2L45*6*660=56件",
+          "thickness": "6mm",
+          "length_required": "0.660x56=36.96"
+        },
+        {
+          "component": "角钢",
+          "part_name": "三宝10-3L45*6*1520=56件",
+          "thickness": "6mm",
+          "length_required": "1.520x56=85.12"
+        }
+      ]
+    },
+    {
+      "thickness": "10mm",
+      "toltal_area_required": 0.05*0.08*112+0.05*0.36*112 = 0.448+2.016 = 2.464,
+      "kind_member": "2",
+      "components": [
+        {
+          "part_name": "三宝12-8PL10*50*80=112件",
+          "area_required": "0.050x0.080x112=0.448",
+          "component": "钢板",
+          "thickness": "10mm"
+        },
+        {
+          "part_name": "三宝12-9PL10*50*360=112件",
+          "area_required": "0.050x0.360x112=2.016",
+          "component": "钢板",
+          "thickness": "10mm"
+        }
+      ]
+    },
+    {
+      "thickness": "20mm",
+      "toltal_area_required": 0.57*4.81*12+0.15*1.92*18+0.15*0.15*18+0.57*4.81*10+0.15*2.27*15+0.15*0.15*15+0.11*0.3*32+0.3*0.35*32+0.135*0.229*128+0.135*0.062*128+0.22*0.3*16+0.3*0.7*64+0.33*3.4*16+0.15*0.15*16+0.15*0.72*16+0.135*0.35*32+0.805*1.81*28+0.15*1.79*14+0.15*0.15*14+0.25*0.36*12+0.25*2.732*32+0.25*3.097*8+0.5*2.415*10+0.25*7.47*16+0.11*0.4*56+0.312*0.169*64+0.27*0.14*96+0.1*0.15*132 = 32.9004+5.184+0.405+27.417+5.1075+0.3375+1.056+3.36+3.957+1.071+1.056+13.44+17.952+0.36+1.728+1.512+40.7827+3.759+0.315+1.08+21.8624+6.194+12.075+29.88+2.464+3.377+3.6288+1.98 = 247.8998,
+      "kind_member": "32",
+      "components": [
+        {
+          "part_name": "三宝7-4PL20*570*4810=12件",
+          "area_required": "0.570x4.810x12=32.9004",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-5PL20*150*1920=18件",
+          "area_required": "0.150x1.920x18=5.184",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝7-6PL20*150*150=18件",
+          "area_required": "0.150x0.150x18=0.405",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-4PL20*570*4810=10件",
+          "area_required": "0.570x4.810x10=27.417",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-5PL20*150*2270=15件",
+          "area_required": "0.150x2.270x15=5.1075",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝8-6PL20*150*150=15件",
+          "area_required": "0.150x0.150x15=0.3375",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-2PL20*110*300=32件",
+          "area_required": "0.110x0.300x32=1.056",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-3PL20*300*350=32件",
+          "area_required": "0.300x0.350x32=3.36",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-4PL20*135*229=128件",
+          "area_required": "0.135x0.229x128=3.957",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-5PL20*135*62=128件",
+          "area_required": "0.135x0.062x128=1.071",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-6PL20*220*300=16件",
+          "area_required": "0.220x0.300x16=1.056",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-7PL20*300*700=64件",
+          "area_required": "0.300x0.700x64=13.44",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-8PL20*330*3400=16件",
+          "area_required": "0.330x3.400x16=17.952",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-9PL20*150*150=16件",
+          "area_required": "0.150x0.150x16=0.36",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-10PL20*150*720=16件",
+          "area_required": "0.150x0.720x16=1.728",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝9-13PL20*135*350=32件",
+          "area_required": "0.135x0.350x32=1.512",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-4PL20*805*1810=28件",
+          "area_required": "0.805x1.810x28=40.7827",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-5PL20*150*1790=14件",
+          "area_required": "0.150x1.790x14=3.759",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝10-6PL20*150*150=14件",
+          "area_required": "0.150x0.150x14=0.315",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-13PL20*250*360=12件",
+          "area_required": "0.250x0.360x12=1.08",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-14PL20*250*2732=32件",
+          "area_required": "0.250x2.732x32=21.8624",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-16PL20*250*3097=8件",
+          "area_required": "0.250x3.097x8=6.194",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-18PL20*500*2415=10件",
+          "area_required": "0.500x2.415x10=12.075",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝11-21PL20*250*7470=16件",
+          "area_required": "0.250x7.470x16=29.88",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-10PL20*110*400=56件",
+          "area_required": "0.110x0.400x56=2.464",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-12PL20*312*169=64件",
+          "area_required": "0.312x0.169x64=3.377",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-13PL20*270*140=96件",
+          "area_required": "0.270x0.140x96=3.6288",
+          "component": "钢板",
+          "thickness": "20mm"
+        },
+        {
+          "part_name": "三宝12-4PL20*100*150=132件",
+          "area_required": "0.100x0.150x132=1.98",
+          "component": "钢板",
+          "thickness": "20mm"
+        }
+      ]
+    },
+    {
+      "thickness": "25mm",
+      "toltal_area_required": 0.12*0.25*20+0.25*0.566*8+0.25*0.8*32+0.11*0.123*64+0.11*0.267*64+0.11*0.4*40+0.74*2.695*8+0.56*2.695*12 = 0.6+1.132+6.4+0.866+1.882+1.76+15.964+18.122 = 46.726,
+      "kind_member": "8",
+      "components": [
+        {
+          "part_name": "三宝11-2PL25*120*250=20件",
+          "area_required": "0.120x0.250x20=0.6",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-3PL25*250*566=8件",
+          "area_required": "0.250x0.566x8=1.132",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-4PL25*250*800=32件",
+          "area_required": "0.250x0.800x32=6.4",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-5PL25*110*123=64件",
+          "area_required": "0.110x0.123x64=0.866",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-6PL25*110*267=64件",
+          "area_required": "0.110x0.267x64=1.882",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-7PL25*110*400=40件",
+          "area_required": "0.110x0.400x40=1.76",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-19PL25*740*2695=8件",
+          "area_required": "0.740x2.695x8=15.964",
+          "component": "钢板",
+          "thickness": "25mm"
+        },
+        {
+          "part_name": "三宝11-20PL25*560*2695=12件",
+          "area_required": "0.560x2.695x12=18.122",
+          "component": "钢板",
+          "thickness": "25mm"
+        }
+      ]
+    },
+    {
+      "thickness": "30mm",
+      "toltal_area_required": 0.35*0.6762*32+0.35*1.4324*16+0.4*1.5056*12+0.4*1.2128*8+0.36*0.117*32+0.18*0.33*12+0.32*0.33*36 = 7.573+8.021+7.227+3.881+1.347+0.713+3.802 = 32.564,
+      "kind_member": "7",
+      "components": [
+        {
+          "part_name": "三宝9-11PL30*350*676.2=32件",
+          "area_required": "0.350x0.6762x32=7.573",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝9-12PL30*350*1432.4=16件",
+          "area_required": "0.350x1.4324x16=8.021",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-8PL30*400*1505.6=12件",
+          "area_required": "0.400x1.5056x12=7.227",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-9PL30*400*1212.8=8件",
+          "area_required": "0.400x1.2128x8=3.881",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝11-26PL30*360*117=32件",
+          "area_required": "0.360x0.117x32=1.347",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-5PL30*180*330=12件",
+          "area_required": "0.180x0.330x12=0.713",
+          "component": "钢板",
+          "thickness": "30mm"
+        },
+        {
+          "part_name": "三宝12-16PL30*320*330=36件",
+          "area_required": "0.320x0.330x36
+WARNING:__main__:未在AI响应中找到JSON标记
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:37:21] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: [
+  {
+    "part_name": "三宝7-2L45x6x420=24件",
+    "area_required": "0.420x24=10.08",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝7-3L45x6x4520=24件",
+    "area_required": "4.520x24=108.48",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝8-2L45x6x420=20件",
+    "area_required": "0.420x20=8.4",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝8-3L45x6x4520=20件",
+    "area_required": "4.520x20=90.4",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝10-2L45x6x660=56件",
+    "area_required": "0.660x56=36.96",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝10-3L45x6x1520=56件",
+    "area_required": "1.520x56=85.12",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝7-4PL20x570x4810=12件",
+    "area_required": "0.570x4.810x12=32.94",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝7-5PL20x150x1920=18件",
+    "area_required": "0.150x1.920x18=5.18",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝7-6PL20x150x150=18件",
+    "area_required": "0.150x0.150x18=0.41",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝8-4PL20x570x4810=10件",
+    "area_required": "0.570x4.810x10=27.45",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝8-5PL20x150x2270=15件",
+    "area_required": "0.150x2.270x15=5.11",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝8-6PL20x150x150=15件",
+    "area_required": "0.150x0.150x15=0.34",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-2PL20x110x300=32件",
+    "area_required": "0.110x0.300x32=1.06",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-3PL20x300x350=32件",
+    "area_required": "0.300x0.350x32=3.36",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-4PL20x135x229=128件",
+    "area_required": "0.135x0.229x128=3.96",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-5PL20x135x62=128件",
+    "area_required": "0.135x0.062x128=1.07",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-6PL20x220x300=16件",
+    "area_required": "0.220x0.300x16=1.06",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-7PL20x300x700=64件",
+    "area_required": "0.300x0.700x64=13.44",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-8PL20x330x3400=16件",
+    "area_required": "0.330x3.400x16=17.95",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-9PL20x150x150=16件",
+    "area_required": "0.150x0.150x16=0.36",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-10PL20x150x720=16件",
+    "area_required": "0.150x0.720x16=1.73",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-13PL20x135x350=32件",
+    "area_required": "0.135x0.350x32=1.51",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝10-4PL20x805x1810=28件",
+    "area_required": "0.805x1.810x28=40.80",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝10-5PL20x150x1790=14件",
+    "area_required": "0.150x1.790x14=3.76",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝10-6PL20x150x150=14件",
+    "area_required": "0.150x0.150x14=0.32",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-13PL20x250x360=12件",
+    "area_required": "0.250x0.360x12=1.08",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-14PL20x250x2732=32件",
+    "area_required": "0.250x2.732x32=21.86",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-16PL20x250x3097=8件",
+    "area_required": "0.250x3.097x8=6.19",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-18PL20x500x2415=10件",
+    "area_required": "0.500x2.415x10=12.08",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-21PL20x250x7470=16件",
+    "area_required": "0.250x7.470x16=29.88",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-4PL20x100x150=132件",
+    "area_required": "0.100x0.150x132=1.98",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-10PL20x110x400=56件",
+    "area_required": "0.110x0.400x56=2.46",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-11PL20x312x169=64件",
+    "area_required": "0.312x0.169x64=3.38",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-13PL20x270x140=96件",
+    "area_required": "0.270x0.140x96=3.63",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-24PL30x350x676.2=32件",
+    "area_required": "0.350x0.676x32=7.57",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝9-25PL30x350x1432.4=16件",
+    "area_required": "0.350x1.432x16=8.02",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝11-8PL30x400x1505.6=12件",
+    "area_required": "0.400x1.506x12=7.23",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝11-9PL30x400x1212.8=8件",
+    "area_required": "0.400x1.213x8=3.88",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝11-26PL30x360x117=32件",
+    "area_required": "0.360x0.117x32=1.35",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝12-5PL30x180x330=12件",
+    "area_required": "0.180x0.330x12=0.71",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝12-16PL30x320x330=36件",
+    "area_required": "0.320x0.330x36=3.80",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝11-2PL25x120x250=20件",
+    "area_required": "0.120x0.250x20=0.60",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-3PL25x250x566=8件",
+    "area_required": "0.250x0.566x8=1.13",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-4PL25x250x800=32件",
+    "area_required": "0.250x0.800x32=6.40",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-5PL25x110x123=64件",
+    "area_required": "0.110x0.123x64=0.87",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-6PL25x110x267=64件",
+    "area_required": "0.110x0.267x64=1.88",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-7PL25x110x400=40件",
+    "area_required": "0.110x0.400x40=1.76",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-19PL25x740x2695=8件",
+    "area_required": "0.740x2.695x8=15.96",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-20PL25x560x2695=12件",
+    "area_required": "0.560x2.695x12=18.11",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-17PL50x80x2415=20件",
+    "area_required": "0.080x2.415x20=3.86",
+    "component": "钢板",
+    "thickness": "50mm"
+  },
+  {
+    "part_name": "三宝12-3PL40x100x140=24件",
+    "area_required": "0.100x0.140x24=0.34",
+    "component": "钢板",
+    "thickness": "40mm"
+  },
+  {
+    "part_name": "三宝12-15PL40x100x300=72件",
+    "area_required": "0.100x0.300x72=2.16",
+    "component": "钢板",
+    "thickness": "40mm"
+  },
+  {
+    "part_name": "三宝12-8PL10x50x80=112件",
+    "area_required": "0.050x0.080x112=0.45",
+    "component": "钢板",
+    "thickness": "10mm"
+  },
+  {
+    "part_name": "三宝12-9PL10x50x360=112件",
+    "area_required": "0.050x0.360x112=2.02",
+    "component": "钢板",
+    "thickness": "10mm"
+  }
+]
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 14:48:26] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -
+INFO:werkzeug: * Detected change in 'E:\\code\\my_python_server\\get_thick_part_json.py', reloading
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 127-181-769
+INFO:__main__:提取到的JSON内容: [
+  {
+    "part_name": "三宝7-2L45x6x420=24件",
+    "area_required": "2.52",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝7-3L45x6x4520=24件",
+    "area_required": "27.12",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝7-4PL20x570x4810=12件",
+    "area_required": "32.89",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝7-5PL20x150x1920=18件",
+    "area_required": "5.18",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝7-6PL20x150x150=18件",
+    "area_required": "0.41",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝7-8槽钢20B-4810mm=24件",
+    "area_required": "115.44",
+    "component": "槽钢",
+    "thickness": "20B"
+  },
+  {
+    "part_name": "三宝8-2L45x6x420=20件",
+    "area_required": "2.10",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝8-3L45x6x4520=20件",
+    "area_required": "22.60",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝8-4PL20x570x4810=10件",
+    "area_required": "27.41",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝8-5PL20x150x2270=15件",
+    "area_required": "5.12",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝8-6PL20x150x150=15件",
+    "area_required": "0.34",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝8-8槽钢20B-4810mm=20件",
+    "area_required": "96.20",
+    "component": "槽钢",
+    "thickness": "20B"
+  },
+  {
+    "part_name": "三宝9-2PL20x110x300=32件",
+    "area_required": "1.06",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-3PL20x300x350=32件",
+    "area_required": "3.36",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-4PL20x135x229=128件",
+    "area_required": "3.96",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-5PL20x135x62=128件",
+    "area_required": "1.07",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-6PL20x220x300=16件",
+    "area_required": "1.06",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-7PL20x300x700=64件",
+    "area_required": "13.44",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-8PL20x330x3400=16件",
+    "area_required": "17.95",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-9PL20x150x150=16件",
+    "area_required": "0.36",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-10PL20x150x720=16件",
+    "area_required": "1.73",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝9-11PL30x350x676.2=32件",
+    "area_required": "7.57",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝9-12PL30x350x1432.4=16件",
+    "area_required": "8.02",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝9-13PL20x135x350=32件",
+    "area_required": "1.51",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝10-2L45x6x660=56件",
+    "area_required": "14.70",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝10-3L45x6x1520=56件",
+    "area_required": "33.85",
+    "component": "角钢",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "三宝10-4PL20x805x1810=28件",
+    "area_required": "40.83",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝10-5PL20x150x1790=14件",
+    "area_required": "3.76",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝10-6PL20x150x150=14件",
+    "area_required": "0.32",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝10-8槽钢32C-1810mm=56件",
+    "area_required": "121.96",
+    "component": "槽钢",
+    "thickness": "32C"
+  },
+  {
+    "part_name": "三宝11-2PL25x120x250=20件",
+    "area_required": "0.60",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-3PL25x250x566=8件",
+    "area_required": "1.13",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-4PL25x250x800=32件",
+    "area_required": "6.40",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-5PL25x110x123=64件",
+    "area_required": "0.87",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-6PL25x110x267=64件",
+    "area_required": "1.88",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-7PL25x110x400=40件",
+    "area_required": "1.76",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-8PL30x400x1505.6=12件",
+    "area_required": "7.23",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝11-9PL30x400x1212.8=8件",
+    "area_required": "3.88",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝11-13PL20x250x360=12件",
+    "area_required": "1.08",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-14PL20x250x2732=32件",
+    "area_required": "21.86",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-16PL20x250x3097=8件",
+    "area_required": "6.19",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-17PL50x80x2415=20件",
+    "area_required": "3.86",
+    "component": "钢板",
+    "thickness": "50mm"
+  },
+  {
+    "part_name": "三宝11-18PL20x500x2415=10件",
+    "area_required": "12.08",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-19PL25x740x2695=8件",
+    "area_required": "15.96",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-20PL25x560x2695=12件",
+    "area_required": "18.10",
+    "component": "钢板",
+    "thickness": "25mm"
+  },
+  {
+    "part_name": "三宝11-21PL20x250x7470=16件",
+    "area_required": "29.88",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-22工字钢36C-7470mm=8件",
+    "area_required": "59.79",
+    "component": "工字钢",
+    "thickness": "36C"
+  },
+  {
+    "part_name": "三宝11-23工字钢36C-756mm=20件",
+    "area_required": "6.05",
+    "component": "工字钢",
+    "thickness": "36C"
+  },
+  {
+    "part_name": "三宝11-24工字钢36C-886mm=10件",
+    "area_required": "3.54",
+    "component": "工字钢",
+    "thickness": "36C"
+  },
+  {
+    "part_name": "三宝11-25圆钢D20-960mm=96件",
+    "area_required": "0.00",
+    "component": "圆钢",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝11-26PL30x360x117=32件",
+    "area_required": "1.35",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝12-3PL40x100x140=24件",
+    "area_required": "0.34",
+    "component": "钢板",
+    "thickness": "40mm"
+  },
+  {
+    "part_name": "三宝12-4PL20x100x150=132件",
+    "area_required": "1.98",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-5PL30x180x330=12件",
+    "area_required": "0.71",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝12-8PL10x50x80=112件",
+    "area_required": "0.45",
+    "component": "钢板",
+    "thickness": "10mm"
+  },
+  {
+    "part_name": "三宝12-9PL10x50x360=112件",
+    "area_required": "2.02",
+    "component": "钢板",
+    "thickness": "10mm"
+  },
+  {
+    "part_name": "三宝12-10PL20x110x400=56件",
+    "area_required": "2.46",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-11HW350x350x12x19-7500mm=2件",
+    "area_required": "10.50",
+    "component": "H型钢",
+    "thickness": "12/19mm"
+  },
+  {
+    "part_name": "三宝12-12PL20x312x169=64件",
+    "area_required": "3.38",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-13PL20x270x140=96件",
+    "area_required": "3.63",
+    "component": "钢板",
+    "thickness": "20mm"
+  },
+  {
+    "part_name": "三宝12-14HW300x300x10x15-2100mm=16件",
+    "area_required": "10.08",
+    "component": "H型钢",
+    "thickness": "10/15mm"
+  },
+  {
+    "part_name": "三宝12-15PL40x100x300=72件",
+    "area_required": "2.16",
+    "component": "钢板",
+    "thickness": "40mm"
+  },
+  {
+    "part_name": "三宝12-16PL30x320x330=36件",
+    "area_required": "3.80",
+    "component": "钢板",
+    "thickness": "30mm"
+  },
+  {
+    "part_name": "三宝12-17槽钢28C-2030mm=8件",
+    "area_required": "4.06",
+    "component": "槽钢",
+    "thickness": "28C"
+  },
+  {
+    "part_name": "三宝12-18HW350x350x12x19-2348mm=2件",
+    "area_required": "3.29",
+    "component": "H型钢",
+    "thickness": "12/19mm"
+  },
+  {
+    "part_name": "三宝12-21HW300x300x10x15-1783mm=4件",
+    "area_required": "2.14",
+    "component": "H型钢",
+    "thickness": "10/15mm"
+  },
+  {
+    "part_name": "三宝12-22圆钢D20-780mm=42件",
+    "area_required": "0.00",
+    "component": "圆钢",
+    "thickness": "20mm"
+  }
+]
+INFO:__main__:JSON解析成功
+INFO:__main__:结果已保存至: E:\code\my_python_server\ai_parsed_result.json
+INFO:werkzeug:127.0.0.1 - - [08/Oct/2025 15:06:20] "GET /process_excel?filepath=F:\\陈启鸿\\三宝\\10.7\\三宝.xlsx&sheet_name=Sheet7 HTTP/1.1" 200 -

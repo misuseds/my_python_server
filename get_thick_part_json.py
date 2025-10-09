@@ -69,29 +69,33 @@ def process_excel_api():
         # 在获取excel_memory之前，先从环境变量或配置中获取该信息
         excel_memory = os.environ.get('excel_memory', '')
 
-        ai_message_content = f"""请从以下Excel数据中提取板厚,编号,数量和构件信息，然后整合成一个partname，以及需要平方米的板,以及有几种零件，并按照指定格式返回JSON，使用[START_JSON]和[END_JSON]标记框起JSON部分。特别注意：请将零件按照厚度进行分组。
+        ai_message_content = f"""请从以下Excel数据中提取板厚,编号,数量和构件信息,然后整合成一个partname,名称里的*号要替换成x比如(PL10x570X4810),以及需要平方米的板,以及有几种零件，并按照指定格式返回JSON，使用[START_JSON]和[END_JSON]标记框起JSON部分。特别注意：请将零件按照厚度进行分组。
 
         关于材料的一些记忆信息：{excel_memory}
 
         示例格式：
         [START_JSON]
-        {{
-        "thickness_groups": [
-            {{
-            "thickness": "10mm",
-            "area_required": 2.5,
-            "kind_member":"1",
-            "components": [
+        
+        
+           
+           
                 {{
-                "part_name": "{filename }10-2PL10x570X4810=5个",
-         
-                "component": "角钢"
+                "part_name": "{filename }10-2PL10x570X4810=5件",
+                 "area_required":"13.7"
+                "component": "钢板"
                  "thickness": "10mm",
-                }}
-            ]
-            }}
-        ]
-        }}
+                }},
+                  {{
+                "part_name": "{filename }8-2L45*6*420=6件",
+                 "area_required":"2.52"
+                "component": "角钢"
+                 "thickness": "6mm",
+                }},
+                
+            
+            
+        
+        
         [END_JSON]
         Excel名称：{filename }
         Excel数据：
