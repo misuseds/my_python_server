@@ -35,6 +35,28 @@ def tail_file(log_path, name):
             print(f"读取日志文件 {log_path} 时出错: {str(e)}")
             time.sleep(1)
 
+def select_servers(excel_servers, cad_servers, dino_servers):
+    '''让用户选择要启动的服务器'''
+    print("请选择要启动的服务器:")
+    print("1. Excel Servers (默认)")
+    print("2. CAD Servers")
+    print("3. DINO Servers")
+    print("4. 所有服务器")
+    
+    choice = input("请输入选项编号 (默认为1): ").strip()
+    
+    if choice == "" or choice == "1":
+        return excel_servers
+    elif choice == "2":
+        return cad_servers
+    elif choice == "3":
+        return dino_servers
+    elif choice == "4":
+        return excel_servers + cad_servers + dino_servers
+    else:
+        print("无效选项，使用默认的Excel Servers")
+        return excel_servers
+
 def start_servers():
     # 定义服务器配置
     excel_servers = [
@@ -65,7 +87,6 @@ def start_servers():
         
     ]
     cad_servers = [
-    
         {
             "name": "cad Server",
             "command": "micromambavenv\\python cad_server\\server.py",
@@ -74,22 +95,23 @@ def start_servers():
         }
     ]
     dino_servers = [
-    
-    
-            {
+        {
             "name": "dino Server",
             "command": "micromambavenv\\python dino_server.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/dino_server.log"
         }
     ]
-    start_servers=excel_servers 
+    
+    # 让用户选择要启动的服务器
+    start_servers_list = select_servers(excel_servers, cad_servers, dino_servers)
+    
     processes = []
     
     print("正在启动所有服务器...")
     
     # 启动每个服务器
-    for server in start_servers:
+    for server in start_servers_list:
         # 确保日志目录存在
         log_path = Path(server["log_file"])
         log_path.parent.mkdir(parents=True, exist_ok=True)
