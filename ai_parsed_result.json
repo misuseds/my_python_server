@@ -1,44 +1,386 @@
 [
   {
-    "part_name": "三宝2-7-1PL70x400X4500=12件",
-    "area_required": "21.6",
-    "component": "MC尼龙",
-    "thickness": "70mm"
+    "part_name": "达昊11K-14PL8x100X240=1件",
+    "area_required": "0.192",
+    "component": "钢板",
+    "thickness": "8mm"
   },
   {
-    "part_name": "三宝2-8-1PL70x400X4500=10件",
-    "area_required": "18.0",
-    "component": "MC尼龙",
-    "thickness": "70mm"
+    "part_name": "达昊11K-60PL8x85X250=1件",
+    "area_required": "0.213",
+    "component": "钢板",
+    "thickness": "8mm"
   },
   {
-    "part_name": "三宝2-9-1PL80x300X680=64件",
-    "area_required": "13.06",
-    "component": "MC尼龙",
-    "thickness": "80mm"
+    "part_name": "达昊11K-61PL8x85X250=102件",
+    "area_required": "21.675",
+    "component": "钢板",
+    "thickness": "8mm"
   },
   {
-    "part_name": "三宝2-10-1PL100x640X1500=28件",
-    "area_required": "26.88",
-    "component": "MC尼龙",
-    "thickness": "100mm"
+    "part_name": "达昊11K-62PL8x85X230=12件",
+    "area_required": "2.346",
+    "component": "钢板",
+    "thickness": "8mm"
   },
   {
-    "part_name": "三宝2-11-1PL100x250X760=32件",
-    "area_required": "6.08",
-    "component": "MC尼龙",
-    "thickness": "100mm"
+    "part_name": "达昊11K-64PL8x85X250=37件",
+    "area_required": "7.863",
+    "component": "钢板",
+    "thickness": "8mm"
   },
   {
-    "part_name": "三宝2-11-15PL40x250X2000=32件",
-    "area_required": "16.0",
-    "component": "MC尼龙",
-    "thickness": "40mm"
+    "part_name": "达昊11K-70PL8x85X250=2件",
+    "area_required": "0.425",
+    "component": "钢板",
+    "thickness": "8mm"
   },
   {
-    "part_name": "三宝2-12-6PL68x358X145=56件",
-    "area_required": "2.91",
-    "component": "MC尼龙",
-    "thickness": "68mm"
+    "part_name": "达昊12K-9PL8x200X240=1件",
+    "area_required": "0.480",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊12K-10PL8x85X230=2件",
+    "area_required": "0.391",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊12K-34PL8x85X250=1件",
+    "area_required": "0.213",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊12K-35PL8x85X250=41件",
+    "area_required": "8.713",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊12K-36PL8x85X230=6件",
+    "area_required": "1.173",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-9PL8x100X240=1件",
+    "area_required": "0.240",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-25PL8x190X230=1件",
+    "area_required": "0.437",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-57PL8x85X230=14件",
+    "area_required": "2.737",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-58PL8x85X250=96件",
+    "area_required": "20.400",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-61PL8x85X250=37件",
+    "area_required": "7.863",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-67PL8x85X250=3件",
+    "area_required": "0.638",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22K-27PL8x85X230=22件",
+    "area_required": "4.301",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22K-35PL8x85X250=34件",
+    "area_required": "7.225",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22K-36PL8x240X250=1件",
+    "area_required": "0.600",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22K-38PL8x85X250=44件",
+    "area_required": "9.350",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22K-39PL8x85X230=8件",
+    "area_required": "1.564",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22K-46PL8x85X250=1件",
+    "area_required": "0.213",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22K-47PL8x85X230=1件",
+    "area_required": "0.196",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊11K-5PL8x190X230=2件",
+    "area_required": "0.874",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-59PL8x190X230=1件",
+    "area_required": "0.437",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21K-66PL8x90X230=1件",
+    "area_required": "0.207",
+    "component": "钢板",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊11K-63PL6x60X85=116件",
+    "area_required": "0.592",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊11K-65PL6x60X85=38件",
+    "area_required": "0.194",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊11K-66PL6x96X196=18件",
+    "area_required": "3.387",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊11K-67PL6x100X190=31件",
+    "area_required": "5.890",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊11K-68PL6x100X100=36件",
+    "area_required": "3.600",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊11K-69PL6x100X190=5件",
+    "area_required": "0.950",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-12PL6x85X250=36件",
+    "area_required": "7.650",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-13PL6x85X230=18件",
+    "area_required": "3.519",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-28PL6x100X190=19件",
+    "area_required": "3.610",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-29PL6x100X100=28件",
+    "area_required": "2.800",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-30PL6x60X85=103件",
+    "area_required": "0.526",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-38PL6x60X85=1件",
+    "area_required": "0.005",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-39PL6x96X196=6件",
+    "area_required": "1.129",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12K-41PL6x100X190=9件",
+    "area_required": "1.710",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12R-1PL6x96X196=4件",
+    "area_required": "0.753",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊21K-60PL6x60X85=115件",
+    "area_required": "0.587",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊21K-62PL6x100X190=32件",
+    "area_required": "6.080",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊21K-63PL6x60X85=35件",
+    "area_required": "0.179",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊21K-64PL6x96X196=16件",
+    "area_required": "3.011",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊21K-65PL6x100X100=32件",
+    "area_required": "3.200",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊22K-37PL6x60X85=60件",
+    "area_required": "0.306",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊22K-40PL6x100X190=32件",
+    "area_required": "6.080",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊22K-42PL6x100X100=32件",
+    "area_required": "3.200",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊22K-43PL6x60X85=50件",
+    "area_required": "0.255",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊22K-44PL6x96X196=12件",
+    "area_required": "2.258",
+    "component": "钢板",
+    "thickness": "6mm"
+  },
+  {
+    "part_name": "达昊12P-381PL3x288X2158=2件",
+    "area_required": "12.430",
+    "component": "钢板",
+    "thickness": "3mm"
+  },
+  {
+    "part_name": "达昊22P-391PL3x288X2158=2件",
+    "area_required": "12.430",
+    "component": "钢板",
+    "thickness": "3mm"
+  },
+  {
+    "part_name": "达昊11L-6L100x8X100=18件",
+    "area_required": "0.180",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊11L-15L100x8X100=18件",
+    "area_required": "0.180",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊12L-4L100x8X100=10件",
+    "area_required": "0.100",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊12L-10L100x8X100=10件",
+    "area_required": "0.100",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21L-10L100x8X100=12件",
+    "area_required": "0.120",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21L-15L100x8X100=20件",
+    "area_required": "0.200",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊22L-10L100x8X100=24件",
+    "area_required": "0.240",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊11L-14L100x8X240=28件",
+    "area_required": "6.720",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊12L-31L100x8X240=8件",
+    "area_required": "1.920",
+    "component": "角钢",
+    "thickness": "8mm"
+  },
+  {
+    "part_name": "达昊21L-14L100x8X240=28件",
+    "area_required": "6.720",
+    "component": "角钢",
+    "thickness": "8mm"
   }
 ]

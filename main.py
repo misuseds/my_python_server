@@ -46,11 +46,14 @@ def select_servers(excel_servers, cad_servers, dino_servers):
     choice = input("请输入选项编号 (默认为1): ").strip()
     
     if choice == "" or choice == "1":
+        print("Server URL: http://localhost:5001/process_excel?filepath=&sheet_name=Sheet1")
         return excel_servers
     elif choice == "2":
         return cad_servers
     elif choice == "3":
+        print("Server URL: http://localhost:5200/image_info?image_path=")
         return dino_servers
+    
     elif choice == "4":
         return excel_servers + cad_servers + dino_servers
     else:
@@ -83,6 +86,7 @@ def start_servers():
             "command": "micromambavenv\\python get_thick_part_json.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/thick_part.log"
+            
         }
         
     ]

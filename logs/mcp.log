@@ -1,18 +1,13 @@
-Downloading pydantic-core (1.9MiB)
- Downloading pydantic-core
-Installed 68 packages in 7.04s
-INFO:     Started server process [19796]
+INFO:     Started server process [23120]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8017 (Press CTRL+C to quit)
-INFO:     127.0.0.1:53999 - "GET /sse HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54000 - "GET /sse HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54027 - "GET /sse HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54029 - "POST /messages/?session_id=a48b545ccf6a41e389c8014c20768c50 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:54029 - "POST /messages/?session_id=a48b545ccf6a41e389c8014c20768c50 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:54029 - "POST /messages/?session_id=a48b545ccf6a41e389c8014c20768c50 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:54069 - "GET /sse HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54071 - "POST /messages/?session_id=837d7505b12741789452015a2fd3ec96 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:54071 - "POST /messages/?session_id=837d7505b12741789452015a2fd3ec96 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:54071 - "POST /messages/?session_id=837d7505b12741789452015a2fd3ec96 HTTP/1.1" 202 Accepted
-INFO:     127.0.0.1:54071 - "POST /messages/?session_id=837d7505b12741789452015a2fd3ec96 HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:61418 - "GET /sse HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61419 - "GET /sse HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61477 - "GET /sse HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61479 - "POST /messages/?session_id=a5ee2c6593cf40efbd3222d544c45c22 HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:61479 - "POST /messages/?session_id=a5ee2c6593cf40efbd3222d544c45c22 HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:61479 - "POST /messages/?session_id=a5ee2c6593cf40efbd3222d544c45c22 HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:61479 - "POST /messages/?session_id=a5ee2c6593cf40efbd3222d544c45c22 HTTP/1.1" 202 Accepted
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
