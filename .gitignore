@@ -4,3 +4,4 @@
 .env
 micromambavenv
 output/*
+*formatted_data*
