@@ -65,7 +65,7 @@ def start_servers():
     excel_servers = [
         {
             "name": "Python SSE Server",
-            "command": "micromambavenv\\python sse_server.py",
+            "command": "micromambavenv\\python excel_server\\sse_server.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/sse.log"
         },
@@ -83,14 +83,14 @@ def start_servers():
         },
         {
             "name": "Thick Part JSON Server",
-            "command": "micromambavenv\\python get_thick_part_json.py",
+            "command": "micromambavenv\\python excel_server\\get_thick_part_json.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/thick_part.log"
             
         },
             {
             "name": "json2excel Server",
-            "command": "micromambavenv\\python json2excel.py",
+            "command": "micromambavenv\\python excel_server\\json2excel.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/json2excel.log"
             
