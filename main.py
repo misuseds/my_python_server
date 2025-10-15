@@ -49,6 +49,7 @@ def select_servers(excel_servers, cad_servers, dino_servers):
         print("Server URL: http://localhost:5001/process_excel?filepath=&sheet_name=Sheet1")
         return excel_servers
     elif choice == "2":
+        print("Server URL: http://localhost:5301/view_dxf?dxf_path=")
         return cad_servers
     elif choice == "3":
         print("Server URL: http://localhost:5200/image_info?image_path=")
@@ -103,6 +104,12 @@ def start_servers():
             "command": "micromambavenv\\python cad_server\\server.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/cad_server.log"
+        },
+        {
+            "name": "ezcad Server",
+            "command": "micromambavenv\\python ezdxf_server\\readdxf.py",
+            "cwd": "E:\\code\\my_python_server",
+            "log_file": "logs/ezcad_server.log"
         }
     ]
     dino_servers = [
