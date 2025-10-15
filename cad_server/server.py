@@ -26,7 +26,48 @@ PW_CLIENTONLY = 1
 PW_RENDERFULLCONTENT = 3
 
 app = Flask(__name__)
-
+# 在 server.py 文件末尾添加新的 API 端点
+@app.route('/objects/all', methods=['GET'])
+def get_all_objects():
+    """
+    获取AutoCAD中所有对象的类名
+    
+    Returns:
+        JSON格式的对象类名列表
+    """
+    try:
+        pythoncom.CoInitialize()
+        acad = Autocad()
+        
+        # 获取模型空间
+        model_space = acad.doc.ModelSpace
+        
+        # 收集所有对象的类名
+        object_names = []
+        
+        for obj in model_space:
+            if hasattr(obj, 'ObjectName'):
+                object_names.append(obj.ObjectName)
+            else:
+                object_names.append('Unknown')
+        
+        # 统计各类对象数量
+        name_count = {}
+        for name in object_names:
+            name_count[name] = name_count.get(name, 0) + 1
+        
+        return jsonify({
+            'status': 'success',
+            'object_names': object_names,
+            'object_count': len(object_names),
+            'class_statistics': name_count
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 def capture_autocad_region():
     """
     截取AutoCAD窗口中指定区域的截图，类似于C#中的Util.SavePng()方法
@@ -309,7 +350,31 @@ def screenshot_region_base64():
             'status': 'error',
             'message': str(e)
         }), 500
-
+# 在 server.py 文件中添加根路径路由
+@app.route('/', methods=['GET'])
+def home():
+    """
+    API根路径，返回API服务器信息和可用端点列表
+    
+    Returns:
+        JSON格式的API信息
+    """
+    return jsonify({
+        'status': 'success',
+        'message': 'AutoCAD Server API is running',
+        'version': '1.0.0',
+        'available_endpoints': [
+            'GET / - API根路径',
+            'GET /objects/all - 获取所有对象类名',
+            'GET /model/bounds - 获取模型空间边界框',
+            'GET /screenshot/region - 截取AutoCAD指定区域截图',
+            'GET /screenshot/region/base64 - 截取AutoCAD指定区域截图并返回base64编码',
+            'GET /delete-area - 删除指定区域内的对象',
+            'GET /edit/undo - 执行撤销操作',
+            'GET/POST /command/echo - 在AutoCAD命令行显示文本信息'
+        ],
+        'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
+    })
 @app.route('/delete-area', methods=['GET'])
 def delete_area():
     """

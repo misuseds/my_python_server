@@ -1,5 +1,8 @@
 import ezdxf
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Arc
@@ -125,17 +128,221 @@ def is_valid_dxf(dxf_path):
         print(f"DXF文件校验失败: {e}")
         return False
 
+# 在 readdxf.py 文件中添加新的API端点，放在其他@app.route装饰器附近
+@app.route('/objects/all', methods=['GET'])
+def get_dxf_objects():
+    """
+    获取DXF/DWG文件中所有对象的类型
+    
+    Query Parameters:
+        dxf_path: DXF或DWG文件路径
+        
+    Returns:
+        JSON格式的对象类型列表和统计信息
+    """
+    file_path = request.args.get('dxf_path')
+    if not file_path:
+        return jsonify({
+            "status": "error", 
+            "message": "缺少dxf_path参数"
+        }), 400
 
-def process_dxf_file(dxf_file_path):
+    if not os.path.exists(file_path):
+        return jsonify({
+            "status": "error", 
+            "message": f"文件不存在: {file_path}"
+        }), 404
+
+    file_ext = os.path.splitext(file_path)[1].lower()
+
+    try:
+        # 如果是DWG文件，先转换为DXF
+        if file_ext == '.dwg':
+            conversion_result = convert_dwg_to_dxf(file_path)
+            if conversion_result["status"] != "success":
+                return jsonify(conversion_result), 500
+            dxf_file_path = conversion_result["dxf_path"]
+        elif file_ext == '.dxf':
+            dxf_file_path = file_path
+        else:
+            return jsonify({
+                "status": "error",
+                "message": f"不支持的文件格式: {file_ext}。仅支持DXF和DWG文件。"
+            }), 400
+
+        # 读取DXF文件并收集对象类型
+        doc = ezdxf.readfile(dxf_file_path)
+        msp = doc.modelspace()
+
+        # 收集所有对象类型
+        object_types = []
+        for entity in msp:
+            object_types.append(entity.dxftype())
+
+        # 统计各类对象数量
+        type_count = {}
+        for obj_type in object_types:
+            type_count[obj_type] = type_count.get(obj_type, 0) + 1
+
+        return jsonify({
+            'status': 'success',
+            'object_types': object_types,
+            'object_count': len(object_types),
+            'type_statistics': type_count,
+            'file_path': dxf_file_path
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f"处理文件时出错: {str(e)}"
+        }), 500
+
+@app.route('/objects/texts', methods=['GET'])
+def get_dxf_texts():
+    """
+    获取DXF/DWG文件中所有文本对象的内容
+    
+    Query Parameters:
+        dxf_path: DXF或DWG文件路径
+        
+    Returns:
+        JSON格式的文本内容列表
+    """
+    file_path = request.args.get('dxf_path')
+    if not file_path:
+        return jsonify({
+            "status": "error", 
+            "message": "缺少dxf_path参数"
+        }), 400
+
+    if not os.path.exists(file_path):
+        return jsonify({
+            "status": "error", 
+            "message": f"文件不存在: {file_path}"
+        }), 404
+
+    file_ext = os.path.splitext(file_path)[1].lower()
+
+    try:
+        # 如果是DWG文件，先转换为DXF
+        if file_ext == '.dwg':
+            conversion_result = convert_dwg_to_dxf(file_path)
+            if conversion_result["status"] != "success":
+                return jsonify(conversion_result), 500
+            dxf_file_path = conversion_result["dxf_path"]
+        elif file_ext == '.dxf':
+            dxf_file_path = file_path
+        else:
+            return jsonify({
+                "status": "error",
+                "message": f"不支持的文件格式: {file_ext}。仅支持DXF和DWG文件。"
+            }), 400
+
+        # 读取DXF文件并收集文本内容
+        doc = ezdxf.readfile(dxf_file_path)
+        msp = doc.modelspace()
+
+        # 收集所有文本内容
+        texts = []
+        for entity in msp:
+            if entity.dxftype() == 'TEXT':
+                texts.append({
+                    'content': entity.dxf.text,
+                    'position': {
+                        'x': entity.dxf.insert.x,
+                        'y': entity.dxf.insert.y
+                    }
+                })
+            elif entity.dxftype() == 'MTEXT':
+                texts.append({
+                    'content': entity.text,
+                    'position': {
+                        'x': entity.dxf.insert.x,
+                        'y': entity.dxf.insert.y
+                    }
+                })
+
+        # 将所有文本内容合并为一个字符串
+        all_text_content = '\n'.join([text['content'] for text in texts])
+
+        return jsonify({
+            'status': 'success',
+            'texts': texts,
+            'all_text_content': all_text_content,
+            'text_count': len(texts),
+            'file_path': dxf_file_path
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f"处理文件时出错: {str(e)}"
+        }), 500
+
+def process_dxf_file(dxf_file_path, highlight_random=False):
     """
     处理DXF文件并生成图像
     
     Args:
         dxf_file_path (str): DXF文件路径
+        highlight_random (bool): 是否随机高亮一个对象
         
     Returns:
         dict: 处理结果
     """
+    # DXF颜色索引到matplotlib颜色的映射
+    dxf_color_map = {
+        0: 'black',      # 黑色
+        1: 'red',        # 红色
+        2: 'yellow',     # 黄色
+        3: 'green',      # 绿色
+        4: 'cyan',       # 青色
+        5: 'blue',       # 蓝色
+        6: 'magenta',    # 洋红色
+        7: 'white',      # 白色
+        8: '#a5a5a5',    # 灰色
+        9: '#c0c0c0',    # 浅灰
+        10: 'red',       # 红色
+        11: '#ffaaaa',   # 粉红色
+        12: '#bd0000',   # 深红色
+        13: '#bd7373',   # 玫瑰色
+        14: '#800000',   # 棕红色
+        15: '#ff0000',   # 鲜红色
+        16: '#ffff00',   # 黄色
+        17: '#ffff73',   # 金黄色
+        18: '#bda000',   # 深黄色
+        19: '#bdae73',   # 橄榄绿
+        20: '#808000',   # 深橄榄绿
+        21: '#ffff00',   # 鲜黄色
+        22: '#00ff00',   # 绿色
+        23: '#aaffaa',   # 浅绿色
+        24: '#00bd00',   # 深绿色
+        25: '#73bd73',   # 海绿色
+        26: '#008000',   # 深绿
+        27: '#00ff00',   # 鲜绿色
+        28: '#00ffff',   # 青色
+        29: '#aaffff',   # 浅青色
+        30: '#00bfbf',   # 深青色
+        31: '#73bfbf',   # 青绿
+        32: '#008080',   # 深青绿
+        33: '#00ffff',   # 鲜青色
+        34: '#0000ff',   # 蓝色
+        35: '#aaaaff',   # 浅蓝色
+        36: '#0000bd',   # 深蓝色
+        37: '#7373bf',   # 紫蓝色
+        38: '#000080',   # 深紫蓝
+        39: '#0000ff',   # 鲜蓝色
+        40: '#ff00ff',   # 洋红色
+        41: '#ffaaff',   # 浅洋红
+        42: '#bd00bd',   # 深洋红
+        43: '#bd73bd',   # 紫色
+        44: '#800080',   # 深紫
+        45: '#ff00ff',   # 鲜洋红
+        # 默认颜色
+        'default': 'black'
+    }
+
     try:
         # 检查文件是否存在
         if not os.path.exists(dxf_file_path):
@@ -150,60 +357,207 @@ def process_dxf_file(dxf_file_path):
 
         # 创建图形对象
         fig, ax = plt.subplots()
+        
+        # 获取所有可显示的实体列表（只有LINE, SPLINE, ARC, CIRCLE可显示）
+        displayable_entities = []
+        for entity in msp:
+            if entity.dxftype() in ['LINE', 'SPLINE', 'ARC', 'CIRCLE']:
+                displayable_entities.append(entity)
+        
+        # 如果需要高亮且存在可显示实体，则随机选择一个
+        highlighted_entity = None
+        if highlight_random and displayable_entities:
+            highlighted_entity = np.random.choice(displayable_entities)
 
         lines = []
+        line_colors = []
+        highlighted_elements = []
+        
+        # 存储所有坐标点用于设置视图范围
+        all_x_coords = []
+        all_y_coords = []
 
         for entity in msp:
+            # 判断当前实体是否为高亮实体
+            is_highlighted = (entity is highlighted_entity)
+            linewidth = 1.5 if is_highlighted else 0.5
+
+            # 获取实体颜色
+            try:
+                # 尝试获取实体的颜色
+                if hasattr(entity.dxf, 'color'):
+                    dxf_color = entity.dxf.color
+                    # 使用DXF颜色索引映射到实际颜色
+                    if dxf_color is not None and dxf_color in dxf_color_map:
+                        actual_color = dxf_color_map[dxf_color]
+                    else:
+                        actual_color = dxf_color_map['default']  # 默认黑色
+                else:
+                    actual_color = dxf_color_map['default']
+            except:
+                actual_color = dxf_color_map['default']  # 出错时使用默认黑色
+            
+            # 如果是高亮状态，使用红色
+            color = 'red' if is_highlighted else actual_color
+
             if entity.dxftype() == 'LINE':
-                lines.append([(entity.dxf.start.x, entity.dxf.start.y),
-                              (entity.dxf.end.x, entity.dxf.end.y)])
+                start = entity.dxf.start
+                end = entity.dxf.end
+                if is_highlighted:
+                    # 单独绘制高亮线段
+                    ax.plot([start.x, end.x], [start.y, end.y], color=color, linewidth=linewidth)
+                else:
+                    # 添加到普通线段集合
+                    lines.append([(start.x, start.y), (end.x, end.y)])
+                    line_colors.append(color)
+                
+                # 记录坐标用于计算范围
+                all_x_coords.extend([start.x, end.x])
+                all_y_coords.extend([start.y, end.y])
+                    
             elif entity.dxftype() == 'SPLINE':
-                fit_points = entity.control_points
-                lines.append([(fit_points[0][0], fit_points[0][1]),
-                              (fit_points[-1][0], fit_points[-1][1])])
+                try:
+                    # 获取拟合点或控制点
+                    if hasattr(entity, 'fit_points') and entity.fit_points:
+                        points = [(p.x, p.y) for p in entity.fit_points]
+                    else:
+                        points = [(p[0], p[1]) for p in entity.control_points]
+                        
+                    if is_highlighted:
+                        # 单独绘制高亮样条曲线
+                        x_coords = [p[0] for p in points]
+                        y_coords = [p[1] for p in points]
+                        ax.plot(x_coords, y_coords, color=color, linewidth=linewidth)
+                    else:
+                        # 对于普通样条曲线，只绘制起点和终点之间的连线
+                        if len(points) >= 2:
+                            lines.append([points[0], points[-1]])
+                            line_colors.append(color)
+                            
+                    # 记录坐标用于计算范围
+                    all_x_coords.extend([p[0] for p in points])
+                    all_y_coords.extend([p[1] for p in points])
+                except Exception as e:
+                    print(f'处理SPLINE实体时出错: {e}')
+                    
             elif entity.dxftype() == 'ARC':
                 arc = entity
-                center = (arc.dxf.center.x, arc.dxf.center.y)
+                center = arc.dxf.center
                 radius = arc.dxf.radius
                 start_angle = arc.dxf.start_angle
                 end_angle = arc.dxf.end_angle
+                
+                # 处理圆弧角度
                 if start_angle > end_angle:
                     end_angle += 360
-                arc_patch = Arc(center, 2*radius, 2*radius, angle=0,
-                                theta1=start_angle, theta2=end_angle,
-                                color='blue', linewidth=0.5)
-                ax.add_patch(arc_patch)
+                    
+                if is_highlighted:
+                    # 单独绘制高亮圆弧
+                    arc_patch = Arc((center.x, center.y), 2*radius, 2*radius, angle=0,
+                                    theta1=start_angle, theta2=end_angle,
+                                    color=color, linewidth=linewidth)
+                    ax.add_patch(arc_patch)
+                else:
+                    # 普通圆弧用原始颜色绘制
+                    arc_patch = Arc((center.x, center.y), 2*radius, 2*radius, angle=0,
+                                    theta1=start_angle, theta2=end_angle,
+                                    color=color, linewidth=0.5)
+                    ax.add_patch(arc_patch)
+                    
+                # 记录坐标用于计算范围（近似）
+                all_x_coords.extend([center.x - radius, center.x + radius])
+                all_y_coords.extend([center.y - radius, center.y + radius])
+                    
+            elif entity.dxftype() == 'CIRCLE':
+                circle = entity
+                center = circle.dxf.center
+                radius = circle.dxf.radius
+                
+                if is_highlighted:
+                    # 单独绘制高亮圆形
+                    circle_patch = plt.Circle((center.x, center.y), radius, fill=False, 
+                                            color=color, linewidth=linewidth)
+                    ax.add_patch(circle_patch)
+                else:
+                    # 普通圆形用原始颜色绘制
+                    circle_patch = plt.Circle((center.x, center.y), radius, fill=False, 
+                                            color=color, linewidth=0.5)
+                    ax.add_patch(circle_patch)
+                    
+                # 记录坐标用于计算范围
+                all_x_coords.extend([center.x - radius, center.x + radius])
+                all_y_coords.extend([center.y - radius, center.y + radius])
             else:
+                # 其他实体类型虽然处理了但没有可视化
                 print('未处理的实体类型:', entity.dxftype())
 
+        # 绘制普通线条（使用原始颜色）
         if lines:
-            line_segments = LineCollection(lines, linewidths=0.5, colors='blue')
+            line_segments = LineCollection(lines, linewidths=0.5, colors=line_colors if line_colors else 'black')
             ax.add_collection(line_segments)
 
-            # 设置坐标范围
-            x_coords = [p[0] for l in lines for p in l]
-            y_coords = [p[1] for l in lines for p in l]
-            ax.set_xlim(min(x_coords) - 5, max(x_coords) + 5)
-            ax.set_ylim(min(y_coords) - 5, max(y_coords) + 5)
+        # 设置坐标范围
+        if all_x_coords and all_y_coords:
+            margin = 5
+            ax.set_xlim(min(all_x_coords) - margin, max(all_x_coords) + margin)
+            ax.set_ylim(min(all_y_coords) - margin, max(all_y_coords) + margin)
+        else:
+            # 如果没有任何实体，设置默认范围
+            ax.set_xlim(-10, 10)
+            ax.set_ylim(-10, 10)
 
         plt.gca().set_aspect('equal', adjustable='box')
         output_path = f"{dxf_file_path}.png"
-        plt.savefig(output_path)
+        plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1)  # 添加bbox_inches='tight'确保完整保存
         plt.close(fig)
 
-        return {
+        result = {
             "status": "success",
             "message": f"DXF文件已处理并保存为 {output_path}",
             "output_path": output_path
         }
+        
+        # 如果有高亮实体，返回其类型和特征信息
+        if highlighted_entity:
+            entity_info = {
+                "type": highlighted_entity.dxftype()
+            }
+            
+            # 添加不同类型实体的特征信息
+            if highlighted_entity.dxftype() == 'LINE':
+                start = highlighted_entity.dxf.start
+                end = highlighted_entity.dxf.end
+                entity_info["start"] = {"x": start.x, "y": start.y}
+                entity_info["end"] = {"x": end.x, "y": end.y}
+                entity_info["length"] = ((end.x - start.x)**2 + (end.y - start.y)**2)**0.5
+                
+            elif highlighted_entity.dxftype() == 'CIRCLE':
+                center = highlighted_entity.dxf.center
+                entity_info["center"] = {"x": center.x, "y": center.y}
+                entity_info["radius"] = highlighted_entity.dxf.radius
+                
+            elif highlighted_entity.dxftype() == 'ARC':
+                center = highlighted_entity.dxf.center
+                entity_info["center"] = {"x": center.x, "y": center.y}
+                entity_info["radius"] = highlighted_entity.dxf.radius
+                entity_info["start_angle"] = highlighted_entity.dxf.start_angle
+                entity_info["end_angle"] = highlighted_entity.dxf.end_angle
+                
+            elif highlighted_entity.dxftype() == 'SPLINE':
+                if hasattr(highlighted_entity, 'fit_points') and highlighted_entity.fit_points:
+                    entity_info["fit_points_count"] = len(highlighted_entity.fit_points)
+                if hasattr(highlighted_entity, 'control_points'):
+                    entity_info["control_points_count"] = len(highlighted_entity.control_points)
+                    
+            result["highlighted_entity"] = entity_info
+
+        return result
 
     except Exception as e:
         return {
             "status": "error",
             "message": str(e)
         }
-
-
 @app.route('/process_dxf', methods=['GET'])
 def handle_process_dxf():
     file_path = request.args.get('dxf_path')
@@ -271,6 +625,88 @@ def get_image():
     return send_file(image_path, mimetype='image/png')
 
 
+# 新增：随机高亮一个对象并返回JSON结果
+@app.route('/highlight_random', methods=['GET'])
+def highlight_random_object():
+    """
+    随机高亮DXF/DWG文件中的一个对象并生成图像
+    
+    Query Parameters:
+        dxf_path: DXF或DWG文件路径
+        
+    Returns:
+        JSON格式的处理结果
+    """
+    file_path = request.args.get('dxf_path')
+    if not file_path:
+        return jsonify({"status": "error", "message": "缺少dxf_path参数"}), 400
+
+    if not os.path.exists(file_path):
+        return jsonify({"status": "error", "message": f"文件不存在: {file_path}"}), 404
+
+    file_ext = os.path.splitext(file_path)[1].lower()
+
+    if file_ext == '.dwg':
+        conversion_result = convert_dwg_to_dxf(file_path)
+        if conversion_result["status"] != "success":
+            return jsonify(conversion_result), 500
+        dxf_file_path = conversion_result["dxf_path"]
+    elif file_ext == '.dxf':
+        dxf_file_path = file_path
+    else:
+        return jsonify({
+            "status": "error",
+            "message": f"不支持的文件格式: {file_ext}。仅支持DXF和DWG文件。"
+        }), 400
+
+    result = process_dxf_file(dxf_file_path, highlight_random=True)
+    status_code = 200 if result["status"] == "success" else 500
+    return jsonify(result), status_code
+
+
+# 新增：在网页中查看随机高亮结果
+@app.route('/view_highlighted', methods=['GET'])
+def view_highlighted_dxf():
+    """
+    在网页中查看随机高亮对象的DXF/DWG文件
+    
+    Query Parameters:
+        dxf_path: DXF或DWG文件路径
+        
+    Returns:
+        HTML页面显示处理结果
+    """
+    file_path = request.args.get('dxf_path')
+    if not file_path:
+        return render_template_string(HTML_TEMPLATE, title="错误", message="缺少dxf_path参数", image_url=None), 400
+
+    if not os.path.exists(file_path):
+        return render_template_string(HTML_TEMPLATE, title="错误", message=f"文件不存在: {file_path}", image_url=None), 404
+
+    file_ext = os.path.splitext(file_path)[1].lower()
+
+    if file_ext == '.dwg':
+        conversion_result = convert_dwg_to_dxf(file_path)
+        if conversion_result["status"] != "success":
+            return render_template_string(HTML_TEMPLATE, title="转换失败", message=conversion_result["message"], image_url=None), 500
+        dxf_file_path = conversion_result["dxf_path"]
+    elif file_ext == '.dxf':
+        dxf_file_path = file_path
+    else:
+        return render_template_string(HTML_TEMPLATE, title="错误", message=f"不支持的文件格式: {file_ext}。仅支持DXF和DWG文件。", image_url=None), 400
+
+    result = process_dxf_file(dxf_file_path, highlight_random=True)
+    if result["status"] == "success":
+        image_path = result["output_path"]
+        image_url = f"/image?path={image_path}"
+        highlighted_msg = f"随机高亮的对象类型: {result['highlighted_entity']}" if result['highlighted_entity'] else "未找到可高亮的对象"
+        message = f"{result['message']}<br>{highlighted_msg}"
+        return render_template_string(HTML_TEMPLATE, title="高亮对象处理结果", message=message, image_url=image_url)
+    else:
+        return render_template_string(HTML_TEMPLATE, title="处理失败", message=result["message"], image_url=None), 500
+
+
+# 更新根路径路由，添加新的端点信息
 @app.route('/', methods=['GET'])
 def home():
     return jsonify({
@@ -278,7 +714,10 @@ def home():
         "endpoints": {
             "process_dxf": "GET /process_dxf?dxf_path=<path_to_dxf_or_dwg_file> (返回JSON结果)",
             "view_dxf": "GET /view_dxf?dxf_path=<path_to_dxf_or_dwg_file> (在网页中查看图像)",
-            "image": "GET /image?path=<path_to_image> (获取图像文件)"
+            "highlight_random": "GET /highlight_random?dxf_path=<path_to_dxf_or_dwg_file> (随机高亮一个对象并返回JSON结果)",
+            "view_highlighted": "GET /view_highlighted?dxf_path=<path_to_dxf_or_dwg_file> (在网页中查看随机高亮结果)",
+            "image": "GET /image?path=<path_to_image> (获取图像文件)",
+            "objects_all": "GET /objects/all?dxf_path=<path_to_dxf_or_dwg_file> (获取所有对象类型)"
         },
         "notes": "支持DXF和DWG文件格式。DWG文件会自动转换为DXF格式后再处理。",
         "example": "GET /view_dxf?dxf_path=C:\\test\\example.dwg"
@@ -308,8 +747,8 @@ HTML_TEMPLATE = """
         <h1>{{ title }}</h1>
         
         {% if message %}
-        <div class="message {% if title == '处理失败' or title == '错误' or title == '转换失败' %}error{% elif title == '文件处理结果' %}success{% else %}info{% endif %}">
-            <p>{{ message }}</p>
+        <div class="message {% if title == '处理失败' or title == '错误' or title == '转换失败' %}error{% elif title == '文件处理结果' or title == '高亮对象处理结果' %}success{% else %}info{% endif %}">
+            <p>{{ message|safe }}</p>
         </div>
         {% endif %}
         

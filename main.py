@@ -78,7 +78,7 @@ def start_servers():
         },
         {
             "name": "LLM Server",
-            "command": "micromambavenv\\python llm_server.py",
+            "command": "micromambavenv\\python llm_server\llm_server.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/llm.log"
         },
@@ -115,7 +115,7 @@ def start_servers():
     dino_servers = [
         {
             "name": "dino Server",
-            "command": "micromambavenv\\python dino_server.py",
+            "command": "micromambavenv\\python dino_server\dino_server.py",
             "cwd": "E:\\code\\my_python_server",
             "log_file": "logs/dino_server.log"
         }
