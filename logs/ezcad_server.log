@@ -1,0 +1,18 @@
+'name' table stringOffset incorrect. Expected: 222; Actual: 224
+cannot open font 'C:\WINDOWS\Fonts\mstmc.ttf': Not a TrueType or OpenType font (bad sfntVersion)
+ * Serving Flask app 'readdxf'
+ * Debug mode: on
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5301
+ * Running on http://192.168.100.199:5301
+Press CTRL+C to quit
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 117-474-009
+127.0.0.1 - - [20/Oct/2025 20:46:00] "GET /objects/signatures?dxf_path=E:\\code\\cad_ppo\\dataset\\label\\1.dxf HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 20:46:04] "GET /highlight_random?dxf_path=E:\\code\\cad_ppo\\dataset\\train\\1.dxf HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 20:46:06] "GET /highlight_random?dxf_path=E:\\code\\cad_ppo\\dataset\\train\\1.dxf HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 20:46:09] "GET /highlight_random?dxf_path=E:\\code\\cad_ppo\\dataset\\train\\1.dxf HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 20:46:11] "GET /highlight_random?dxf_path=E:\\code\\cad_ppo\\dataset\\train\\1.dxf HTTP/1.1" 200 -
+127.0.0.1 - - [20/Oct/2025 20:46:13] "GET /highlight_random?dxf_path=E:\\code\\cad_ppo\\dataset\\train\\1.dxf HTTP/1.1" 200 -
