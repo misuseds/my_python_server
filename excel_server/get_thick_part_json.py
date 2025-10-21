@@ -198,7 +198,7 @@ def process_excel_api():
         if calculated_data:
             try:
                 # 构造保存的文件名
-                calculated_excel_filename = f"output/{filename}_calculated_data.xlsx"
+                calculated_excel_filename = f"output/{filename}_清单.xlsx"
                 # 在实际使用前确保目录存在
                 os.makedirs(os.path.dirname(calculated_excel_filename), exist_ok=True)
                 

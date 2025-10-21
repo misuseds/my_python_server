@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+
 def save_json_to_excel(json_data, filename="output.xlsx", dxf_filename=None):
     """
     将JSON数据保存为Excel文件
@@ -51,44 +52,45 @@ def save_json_to_excel(json_data, filename="output.xlsx", dxf_filename=None):
         output_path = os.path.abspath(filename)
         df.to_excel(output_path, index=False)
         
-        # 在前三行合并单元格并填入文件名
-        workbook = load_workbook(output_path)
-        worksheet = workbook.active
-        
-        # 获取最大列数
-        max_column = worksheet.max_column
-        if max_column > 0:
-            # 合并前三行的单元格
-            merge_range = f"A1:{chr(64 + max_column) if max_column <= 26 else 'Z' + chr(64 + max_column - 26)}3" if max_column > 26 else f"A1:{chr(64 + max_column)}3"
-            if max_column <= 26:
-                merge_range = f"A1:{chr(64 + max_column)}3"
-            else:
-                # 处理超过26列的情况
-                first_char = chr(64 + (max_column - 1) // 26) if (max_column - 1) // 26 > 0 else ""
-                second_char = chr(64 + ((max_column - 1) % 26) + 1)
-                last_column = first_char + second_char
-                merge_range = f"A1:{last_column}3"
+        # 如果提供了文件名，则在前三行合并单元格并填入文件名
+        if dxf_filename:
+            workbook = load_workbook(output_path)
+            worksheet = workbook.active
+            
+            # 获取最大列数
+            max_column = worksheet.max_column
+            if max_column > 0:
+                # 在第一行之前插入3行
+                worksheet.insert_rows(1, 3)
                 
-            worksheet.merge_cells(merge_range)
+                # 合并新插入的前三行的单元格
+                merge_range = f"A1:{chr(64 + max_column) if max_column <= 26 else 'Z' + chr(64 + max_column - 26)}3" if max_column > 26 else f"A1:{chr(64 + max_column)}3"
+                if max_column <= 26:
+                    merge_range = f"A1:{chr(64 + max_column)}3"
+                else:
+                    # 处理超过26列的情况
+                    first_char = chr(64 + (max_column - 1) // 26) if (max_column - 1) // 26 > 0 else ""
+                    second_char = chr(64 + ((max_column - 1) % 26) + 1)
+                    last_column = first_char + second_char
+                    merge_range = f"A1:{last_column}3"
+                    
+                worksheet.merge_cells(merge_range)
+                
+                # 在合并的单元格中填入文件名
+                worksheet["A1"] = dxf_filename
+                
+                # 设置居中对齐
+                from openpyxl.styles import Alignment
+                alignment = Alignment(horizontal="center", vertical="center")
+                worksheet["A1"].alignment = alignment
+                
+                # 可选：设置字体大小
+                from openpyxl.styles import Font
+                font = Font(size=14, bold=True)
+                worksheet["A1"].font = font
             
-            # 确定要显示的文件名（优先使用dxf_filename，否则使用filename）
-            display_filename = dxf_filename if dxf_filename else os.path.basename(filename)
-            
-            # 在合并的单元格中填入文件名
-            worksheet["A1"] = display_filename
-            
-            # 设置居中对齐
-            from openpyxl.styles import Alignment
-            alignment = Alignment(horizontal="center", vertical="center")
-            worksheet["A1"].alignment = alignment
-            
-            # 可选：设置字体大小
-            from openpyxl.styles import Font
-            font = Font(size=14, bold=True)
-            worksheet["A1"].font = font
-        
-        # 保存修改后的Excel文件
-        workbook.save(output_path)
+            # 保存修改后的Excel文件
+            workbook.save(output_path)
         
         logger.info(f"Excel文件已保存至: {output_path}")
         return output_path
@@ -96,6 +98,9 @@ def save_json_to_excel(json_data, filename="output.xlsx", dxf_filename=None):
     except Exception as e:
         logger.error(f"保存Excel文件时出错: {str(e)}")
         raise e
+
+
+
 @app.route('/json_to_excel', methods=['POST'])
 def convert_json_to_excel():
     """
