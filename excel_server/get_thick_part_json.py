@@ -177,7 +177,7 @@ def process_excel_api():
                     logger.info("钢材参数计算完成")
                     
                     # 保存计算结果到文件
-                    calc_save_path = os.path.join(os.getcwd(), 'output\calculated_result.json')
+                    calc_save_path = os.path.join(os.getcwd(), 'excel_output\calculated_result.json')
                     with open(calc_save_path, 'w', encoding='utf-8') as f:
                         json.dump(calculated_data, f, ensure_ascii=False, indent=2)
                     logger.info(f"计算结果已保存至: {calc_save_path}")
@@ -198,7 +198,7 @@ def process_excel_api():
         if calculated_data:
             try:
                 # 构造保存的文件名
-                calculated_excel_filename = f"output/{filename}_清单.xlsx"
+                calculated_excel_filename = f"excel_output/{filename}_清单.xlsx"
                 # 在实际使用前确保目录存在
                 os.makedirs(os.path.dirname(calculated_excel_filename), exist_ok=True)
                 

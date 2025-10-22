@@ -4,6 +4,8 @@
 .env
 micromambavenv
 output/*
+excel_output/*
+dxf_output/*
 *formatted_data*
 *ai_parsed_result.json
 *calculated_result.json

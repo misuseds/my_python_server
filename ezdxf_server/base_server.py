@@ -353,6 +353,268 @@ def list_dxf_files():
         if SHOW_TIMING:
             response["processing_time"] = time.time() - start_time
         return jsonify(response), 500
+    
+
+
+@app.route('/render_dxf_image', methods=['GET'])
+def render_dxf_image():
+    """
+    渲染DXF/DWG文件为图像
+    
+    Query Parameters:
+        dxf_path: DXF或DWG文件路径
+        
+    Returns:
+        JSON格式的处理结果或图像文件
+    """
+    start_time = time.time()
+    file_path = request.args.get('dxf_path')
+    if not file_path:
+        response = {
+            "status": "error", 
+            "message": "缺少dxf_path参数"
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 400
+
+    if not os.path.exists(file_path):
+        response = {
+            "status": "error", 
+            "message": f"文件不存在: {file_path}"
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 404
+
+    file_ext = os.path.splitext(file_path)[1].lower()
+
+    try:
+        # 如果是DWG文件，先转换为DXF
+        if file_ext == '.dwg':
+            conversion_result = convert_dwg_to_dxf(file_path)
+            if conversion_result["status"] != "success":
+                if SHOW_TIMING:
+                    conversion_result["processing_time"] = time.time() - start_time
+                return jsonify(conversion_result), 500
+            dxf_file_path = conversion_result["dxf_path"]
+        elif file_ext == '.dxf':
+            dxf_file_path = file_path
+        else:
+            response = {
+                "status": "error",
+                "message": f"不支持的文件格式: {file_ext}。仅支持DXF和DWG文件。"
+            }
+            if SHOW_TIMING:
+                response["processing_time"] = time.time() - start_time
+            return jsonify(response), 400
+
+        # 处理DXF文件并生成图像
+        result = process_dxf_file_simple(dxf_file_path)
+        
+        if result["status"] == "success":
+            # 检查是否需要返回图像文件
+            if request.args.get('return_image') == 'true':
+                return send_file(result["output_path"], mimetype='image/png')
+            else:
+                if SHOW_TIMING:
+                    result["processing_time"] = time.time() - start_time
+                return jsonify(result)
+        else:
+            if SHOW_TIMING:
+                result["processing_time"] = time.time() - start_time
+            return jsonify(result), 500
+
+    except Exception as e:
+        response = {
+            'status': 'error',
+            'message': f"处理文件时出错: {str(e)}"
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 500
+
+
+def process_dxf_file_simple(dxf_file_path):
+    """
+    处理DXF文件并生成图像（简化版，无高亮）
+    
+    Args:
+        dxf_file_path (str): DXF文件路径
+        
+    Returns:
+        dict: 处理结果
+    """
+    start_time = time.time()
+    # DXF颜色索引到matplotlib颜色的映射
+    dxf_color_map = {
+        0: 'black', 1: 'red', 2: 'yellow', 3: 'green', 4: 'cyan',
+        5: 'blue', 6: 'magenta', 7: 'white', 8: '#a5a5a5', 9: '#c0c0c0',
+        10: 'red', 11: '#ffaaaa', 12: '#bd0000', 13: '#bd7373', 14: '#800000',
+        15: '#ff0000', 16: '#ffff00', 17: '#ffff73', 18: '#bda000', 19: '#bdae73',
+        20: '#808000', 21: '#ffff00', 22: '#00ff00', 23: '#aaffaa', 24: '#00bd00',
+        25: '#73bd73', 26: '#008000', 27: '#00ff00', 28: '#00ffff', 29: '#aaffff',
+        30: '#00bfbf', 31: '#73bfbf', 32: '#008080', 33: '#00ffff', 34: '#0000ff',
+        35: '#aaaaff', 36: '#0000bd', 37: '#7373bf', 38: '#000080', 39: '#0000ff',
+        40: '#ff00ff', 41: '#ffaaff', 42: '#bd00bd', 43: '#bd73bd', 44: '#800080',
+        45: '#ff00ff', 'default': 'black'
+    }
+
+    try:
+        # 检查文件是否存在
+        if not os.path.exists(dxf_file_path):
+            response = {
+                "status": "error",
+                "message": f"文件不存在: {dxf_file_path}"
+            }
+            if SHOW_TIMING:
+                response["processing_time"] = time.time() - start_time
+            return response
+
+        # 加载DXF文件
+        print(f"开始加载DXF文件: {dxf_file_path}")
+        doc = ezdxf.readfile(dxf_file_path)
+        msp = doc.modelspace()
+        print(f"成功加载DXF文件，包含 {len(msp)} 个实体")
+
+        # 创建图形对象
+        fig, ax = plt.subplots(figsize=(10, 10), dpi=100)
+        
+        all_x_coords = []
+        all_y_coords = []
+
+        # 处理实体
+        entity_counts = {}  # 统计各类实体数量
+        processed_entities = 0
+        
+        for entity in msp:
+            # 统计实体类型
+            entity_type = entity.dxftype()
+            entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+            
+            # 获取实体颜色
+            try:
+                if hasattr(entity.dxf, 'color') and entity.dxf.color in dxf_color_map:
+                    color = dxf_color_map[entity.dxf.color]
+                else:
+                    color = dxf_color_map['default']
+            except:
+                color = dxf_color_map['default']
+            
+            linewidth = 0.5
+
+            if entity.dxftype() == 'LINE':
+                start = entity.dxf.start
+                end = entity.dxf.end
+                # 直接绘制所有线条，避免使用LineCollection
+                ax.plot([start.x, end.x], [start.y, end.y], color=color, linewidth=linewidth)
+                
+                all_x_coords.extend([start.x, end.x])
+                all_y_coords.extend([start.y, end.y])
+                processed_entities += 1
+                    
+            elif entity.dxftype() == 'SPLINE':
+                try:
+                    if hasattr(entity, 'fit_points') and entity.fit_points:
+                        points = [(p.x, p.y) for p in entity.fit_points]
+                    else:
+                        points = [(p[0], p[1]) for p in entity.control_points]
+                        
+                    x_coords = [p[0] for p in points]
+                    y_coords = [p[1] for p in points]
+                    ax.plot(x_coords, y_coords, color=color, linewidth=linewidth)
+                            
+                    all_x_coords.extend([p[0] for p in points])
+                    all_y_coords.extend([p[1] for p in points])
+                    processed_entities += 1
+                except Exception as e:
+                    print(f'处理SPLINE实体时出错: {e}')
+                    
+            elif entity.dxftype() == 'ARC':
+                center = entity.dxf.center
+                radius = entity.dxf.radius
+                start_angle = entity.dxf.start_angle
+                end_angle = entity.dxf.end_angle
+                
+                if start_angle > end_angle:
+                    end_angle += 360
+                    
+                arc_patch = Arc((center.x, center.y), 2*radius, 2*radius, angle=0,
+                                theta1=start_angle, theta2=end_angle,
+                                color=color, linewidth=linewidth)
+                ax.add_patch(arc_patch)
+                    
+                all_x_coords.extend([center.x - radius, center.x + radius])
+                all_y_coords.extend([center.y - radius, center.y + radius])
+                processed_entities += 1
+                    
+            elif entity.dxftype() == 'CIRCLE':
+                center = entity.dxf.center
+                radius = entity.dxf.radius
+                
+                circle_patch = plt.Circle((center.x, center.y), radius, fill=False, 
+                                        color=color, linewidth=linewidth)
+                ax.add_patch(circle_patch)
+                    
+                all_x_coords.extend([center.x - radius, center.x + radius])
+                all_y_coords.extend([center.y - radius, center.y + radius])
+                processed_entities += 1
+
+        # 设置坐标范围
+        if all_x_coords and all_y_coords:
+            margin = 5
+            ax.set_xlim(min(all_x_coords) - margin, max(all_x_coords) + margin)
+            ax.set_ylim(min(all_y_coords) - margin, max(all_y_coords) + margin)
+        else:
+            ax.set_xlim(-10, 10)
+            ax.set_ylim(-10, 10)
+
+        # 保存图像到 dxf_output 目录
+        plt.gca().set_aspect('equal', adjustable='box')
+        
+        # 确保 dxf_output 目录存在
+        output_dir = "dxf_output"
+        os.makedirs(output_dir, exist_ok=True)
+        output_dir = "dxf_output/pictures"
+        os.makedirs(output_dir, exist_ok=True)
+        # 生成输出路径
+        dxf_basename = os.path.basename(dxf_file_path)
+        output_filename = f"{os.path.splitext(dxf_basename)[0]}.png"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        plt.savefig(output_path, bbox_inches='tight', pad_inches=0.1, dpi=100, format='png')
+        plt.close(fig)
+        plt.close('all')
+
+        response = {
+            "status": "success",
+            "message": f"DXF文件已处理并保存为 {output_path}",
+            "output_path": output_path,
+            "entity_stats": {
+                "total_processed": processed_entities,
+                "type_breakdown": entity_counts
+            }
+        }
+        
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+            
+        return response
+
+    except Exception as e:
+        response = {
+            "status": "error",
+            "message": str(e)
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return response
+
+
+
+
+
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
