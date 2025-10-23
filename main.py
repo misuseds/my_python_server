@@ -300,6 +300,8 @@ class ServiceManager:
                     print(f"{service['name']} 启动成功，日志输出到: {log_path}")
                     # 启动线程实时读取日志文件
                     threading.Thread(target=self.tail_file, args=(log_path, service_name), daemon=True).start()
+                    # 自动显示路由信息
+                    self.print_service_routes(service_name, service['port'])
                     return True
                     
         except Exception as e:
@@ -351,7 +353,6 @@ class ServiceManager:
             print("\n可用命令:")
             print("start <编号> - 启动服务")
             print("stop <编号> - 停止服务")
-            print("routes <编号> - 查看服务路由信息")
             print("exit - 退出程序")
             
             # 获取用户输入
@@ -379,21 +380,6 @@ class ServiceManager:
                 except (ValueError, IndexError):
                     print("请输入有效的命令格式: stop <编号>")
                     
-            elif command.startswith("routes"):
-                try:
-                    service_index = int(command.split()[1])
-                    if 1 <= service_index <= len(self.services_config):
-                        service_name = list(self.services_config.keys())[service_index-1]
-                        if service_name in self.processes:
-                            service = self.services_config[service_name]
-                            self.print_service_routes(service_name, service['port'])
-                        else:
-                            print(f"服务 {service_name} 未运行，无法查看路由信息")
-                    else:
-                        print("无效的服务编号")
-                except (ValueError, IndexError):
-                    print("请输入有效的命令格式: routes <编号>")
-                    
             elif command == "exit":
                 break
                 
@@ -419,6 +405,7 @@ class ServiceManager:
         for service_name in selected:
             if self.start_service(service_name):
                 started_count += 1
+                # 注意：这里不再需要手动调用 print_service_routes，因为 start_service 内部已经自动调用了
                 
         print(f"\n成功启动 {started_count} 个服务")
         return started_count > 0
