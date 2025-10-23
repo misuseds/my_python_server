@@ -150,6 +150,9 @@ def calculate_similarity():
         return jsonify({"error": str(e)}), 500
 @app.route('/image_info', methods=['GET'])
 def image_info():
+    """
+image_path
+"""
     # 从请求参数中获取图片路径
     test_image_fpath = request.args.get('image_path')
     

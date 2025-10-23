@@ -17,6 +17,9 @@ from functools import wraps
 import math
 import logging
 
+import re
+import pandas as pd
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -279,6 +282,7 @@ def list_dxf_files():
 def render_dxf_image():
     """
     渲染DXF/DWG文件为图像
+    name:dxf_path
     """
     start_time = time.time()
     file_path = request.args.get('dxf_path')
@@ -361,10 +365,25 @@ def process_dxf_file_simple(dxf_file_path):
 
         entity_counts = {}
         processed_entities = 0
+        
+        # 收集实体类型的属性方法信息
+        entity_attributes = {}
 
         for entity in msp:
             entity_type = entity.dxftype()
             entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+
+            # 收集实体属性方法（只在第一次遇到该类型时）
+            if entity_type not in entity_attributes:
+                # 获取实体的DXF属性方法
+                dxf_attrs = []
+                if hasattr(entity, 'dxf'):
+                    # 获取所有可用的DXF属性
+                    dxf_attrs = [attr for attr in dir(entity.dxf) if not attr.startswith('_')]
+                entity_attributes[entity_type] = {
+                    'dxf_attributes': dxf_attrs,
+                    'methods': [method for method in dir(entity) if not method.startswith('_') and callable(getattr(entity, method))]
+                }
 
             try:
                 color = dxf_color_map.get(entity.dxf.color, dxf_color_map['default'])
@@ -418,7 +437,6 @@ def process_dxf_file_simple(dxf_file_path):
                 all_y_coords.extend([center.y - radius, center.y + radius])
                 processed_entities += 1
 
-            # 修改 TEXT 实体处理部分
             elif entity.dxftype() == 'TEXT':
                 insert = entity.dxf.insert
                 text = entity.dxf.text
@@ -430,7 +448,6 @@ def process_dxf_file_simple(dxf_file_path):
                 all_y_coords.append(insert.y)
                 processed_entities += 1
 
-            # 修改 MTEXT 实体处理部分
             elif entity.dxftype() == 'MTEXT':
                 insert = entity.dxf.insert
                 text = entity.text
@@ -440,6 +457,10 @@ def process_dxf_file_simple(dxf_file_path):
                 ax.text(insert.x, insert.y, text, color=color, fontsize=font_size)
                 all_x_coords.append(insert.x)
                 all_y_coords.append(insert.y)
+                processed_entities += 1
+
+            elif entity.dxftype() == 'REGION':
+                # REGION实体通常不直接渲染，但增加计数
                 processed_entities += 1
 
         # 设置坐标范围
@@ -472,7 +493,8 @@ def process_dxf_file_simple(dxf_file_path):
             "entity_stats": {
                 "total_processed": processed_entities,
                 "type_breakdown": entity_counts
-            }
+            },
+            "entity_attributes": entity_attributes  # 添加实体属性方法信息
         }
         if SHOW_TIMING:
             response["processing_time"] = time.time() - start_time
@@ -483,6 +505,9 @@ def process_dxf_file_simple(dxf_file_path):
         if SHOW_TIMING:
             response["processing_time"] = time.time() - start_time
         return response
+
+
+
 @app.route('/objects/break_all_blocks', methods=['GET'])
 def break_all_blocks():
     """
@@ -626,9 +651,17 @@ def explode_all_blocks(msp):
         
     Returns:
         tuple: (分解的块数量, 分解出的实体数量)
+        
+    Raises:
+        ValueError: 当遇到不支持的实体类型(如REGION)时抛出异常
     """
     blocks_broken = 0
     exploded_entities = 0
+    
+    # 检查是否存在不支持的实体类型(如REGION)
+    regions = [entity for entity in msp if entity.dxftype() == 'REGION']
+    if regions:
+        raise ValueError(f"不支持处理REGION实体，发现 {len(regions)} 个REGION实体")
     
     # 多次遍历直到没有更多的INSERT实体和可分解的多段线
     while True:
@@ -908,7 +941,168 @@ def copy_entities_with_offset(source_msp, target_msp, offset_x, offset_y):
         except Exception as e:
             logger.info(f"复制实体时出错: {e}")
             continue
+# 添加到 base_server.py 文件中
 
+@app.route('/export_dxf_info', methods=['GET'])
+def export_dxf_info():
+    """
+    导出文件夹内所有DXF文件的边界框信息和数量到Excel文件
+    
+    参数:
+    - folder_path: 包含DXF文件的文件夹路径
+    -name:folder_path
+    返回:
+    - status: 状态(success/error)
+    - message: 处理结果消息
+    - output_path: Excel文件路径
+    - file_count: 处理的文件数量
+    """
+    start_time = time.time()
+    folder_path = request.args.get('folder_path')
+    
+    if not folder_path:
+        response = {"status": "error", "message": "缺少folder_path参数"}
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 400
+
+    if not os.path.exists(folder_path):
+        response = {"status": "error", "message": f"路径不存在: {folder_path}"}
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 404
+
+    if not os.path.isdir(folder_path):
+        response = {"status": "error", "message": f"指定路径不是文件夹: {folder_path}"}
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 400
+
+    try:
+        # 获取所有DXF文件
+        all_files = os.listdir(folder_path)
+        dxf_files = [f for f in all_files if f.lower().endswith('.dxf')]
+        
+        if not dxf_files:
+            response = {"status": "error", "message": "文件夹中没有找到DXF文件"}
+            if SHOW_TIMING:
+                response["processing_time"] = time.time() - start_time
+            return jsonify(response), 404
+            
+        # 准备数据列表
+        data = []
+        error_files = []  # 记录出错的文件
+        
+        # 处理每个DXF文件
+        for filename in dxf_files:
+            try:
+                file_path = os.path.join(folder_path, filename)
+                
+                # 读取DXF文件
+                doc = ezdxf.readfile(file_path)
+                msp = doc.modelspace()
+                
+                # 先分解块引用
+                blocks_broken, exploded_entities = explode_all_blocks(msp)
+                logger.info(f"文件 {filename} 分解了 {blocks_broken} 个块引用")
+                
+                # 计算边界框
+                extents = calculate_dxf_extents(msp)
+                
+                if extents:
+                    min_x, min_y, max_x, max_y = extents
+                    width = max_x - min_x
+                    height = max_y - min_y
+                else:
+                    width = 0
+                    height = 0
+                
+                # 从文件名提取数量（查找 "=数字" 模式）
+                quantity = 1  # 默认数量为1
+                quantity_match = re.search(r'=(\d+)', filename)
+                if quantity_match:
+                    quantity = int(quantity_match.group(1))
+                
+                # 添加到数据列表
+                data.append({
+                    '文件名': filename,
+                    '最小X': min_x if extents else 0,
+                    '最小Y': min_y if extents else 0,
+                    '最大X': max_x if extents else 0,
+                    '最大Y': max_y if extents else 0,
+                    '宽度': width,
+                    '高度': height,
+                    '数量': quantity,
+                    '分解块数': blocks_broken
+                })
+                
+            except ValueError as ve:
+                # 特别处理REGION实体错误
+                logger.error(f"处理文件 {filename} 时出错: {ve}")
+                error_files.append({
+                    '文件名': filename,
+                    '错误': str(ve)
+                })
+                # 可选：如果遇到REGION实体就停止处理
+                return jsonify({"status": "error", "message": f"处理文件 {filename} 时出错: {ve}"}), 500
+                continue
+            except Exception as e:
+                logger.error(f"处理文件 {filename} 时出错: {e}")
+                # 即使出错也添加记录，但标记为错误
+                data.append({
+                    '文件名': filename,
+                    '最小X': 0,
+                    '最小Y': 0,
+                    '最大X': 0,
+                    '最大Y': 0,
+                    '宽度': 0,
+                    '高度': 0,
+                    '数量': 0,
+                    '错误': str(e),
+                    '分解块数': 0
+                })
+                continue
+        
+        # 创建DataFrame
+        df = pd.DataFrame(data)
+        
+        # 保存为Excel文件
+        output_dir = "dxf_output/info"
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"dxf_info_{timestamp}.xlsx"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        # 写入Excel文件
+        df.to_excel(output_path, index=False)
+        
+        # 构建响应消息
+        success_message = f"成功处理 {len(dxf_files) - len(error_files)} 个DXF文件信息并导出到Excel"
+        if error_files:
+            error_details = "; ".join([f"{ef['文件名']}: {ef['错误']}" for ef in error_files])
+            success_message += f"。{len(error_files)} 个文件处理出错: {error_details}"
+        
+        response = {
+            "status": "success",
+            "message": success_message,
+            "output_path": output_path,
+            "file_count": len(dxf_files),
+            "errors": error_files  # 包含错误详情
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response)
+        
+    except PermissionError:
+        response = {"status": "error", "message": f"没有权限访问文件夹: {folder_path}"}
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 403
+    except Exception as e:
+        response = {"status": "error", "message": f"导出信息时出错: {str(e)}"}
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return jsonify(response), 500
 @app.route('/routes')
 def show_routes():
     routes = []
