@@ -213,6 +213,9 @@ class ServiceManager:
                 # 默认显示基本URL
                 base_url = f"http://localhost:{port}{route['rule']}"
                 
+                # 检查路由中是否包含路径参数 <path:...>
+                path_params = re.findall(r'<path:(.*?)>', route['rule'])
+                
                 # 检查是否有查询参数
                 has_query_params = False
                 if 'GET' in route['methods'] and route['description']:
@@ -243,6 +246,10 @@ class ServiceManager:
                 else:
                     # 非GET请求或没有描述的情况
                     print(f"{idx}. {base_url} [{methods}] - {description}")
+                
+                # 如果有路径参数，提供额外说明
+                if path_params:
+                    print(f"    注意: 此路由包含路径参数 {', '.join(path_params)}，这些参数应直接包含在URL路径中")
         else:
             print(f"  无法获取路由信息或服务尚未启动")
         print("=" * 50)
@@ -348,7 +355,24 @@ class ServiceManager:
         执行GET请求，支持参数输入
         """
         try:
-            # 解析路由参数
+            # 处理路径参数 <path:...>
+            path_params = re.findall(r'<path:(.*?)>', route_rule)
+            modified_route_rule = route_rule
+            
+            # 如果有路径参数，提示用户输入
+            if path_params:
+                print(f"注意: 此路由包含路径参数: {', '.join(path_params)}")
+                print("这些参数必须作为URL路径的一部分提供")
+                
+                for param in path_params:
+                    value = input(f"请输入路径参数 '{param}' 的值 (可以包含 /): ").strip()
+                    if not value:
+                        print(f"路径参数 '{param}' 是必需的")
+                        return
+                    # 替换路径参数占位符
+                    modified_route_rule = modified_route_rule.replace(f'<path:{param}>', value)
+            
+            # 解析查询参数
             params = {}
             if route_info.get('description'):
                 lines = route_info['description'].split('\n')
@@ -398,10 +422,10 @@ class ServiceManager:
                     elif default_val is not None:
                         params[param_name] = default_val
         
-            url = f"http://localhost:{port}{route_rule}"
+            url = f"http://localhost:{port}{modified_route_rule}"
             print(f"正在执行请求: {url}")
             if params:
-                print(f"参数: {params}")
+                print(f"查询参数: {params}")
             
             response = requests.get(url, params=params, timeout=10)
             print(f"\n=== 响应结果 (服务: {service_name}, 路由 #{route_index}) ===")
