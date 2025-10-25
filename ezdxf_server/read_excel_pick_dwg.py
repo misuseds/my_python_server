@@ -5,6 +5,109 @@ from flask import Flask, jsonify, request
 
 # 初始化Flask应用
 app = Flask(__name__)
+def convert_dwg_to_dxf(dwg_file_path):
+    """
+    使用ODA File Converter将DWG文件转换为DXF文件
+    
+    Args:
+        dwg_file_path (str): DWG文件路径
+        
+    Returns:
+        dict: 转换结果，包含状态和DXF文件路径或错误信息
+    """
+    start_time = time.time()
+    try:
+        if not os.path.exists(dwg_file_path):
+            return {
+                "status": "error",
+                "message": f"DWG文件不存在: {dwg_file_path}"
+            }
+
+        dwg_dir = os.path.dirname(dwg_file_path)
+        dwg_filename = os.path.basename(dwg_file_path)
+        dxf_filename = dwg_filename.replace('.dwg', '.dxf')
+        dxf_file_path = dwg_file_path.replace('.dwg', '.dxf')
+        if dxf_file_path == dwg_file_path:
+            dxf_file_path = f"{dwg_file_path}.dxf"
+
+        output_dir = os.path.dirname(dxf_file_path)
+        os.makedirs(output_dir, exist_ok=True)
+
+        TEIGHA_PATH = "ODAFileConverter"
+        INPUT_FOLDER = dwg_dir
+        OUTPUT_FOLDER = output_dir
+        OUTVER = "ACAD2018"
+        OUTFORMAT = "DXF"
+        RECURSIVE = "0"
+        AUDIT = "1"
+        INPUTFILTER = "*.DWG"
+
+        cmd = [
+            TEIGHA_PATH,
+            INPUT_FOLDER,
+            OUTPUT_FOLDER,
+            OUTVER,
+            OUTFORMAT,
+            RECURSIVE,
+            AUDIT,
+            INPUTFILTER
+        ]
+
+        logger.info(f"执行命令: {' '.join(cmd)}")
+
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+
+        if result.returncode == 0:
+            if os.path.exists(dxf_file_path) and is_valid_dxf(dxf_file_path):
+                response = {
+                    "status": "success",
+                    "message": f"DWG文件已成功转换为DXF: {dxf_file_path}",
+                    "dxf_path": dxf_file_path
+                }
+                if SHOW_TIMING:
+                    response["processing_time"] = time.time() - start_time
+                return response
+            else:
+                response = {
+                    "status": "error",
+                    "message": f"生成的DXF文件无效或未创建: {dxf_file_path}"
+                }
+                if SHOW_TIMING:
+                    response["processing_time"] = time.time() - start_time
+                return response
+        else:
+            response = {
+                "status": "error",
+                "message": f"ODA转换失败: {result.stderr}"
+            }
+            if SHOW_TIMING:
+                response["processing_time"] = time.time() - start_time
+            return response
+
+    except subprocess.TimeoutExpired:
+        response = {
+            "status": "error",
+            "message": "转换超时"
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return response
+    except FileNotFoundError:
+        response = {
+            "status": "error",
+            "message": "未找到ODAFileConverter命令，请确保已安装并加入PATH"
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return response
+    except Exception as e:
+        response = {
+            "status": "error",
+            "message": f"转换过程中发生错误: {str(e)}"
+        }
+        if SHOW_TIMING:
+            response["processing_time"] = time.time() - start_time
+        return response
 
 def find_dwg_files_by_excel_data(excel_path, folder_path, output_folder='dxf_output/pick_dxf', column='B', sheet_name=None):
     """
@@ -109,7 +212,7 @@ def find_dwg_api(excel_path, folder_path):
     
     # 这里应该使用传入的路径参数而不是硬编码的路径
     # 以下两行仅用于测试目的，实际部署时应删除或修改
-
+ 
     results = find_dwg_files_by_excel_data(excel_path, folder_path, output_folder, column, sheet_name)
     return jsonify(results)
 
