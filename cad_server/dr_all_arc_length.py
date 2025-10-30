@@ -1,4 +1,4 @@
-#dr_arc_length.py
+# fixed_modified_dr_arc_length_centerline.py
 from pyautocad import Autocad, APoint
 import math
 import time
@@ -79,21 +79,16 @@ def get_selection_or_model_space(acad, doc):
 
 def process_arcs(entities):
     """
-    从实体列表中筛选出圆弧对象并计算相关信息，排除"外弧"图层上的圆弧
+    从实体列表中筛选出圆弧对象作为中心线
     """
     arcs = []
     
     for i, entity in enumerate(entities):
         try:
-            # 判断是否为圆弧且不在"外弧"图层上
+            # 判断是否为圆弧
             if entity.ObjectName == "AcDbArc":
-                # 检查图层名称，排除"外弧"图层
-                layer_name = entity.Layer
-                if layer_name != "外弧":
-                    arcs.append(entity)
-                    print(f"找到圆弧对象 {len(arcs)} (图层: {layer_name})")
-                else:
-                    print(f"跳过'外弧'图层上的圆弧对象 {i}")
+                arcs.append(entity)
+                print(f"找到中心弧对象 {len(arcs)}")
             else:
                 print(f"对象 {i} 类型: {entity.ObjectName}")
         except Exception as e:
@@ -102,15 +97,92 @@ def process_arcs(entities):
     
     return arcs
 
-def calculate_arc_properties(arc):
+def create_concentric_arcs(doc, center_arcs, offset_distance=50):
     """
-    计算圆弧的各种属性：弧长、弦长、矢高
+    基于中心弧创建内外同心圆弧，并分配到对应图层
     
     Args:
-        arc: AutoCAD圆弧对象
+        doc: AutoCAD文档对象
+        center_arcs: 中心弧对象列表
+        offset_distance: 偏移距离
     
     Returns:
-        dict: 包含弧长、弦长、矢高等信息的字典
+        tuple: (outer_arcs, inner_arcs) 外弧和内弧列表
+    """
+    # 确保内外弧图层存在
+    ensure_layer_exists(doc, "外弧")
+    ensure_layer_exists(doc, "内弧")
+    
+    outer_arcs = []
+    inner_arcs = []
+    
+    for i, arc in enumerate(center_arcs):
+        try:
+            # 获取圆弧属性
+            center = arc.Center
+            radius = arc.Radius
+            start_angle = arc.StartAngle
+            end_angle = arc.EndAngle
+            
+            # 检查半径有效性
+            if radius <= 0:
+                print(f"第{i+1}条中心弧半径无效: {radius}")
+                continue
+            
+            # 创建外弧（向外偏移）
+            outer_radius = radius + offset_distance
+            try:
+                # 创建新的外弧对象
+                outer_center = APoint(center[0], center[1])
+                outer_start_angle = start_angle
+                outer_end_angle = end_angle
+                
+                outer_arc = doc.ModelSpace.AddArc(outer_center, outer_radius, outer_start_angle, outer_end_angle)
+                # 分配到外弧图层
+                outer_arc.Layer = "外弧"
+                outer_arcs.append(outer_arc)
+            except Exception as e:
+                print(f"创建第{i+1}条外弧时出错: {e}")
+                continue
+            
+            # 创建内弧（向内偏移）
+            inner_radius = radius - offset_distance
+            # 确保内弧半径为正数
+            if inner_radius <= 0:
+                inner_radius = radius * 0.1  # 如果偏移过大，使用原半径的10%
+                print(f"第{i+1}条内弧偏移过大，调整半径为: {inner_radius}")
+            
+            try:
+                # 创建新的内弧对象
+                inner_center = APoint(center[0], center[1])
+                inner_start_angle = start_angle
+                inner_end_angle = end_angle
+                
+                inner_arc = doc.ModelSpace.AddArc(inner_center, inner_radius, inner_start_angle, inner_end_angle)
+                # 分配到内弧图层
+                inner_arc.Layer = "内弧"
+                inner_arcs.append(inner_arc)
+            except Exception as e:
+                print(f"创建第{i+1}条内弧时出错: {e}")
+                continue
+            
+            print(f"成功为第{i+1}条中心弧创建内外弧并分配图层")
+            
+        except Exception as e:
+            print(f"为第{i+1}条中心弧创建内外弧时出错: {e}")
+            continue
+    
+    return outer_arcs, inner_arcs
+
+def calculate_arc_properties_from_object(arc):
+    """
+    直接从Arc对象计算属性
+    
+    Args:
+        arc: AutoCAD Arc对象
+    
+    Returns:
+        dict: 包含弧长、弦长等信息的字典
     """
     try:
         # 获取基本属性
@@ -147,8 +219,7 @@ def calculate_arc_properties(arc):
         # 矢高 = 半径 - 圆心到弦的距离
         sagitta = radius - dist_center_to_chord_mid
         
-        # 计算标注位置点
-        # 弧中点角度
+        # 计算弧中点角度
         mid_angle = (start_angle + end_angle) / 2
         if end_angle < start_angle:
             mid_angle = (start_angle + end_angle + 2*math.pi) / 2
@@ -201,30 +272,30 @@ def ensure_layer_exists(doc, layer_name):
         print(f"创建或获取图层 {layer_name} 时出错: {e}")
         return None
 
-def add_arc_dimensions(doc, arcs):
+def add_outer_arc_dimensions(doc, outer_arcs):
     """
-    为选中的圆弧添加弧长、弦长和矢高标注
+    为外弧添加弧长标注
     
     Args:
         doc: AutoCAD文档对象
-        arcs: 圆弧对象列表
+        outer_arcs: 外弧对象列表
     
     Returns:
         list: 成功添加的标注对象列表
     """
+    # 确保外弧标注图层存在
+    ensure_layer_exists(doc, "外弧标注")
+    
     added_dims = []
     
-    # 确保"矢高"图层存在
-    sagitta_layer = ensure_layer_exists(doc, "矢高")
-    
-    for i, arc in enumerate(arcs):
+    for i, arc in enumerate(outer_arcs):
         try:
-            # 计算圆弧属性
-            props = calculate_arc_properties(arc)
+            # 直接从Arc对象计算属性
+            props = calculate_arc_properties_from_object(arc)
             if not props:
                 continue
                 
-            # 1. 添加弧长标注（使用专门的弧长标注）
+            # 添加弧长标注
             try:
                 # 弧长标注需要圆心点、起点、终点和标注位置点
                 center_point = APoint(props['center'][0], props['center'][1])
@@ -241,13 +312,45 @@ def add_arc_dimensions(doc, arcs):
                 # 添加真正的弧长标注
                 arc_length_dim = doc.ModelSpace.AddDimArc(center_point, start_point, end_point, dim_point)
                 arc_length_value = round(props['arc_length'])
-                arc_length_dim.TextOverride = f"L={arc_length_value}"
+                arc_length_dim.TextOverride = f"外弧长={arc_length_value}"
+                # 分配到外弧标注图层
+                arc_length_dim.Layer = "外弧标注"
                 added_dims.append(arc_length_dim)
-                print(f"成功为圆弧 {i+1} 添加弧长标注: L={arc_length_value}")
+                print(f"成功为外弧 {i+1} 添加弧长标注: L={arc_length_value}")
             except Exception as e:
-                print(f"为圆弧 {i+1} 添加弧长标注时出错: {e}")
-            
-            # 2. 添加弦长标注
+                print(f"为外弧 {i+1} 添加弧长标注时出错: {e}")
+                
+        except Exception as e:
+            print(f"为外弧 {i+1} 添加标注时出错: {e}")
+            continue
+    
+    return added_dims
+
+def add_inner_arc_dimensions(doc, inner_arcs):
+    """
+    为内弧添加弦长和矢高标注
+    
+    Args:
+        doc: AutoCAD文档对象
+        inner_arcs: 内弧对象列表
+    
+    Returns:
+        list: 成功添加的标注对象列表
+    """
+    added_dims = []
+    
+    # 确保相关图层存在
+    ensure_layer_exists(doc, "矢高")
+    ensure_layer_exists(doc, "内弧标注")
+    
+    for i, arc in enumerate(inner_arcs):
+        try:
+            # 直接从Arc对象计算属性
+            props = calculate_arc_properties_from_object(arc)
+            if not props:
+                continue
+                
+            # 1. 添加弦长标注
             try:
                 # 在弦下方标注弦长
                 # 计算弦中点
@@ -272,9 +375,9 @@ def add_arc_dimensions(doc, arcs):
                     # 标注点（弦中点向下偏移更远）
                     offset_distance = max(props['radius'] * 0.3, 15)  # 至少10个单位距离
                     dim_x = chord_mid_x + perp_x * offset_distance
-                    dim_y = chord_mid_y - perp_y * offset_distance*3/2
+                    dim_y = chord_mid_y + perp_y * offset_distance
                     
-                    chord_dim_point = APoint(dim_x,dim_y)
+                    chord_dim_point = APoint(dim_x, dim_y)
                     
                     # 添加弦长标注
                     chord_start = APoint(props['start_point'][0], props['start_point'][1])
@@ -282,16 +385,20 @@ def add_arc_dimensions(doc, arcs):
                     
                     chord_length_dim = doc.ModelSpace.AddDimAligned(chord_start, chord_end, chord_dim_point)
                     chord_length_value = round(props['chord_length'])
-                    chord_length_dim.TextOverride = f"弦长={chord_length_value}"
-                                        # 控制文字位置
+                    chord_length_dim.TextOverride = f"内弦长={chord_length_value}"
+                    
+                    # 控制文字位置
                     chord_length_dim.TextMovement = 2  # 固定文字位置
-                    chord_length_dim.TextPosition =chord_dim_point
+                    chord_length_dim.TextPosition = chord_dim_point
+                    # 分配到内弧标注图层
+                    chord_length_dim.Layer = "内弧标注"
+                    
                     added_dims.append(chord_length_dim)
-                    print(f"成功为圆弧 {i+1} 添加弦长标注: 弦长={chord_length_value}")
+                    print(f"成功为内弧 {i+1} 添加弦长标注: 弦长={chord_length_value}")
             except Exception as e:
-                print(f"为圆弧 {i+1} 添加弦长标注时出错: {e}")
+                print(f"为内弧 {i+1} 添加弦长标注时出错: {e}")
             
-            # 3. 添加矢高标注
+            # 2. 添加矢高标注
             try:
                 # 矢高标注放在弦的中垂线上
                 chord_mid_x = (props['start_point'][0] + props['end_point'][0]) / 2
@@ -310,9 +417,9 @@ def add_arc_dimensions(doc, arcs):
                     # 矢高标注点（放在更精确的中间位置）
                     offset_distance = max(props['radius'] * 0.3, 15)
                     dim_x = chord_mid_x + unit_x * offset_distance
-                    dim_y = chord_mid_y + unit_y * offset_distance
+                    dim_y = chord_mid_y - unit_y * offset_distance/2
                     
-                    sagitta_dim_point = APoint(dim_x,props['end_point'][1]-  unit_y * offset_distance/2)
+                    sagitta_dim_point = APoint(dim_x, dim_y)
                     
                     # 矢高起点（弦中点）
                     sagitta_start = APoint(chord_mid_x, chord_mid_y)
@@ -323,7 +430,7 @@ def add_arc_dimensions(doc, arcs):
                     # 添加矢高标注
                     sagitta_dim = doc.ModelSpace.AddDimAligned(sagitta_start, sagitta_end, sagitta_dim_point)
                     sagitta_value = round(props['sagitta'])
-                    sagitta_dim.TextOverride = f"矢高={sagitta_value}"
+                    sagitta_dim.TextOverride = f"内矢高={sagitta_value}"
                     
                     # 设置图层为"矢高"
                     sagitta_dim.Layer = "矢高"
@@ -333,19 +440,72 @@ def add_arc_dimensions(doc, arcs):
                     sagitta_dim.TextPosition = sagitta_dim_point
                     
                     added_dims.append(sagitta_dim)
-                    print(f"成功为圆弧 {i+1} 添加矢高标注: 矢高={sagitta_value}")
+                    print(f"成功为内弧 {i+1} 添加矢高标注: 矢高={sagitta_value}")
             except Exception as e:
-                print(f"为圆弧 {i+1} 添加矢高标注时出错: {e}")
+                print(f"为内弧 {i+1} 添加矢高标注时出错: {e}")
                 
         except Exception as e:
-            print(f"为圆弧 {i+1} 添加标注时出错: {e}")
+            print(f"为内弧 {i+1} 添加标注时出错: {e}")
+            continue
+    
+    return added_dims
+
+def add_inner_arc_radius_dimensions(doc, inner_arcs):
+    """
+    为内弧添加半径标注
+    
+    Args:
+        doc: AutoCAD文档对象
+        inner_arcs: 内弧对象列表
+    
+    Returns:
+        list: 成功添加的标注对象列表
+    """
+    # 确保内弧半径标注图层存在
+    ensure_layer_exists(doc, "内弧半径标注")
+    
+    added_dims = []
+    
+    for i, arc in enumerate(inner_arcs):
+        try:
+            # 直接从Arc对象计算属性
+            props = calculate_arc_properties_from_object(arc)
+            if not props:
+                continue
+                
+            # 添加半径标注
+            try:  
+                # 半径标注需要圆心点、弧上一点和引线长度  
+                center_point = APoint(props['center'][0], props['center'][1])  
+                
+                # 在弧上选择一个点作为半径标注的引线点（使用中点）  
+                mid_arc_point = APoint(props['mid_arc_point'][0], props['mid_arc_point'][1])  
+                
+                # 标注点放在从圆心到弧点延长线上的位置  
+                radius = props['radius']  
+                offset_distance = max(radius * 0.2, 10)  # 至少10个单位距离  
+                
+                # 添加半径标注 - 使用三个参数  
+                radius_dim = doc.ModelSpace.AddDimRadial(center_point, mid_arc_point, offset_distance)  
+                radius_value = round(props['radius'])  
+                radius_dim.TextOverride = f"内R{radius_value}"  
+                # 分配到内弧半径标注图层
+                radius_dim.Layer = "内弧半径标注"
+                
+                added_dims.append(radius_dim)  
+                print(f"成功为内弧 {i+1} 添加半径标注: R={radius_value}")  
+            except Exception as e:  
+                print(f"为内弧 {i+1} 添加半径标注时出错: {e}")
+                
+        except Exception as e:
+            print(f"为内弧 {i+1} 添加标注时出错: {e}")
             continue
     
     return added_dims
 
 def main():
     """
-    主函数 - 为选中圆弧添加弧长、弦长和矢高标注
+    主函数 - 基于选中的中心弧创建内外弧并添加相应标注
     """
     # 连接到正在运行的 AutoCAD
     try:
@@ -366,20 +526,44 @@ def main():
         
         print(f"处理 {len(entities)} 个对象")
         
-        # 筛选出圆弧对象
-        arcs = process_arcs(entities)
+        # 筛选出圆弧对象作为中心线
+        center_arcs = process_arcs(entities)
         
-        if not arcs:
-            print("没有找到圆弧对象")
+        if not center_arcs:
+            print("没有找到中心弧对象")
             return
         
-        print(f"找到 {len(arcs)} 个圆弧对象")
+        print(f"找到 {len(center_arcs)} 条中心弧")
         
-        # 为圆弧添加各种标注
-        dims = add_arc_dimensions(doc, arcs)
+        # 确保中心弧图层存在并将中心弧移动到该图层
+        ensure_layer_exists(doc, "中心弧")
+        for arc in center_arcs:
+            try:
+                arc.Layer = "中心弧"
+            except Exception as e:
+                print(f"设置中心弧图层时出错: {e}")
         
-        if dims:
-            print(f"成功为 {len(dims)} 个标注添加完成")
+        # 基于中心弧创建内外弧
+        outer_arcs, inner_arcs = create_concentric_arcs(doc, center_arcs, offset_distance=50)
+        
+        if not outer_arcs and not inner_arcs:
+            print("未能创建任何内外弧")
+            return
+        
+        print(f"创建了 {len(outer_arcs)} 条外弧和 {len(inner_arcs)} 条内弧")
+        
+        # 为外弧添加弧长标注
+        outer_dims = add_outer_arc_dimensions(doc, outer_arcs)
+        
+        # 为内弧添加弦长和矢高标注
+        inner_dims = add_inner_arc_dimensions(doc, inner_arcs)
+        
+        # 为内弧添加半径标注
+        radius_dims = add_inner_arc_radius_dimensions(doc, inner_arcs)
+        
+        total_dims = len(outer_dims) + len(inner_dims) + len(radius_dims)
+        if total_dims > 0:
+            print(f"成功添加了 {total_dims} 个标注")
         else:
             print("未能添加任何标注")
             

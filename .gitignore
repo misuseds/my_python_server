@@ -13,4 +13,5 @@ dxf_output/*
 工作日志/*
 logs/**
 cache
+*pdf_output/*
 pdf_output/*
