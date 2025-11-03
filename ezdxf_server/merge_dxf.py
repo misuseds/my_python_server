@@ -192,25 +192,37 @@ def copy_entities_with_offset(source_msp, target_msp, offset_x, offset_y):
                 
             elif entity.dxftype() == 'TEXT':
                 insert = entity.dxf.insert
+                # 确保文本内容正确处理
+                text_content = entity.dxf.text
+                if isinstance(text_content, bytes):
+                    text_content = text_content.decode('utf-8')
+                
                 target_msp.add_text(
-                    entity.dxf.text,
+                    text_content,
                     dxfattribs={
                         'insert': (insert[0] + offset_x, insert[1] + offset_y),
                         'height': entity.dxf.height,
                         'color': entity.dxf.color,
-                        'layer': entity.dxf.layer
+                        'layer': entity.dxf.layer,
+                        'style': entity.dxf.style  # 保留文字样式
                     }
                 )
                 
             elif entity.dxftype() == 'MTEXT':
                 insert = entity.dxf.insert
+                # 确保文本内容正确处理
+                text_content = entity.text
+                if isinstance(text_content, bytes):
+                    text_content = text_content.decode('utf-8')
+                
                 target_msp.add_mtext(
-                    entity.text,
+                    text_content,
                     dxfattribs={
                         'insert': (insert[0] + offset_x, insert[1] + offset_y),
                         'char_height': entity.dxf.char_height if hasattr(entity.dxf, 'char_height') else 0.5,
                         'color': entity.dxf.color,
-                        'layer': entity.dxf.layer
+                        'layer': entity.dxf.layer,
+                        'style': entity.dxf.style  # 保留文字样式
                     }
                 )
                 
@@ -265,6 +277,26 @@ def merge_dxf_files(input_files, output_file):
     # 创建新的DXF文档
     doc = ezdxf.new(dxfversion='R2010')
     msp = doc.modelspace()
+    
+    # 添加常用的中文字体样式
+    try:
+        # 添加常用中文字体样式
+        chinese_fonts = [
+            ('SIMSUN', 'SimSun'),      # 宋体
+            ('SIMHEI', 'SimHei'),      # 黑体
+            ('KAITI', 'KaiTi'),        # 楷体
+            ('FANGSONG', 'FangSong'),  # 仿宋
+            ('MICROSURF', 'Microsoft YaHei')  # 微软雅黑
+        ]
+        
+        for font_name, font_file in chinese_fonts:
+            if font_name not in doc.styles:
+                try:
+                    doc.styles.new(font_name, dxfattribs={'font': font_file})
+                except:
+                    pass  # 如果创建失败则跳过
+    except Exception as e:
+        logging.warning(f"添加中文字体样式时出错: {e}")
     
     # 记录处理状态
     processed_files = []
@@ -321,15 +353,29 @@ def merge_dxf_files(input_files, output_file):
                         except:
                             pass
             
-            # 复制文字样式定义
+            # 复制文字样式定义（增强版）
             for style in source_doc.styles:
                 if style.dxf.name not in doc.styles:
                     try:
+                        style_attribs = {
+                            'font': getattr(style.dxf, 'font', 'Arial'),
+                        }
+                        
+                        # 复制更多样式属性
+                        if hasattr(style.dxf, 'big_font'):
+                            style_attribs['big_font'] = style.dxf.big_font
+                        if hasattr(style.dxf, 'flags'):
+                            style_attribs['flags'] = style.dxf.flags
+                        if hasattr(style.dxf, 'text_height'):
+                            style_attribs['text_height'] = style.dxf.text_height
+                        if hasattr(style.dxf, 'width_factor'):
+                            style_attribs['width_factor'] = style.dxf.width_factor
+                        if hasattr(style.dxf, 'oblique_angle'):
+                            style_attribs['oblique_angle'] = style.dxf.oblique_angle
+                        
                         doc.styles.new(
                             style.dxf.name,
-                            dxfattribs={
-                                'font': getattr(style.dxf, 'font', 'Arial'),
-                            }
+                            dxfattribs=style_attribs
                         )
                     except Exception as e:
                         logging.warning(f"文字样式 {style.dxf.name} 复制失败: {e}")

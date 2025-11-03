@@ -543,8 +543,23 @@ def main():
             except Exception as e:
                 print(f"设置中心弧图层时出错: {e}")
         
+        # 获取用户输入的偏移距离
+        try:
+            offset_input = input("请输入偏移距离（默认为50）: ")
+            if offset_input.strip() == "":
+                offset_distance = 50
+            else:
+                offset_distance = float(offset_input)
+            print(f"使用偏移距离: {offset_distance}")
+        except ValueError:
+            print("输入无效，使用默认偏移距离50")
+            offset_distance = 50
+        except KeyboardInterrupt:
+            print("用户取消输入，使用默认偏移距离50")
+            offset_distance = 50
+        
         # 基于中心弧创建内外弧
-        outer_arcs, inner_arcs = create_concentric_arcs(doc, center_arcs, offset_distance=50)
+        outer_arcs, inner_arcs = create_concentric_arcs(doc, center_arcs, offset_distance=offset_distance)
         
         if not outer_arcs and not inner_arcs:
             print("未能创建任何内外弧")
@@ -569,6 +584,5 @@ def main():
             
     except Exception as e:
         print(f"处理对象时出错: {e}")
-
 if __name__ == "__main__":
     main()
