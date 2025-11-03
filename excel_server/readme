@@ -1,8 +1,28 @@
 圆管质量计算公式
-=ROUND((PI()/4)*((C6^2)-(C6-2*D6)^2)*7.85/1000*B6/1000,2)
+=LET(
+    OuterDiameter, C6,
+    WallThickness, D6,
+    Length, B6,
+    OuterRadius, OuterDiameter / 2,
+    InnerRadius, OuterDiameter / 2 - WallThickness,
+    CrossSectionArea, (PI() * (OuterRadius^2 - InnerRadius^2)),
+    Volume, CrossSectionArea * Length,
+    Density, 7.85, // 钢的密度，单位 g/cm³ 或 kg/dm³
+    Weight, Volume * Density / 1000 / 1000, // 转换体积单位从 mm³ 到 dm³，并计算重量
+    ROUND(Weight, 2)
+)
 
 提取pl后的计算
 =ROUND(PRODUCT(--MID(SUBSTITUTE(MID(B3,FIND("PL",B3)+2,LEN(B3)),"*",REPT(" ",100)),{1,101,201},100))/1000/1000*7.85,2)
 
 矩形管质量公式
-=ROUND((((B6*C6)-((B6-2*D6)*(C6-2*D6))) * 7.85 / 1000), 2)
+=LET(
+    H, B6,
+    W, C6,
+    T, D6,
+    L, E6,                    // 添加长度参数（单位：mm）
+    Area_mm2, (H*W) - ((H-2*T)*(W-2*T)),  // 截面积（mm²）
+    Volume_mm3, Area_mm2 * L,             // 体积（mm³）
+    Weight_kg, Volume_mm3 * 7.85 / 1000000, // 质量 = 体积 × 密度（钢：7.85 g/cm³）→ kg
+    ROUND(Weight_kg, 2)                   // 四舍五入到小数点后两位
+)
