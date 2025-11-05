@@ -76,11 +76,14 @@ def get_selection_or_model_space(acad, doc):
     except Exception as e:
         print(f"无法访问模型空间: {e}")
         return []
+
+
 def process_entities(entities):
     """
-    处理实体列表，提取直线并计算边界
+    处理实体列表，提取直线和圆形并计算边界
     """
     lines = []
+    circles = []
     min_x = min_y = min_z = float('inf')
     max_x = max_y = max_z = float('-inf')
     has_valid_bounds = False
@@ -133,13 +136,30 @@ def process_entities(entities):
                 except Exception as poly_error:
                     print(f"处理多段线 {i} 时出错: {poly_error}")
             
+            # 处理圆形
+            elif entity.ObjectName == "AcDbCircle":
+                circles.append(entity)
+                print(f"对象 {i} 是圆形")
+                try:
+                    center = entity.Center
+                    radius = entity.Radius
+                    # 更新边界
+                    min_x = min(min_x, center[0] - radius)
+                    min_y = min(min_y, center[1] - radius)
+                    max_x = max(max_x, center[0] + radius)
+                    max_y = max(max_y, center[1] + radius)
+                    has_valid_bounds = True
+                except Exception as circle_error:
+                    print(f"处理圆形 {i} 时出错: {circle_error}")
+            
             else:
                 print(f"对象 {i} 类型: {entity.ObjectName}")
         except Exception as e:
             print(f"处理对象 {i} 时出错: {e}")
             continue
     
-    return lines, (min_x, min_y, min_z, max_x, max_y, max_z), has_valid_bounds
+    return lines, circles, (min_x, min_y, min_z, max_x, max_y, max_z), has_valid_bounds
+
 
 def calculate_dimensions(bounds):
     """
@@ -151,6 +171,19 @@ def calculate_dimensions(bounds):
         width = round(max_y - min_y, 1)
         return length, width
     return None, None
+
+
+def set_text_height(dim, text_height):
+    """
+    设置标注文字的高度
+    """
+    try:
+        dim.TextHeight = text_height
+        return True
+    except Exception as e:
+        print(f"设置文字高度失败: {e}")
+        return False
+
 
 def add_dal_aligned_dimension(doc, bounds):
     """
@@ -189,6 +222,35 @@ def add_dal_aligned_dimension(doc, bounds):
         print(f"添加对齐标注失败: {e}")
         return None, None
 
+
+def add_circle_diameter_dimension(doc, circle_entity, offset):
+    """
+    添加圆形的直径标注（修正版）
+    """
+    try:
+        # 获取圆心和半径
+        center = circle_entity.Center
+        radius = circle_entity.Radius
+        
+        # 计算直径两端点
+        pt1 = APoint(center[0] - radius, center[1])
+        pt2 = APoint(center[0] + radius, center[1])
+        
+        # 计算标注文本位置点（在圆上方）
+        text_point = APoint(center[0], center[1] + radius + offset)
+        
+        # 正确的方法：使用AddDimAligned并手动设置为直径标注
+        dim = doc.ModelSpace.AddDimAligned(pt1, pt2, text_point)
+        diameter_value = radius * 2
+        # 设置直径标注样式
+        dim.TextOverride = f"⌀{int(diameter_value)}" if diameter_value == int(diameter_value) else f"⌀{diameter_value:.1f}"
+        
+        return dim
+    except Exception as e:
+        print(f"添加圆形直径标注失败: {e}")
+        return None
+
+
 def main():
     """
     主函数
@@ -213,25 +275,41 @@ def main():
         print(f"处理 {len(entities)} 个对象")
         
         # 处理实体
-        lines, bounds, has_valid_bounds = process_entities(entities)
+        lines, circles, bounds, has_valid_bounds = process_entities(entities)
         
         # 计算长宽
         if has_valid_bounds:
             length, width = calculate_dimensions(bounds)
             if length is not None and width is not None:
                 print(f"长：{length}, 宽：{width}")
+                
+                # 计算文字高度（最大尺寸的1/5）
+                text_height = max(length, width) / 5
+                
                 # 添加DAL对齐标注
                 dim1, dim2 = add_dal_aligned_dimension(doc, bounds)
                 if dim1 and dim2:
+                    # 设置文字高度
+                    set_text_height(dim1, text_height)
+                    set_text_height(dim2, text_height)
                     print("成功添加DAL对齐标注")
                 else:
                     print("添加DAL对齐标注失败")
+                
+                # 为圆形添加直径标注
+                offset = max(length, width) * 0.1
+                for circle in circles:
+                    dim = add_circle_diameter_dimension(doc, circle, offset)
+                    if dim:
+                        set_text_height(dim, text_height)
+                        print("成功添加圆形直径标注")
         
         print(f"找到的直线数量: {len(lines)}")
-        
+        print(f"找到的圆形数量: {len(circles)}")
 
     except Exception as e:
         print(f"处理对象时出错: {e}")
+
 
 if __name__ == "__main__":
     main()
