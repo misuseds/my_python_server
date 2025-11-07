@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import os
 from PyPDF2 import PdfMerger
+import subprocess
+import platform
 
 class PDFMergerApp:
     def __init__(self, root):
@@ -147,10 +149,27 @@ class PDFMergerApp:
                     merger.write(output_file)
                 
                 merger.close()
+                
+                # 合并完成后打开文件
+                self.open_file(output_path)
+                
                 messagebox.showinfo("成功", f"PDF合并完成！\n保存路径：{output_path}")
             
         except Exception as e:
             messagebox.showerror("错误", f"合并过程中出现错误：\n{str(e)}")
+    
+    def open_file(self, file_path):
+        """根据操作系统打开文件"""
+        try:
+            system = platform.system()
+            if system == "Windows":
+                os.startfile(file_path)
+            elif system == "Darwin":  # macOS
+                subprocess.call(["open", file_path])
+            elif system == "Linux":
+                subprocess.call(["xdg-open", file_path])
+        except Exception as e:
+            messagebox.showerror("错误", f"无法打开文件：\n{str(e)}")
 
 def main():
     root = tk.Tk()

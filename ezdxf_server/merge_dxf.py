@@ -29,9 +29,9 @@ def select_dxf_files():
 
 def is_supported_entity(entity):
     """
-    检查实体是否为支持的类型（圆弧、直线、多段线、圆、文字）
+    检查实体是否为支持的类型（圆弧、直线、多段线、圆、文字、插入块）
     """
-    supported_types = ['ARC', 'LINE', 'LWPOLYLINE', 'POLYLINE', 'CIRCLE', 'TEXT', 'MTEXT']
+    supported_types = ['ARC', 'LINE', 'LWPOLYLINE', 'POLYLINE', 'CIRCLE', 'TEXT', 'MTEXT', 'INSERT']
     return entity.dxftype() in supported_types
 
 def extract_quantity_from_filename(filename):
@@ -78,12 +78,28 @@ def explode_all_blocks(msp):
         # 分解所有块引用
         for insert in inserts:
             try:
+                # 更安全的方式检查insert对象
+                if not hasattr(insert, 'dxf'):
+                    logging.warning(f"INSERT实体缺少dxf属性: {insert}")
+                    continue
+                    
+                if not hasattr(insert.dxf, 'name'):
+                    logging.warning(f"INSERT实体的dxf缺少name属性")
+                    continue
+                
+                block_name = insert.dxf.name
                 exploded = insert.explode()
                 blocks_broken += 1
                 exploded_entities += len(exploded)
-                logging.info(f"分解块 '{insert.dxf.name}'，获得 {len(exploded)} 个实体")
+                logging.info(f"分解块 '{block_name}'，获得 {len(exploded)} 个实体")
             except Exception as e:
-                logging.warning(f"分解块 '{insert.dxf.name}' 时出错: {e}")
+                block_name = "未知"
+                try:
+                    if hasattr(insert, 'dxf') and hasattr(insert.dxf, 'name'):
+                        block_name = insert.dxf.name
+                except:
+                    pass
+                logging.warning(f"分解块 '{block_name}' 时出错: {e}")
                 
     return blocks_broken, exploded_entities
 
@@ -102,35 +118,68 @@ def calculate_dxf_extents(msp):
     
     for entity in msp:
         try:
+            # 安全检查实体是否有dxftype方法
+            if not hasattr(entity, 'dxftype'):
+                continue
+                
             if entity.dxftype() == 'LINE':
+                # 检查必要属性是否存在
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'start') and hasattr(entity.dxf, 'end')):
+                    continue
                 start = entity.dxf.start
                 end = entity.dxf.end
                 all_x_coords.extend([start[0], end[0]])
                 all_y_coords.extend([start[1], end[1]])
                 
             elif entity.dxftype() == 'CIRCLE':
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'center') and hasattr(entity.dxf, 'radius')):
+                    continue
                 center = entity.dxf.center
                 radius = entity.dxf.radius
                 all_x_coords.extend([center[0] - radius, center[0] + radius])
                 all_y_coords.extend([center[1] - radius, center[1] + radius])
                 
             elif entity.dxftype() == 'ARC':
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'center') and hasattr(entity.dxf, 'radius')):
+                    continue
                 center = entity.dxf.center
                 radius = entity.dxf.radius
                 all_x_coords.extend([center[0] - radius, center[0] + radius])
                 all_y_coords.extend([center[1] - radius, center[1] + radius])
                 
             elif entity.dxftype() in ['TEXT', 'MTEXT']:
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'insert')):
+                    continue
                 insert = entity.dxf.insert
                 all_x_coords.append(insert[0])
                 all_y_coords.append(insert[1])
                 
             elif entity.dxftype() == 'LWPOLYLINE':
-                with entity.points() as points:
+                if not hasattr(entity, 'vertices'):
+                    continue
+                try:
+                    points = entity.vertices()
                     for point in points:
                         if len(point) >= 2:
                             all_x_coords.append(point[0])
                             all_y_coords.append(point[1])
+                except Exception:
+                    pass
+                            
+            elif entity.dxftype() == 'INSERT':
+                # 处理INSERT实体
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'insert')):
+                    continue
+                insert_point = entity.dxf.insert
+                all_x_coords.append(insert_point[0])
+                all_y_coords.append(insert_point[1])
+                
+                # 如果需要考虑块的边界框，可以尝试获取块定义并计算其边界
+                try:
+                    block_name = entity.dxf.name
+                    # 这里可以根据需要进一步处理块的边界计算
+                except:
+                    pass
                             
         except Exception as e:
             logging.warning(f"计算实体边界时出错: {e}")
@@ -154,30 +203,42 @@ def copy_entities_with_offset(source_msp, target_msp, offset_x, offset_y):
     entity_count = 0
     for entity in source_msp:
         try:
+            # 安全检查实体类型
+            if not hasattr(entity, 'dxftype'):
+                continue
+                
             if entity.dxftype() == 'LINE':
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'start') and hasattr(entity.dxf, 'end')):
+                    continue
                 start = entity.dxf.start
                 end = entity.dxf.end
                 target_msp.add_line(
                     (start[0] + offset_x, start[1] + offset_y),
                     (end[0] + offset_x, end[1] + offset_y),
                     dxfattribs={
-                        'color': entity.dxf.color,
-                        'layer': entity.dxf.layer
+                        'color': getattr(entity.dxf, 'color', 7),
+                        'layer': getattr(entity.dxf, 'layer', '0')
                     }
                 )
                 
             elif entity.dxftype() == 'CIRCLE':
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'center') and hasattr(entity.dxf, 'radius')):
+                    continue
                 center = entity.dxf.center
                 target_msp.add_circle(
                     (center[0] + offset_x, center[1] + offset_y),
                     entity.dxf.radius,
                     dxfattribs={
-                        'color': entity.dxf.color,
-                        'layer': entity.dxf.layer
+                        'color': getattr(entity.dxf, 'color', 7),
+                        'layer': getattr(entity.dxf, 'layer', '0')
                     }
                 )
                 
             elif entity.dxftype() == 'ARC':
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'center') and 
+                       hasattr(entity.dxf, 'radius') and hasattr(entity.dxf, 'start_angle') and 
+                       hasattr(entity.dxf, 'end_angle')):
+                    continue
                 center = entity.dxf.center
                 target_msp.add_arc(
                     (center[0] + offset_x, center[1] + offset_y),
@@ -185,12 +246,14 @@ def copy_entities_with_offset(source_msp, target_msp, offset_x, offset_y):
                     entity.dxf.start_angle,
                     entity.dxf.end_angle,
                     dxfattribs={
-                        'color': entity.dxf.color,
-                        'layer': entity.dxf.layer
+                        'color': getattr(entity.dxf, 'color', 7),
+                        'layer': getattr(entity.dxf, 'layer', '0')
                     }
                 )
                 
             elif entity.dxftype() == 'TEXT':
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'insert') and hasattr(entity.dxf, 'text')):
+                    continue
                 insert = entity.dxf.insert
                 # 确保文本内容正确处理
                 text_content = entity.dxf.text
@@ -201,17 +264,19 @@ def copy_entities_with_offset(source_msp, target_msp, offset_x, offset_y):
                     text_content,
                     dxfattribs={
                         'insert': (insert[0] + offset_x, insert[1] + offset_y),
-                        'height': entity.dxf.height,
-                        'color': entity.dxf.color,
-                        'layer': entity.dxf.layer,
-                        'style': entity.dxf.style  # 保留文字样式
+                        'height': getattr(entity.dxf, 'height', 0.2),
+                        'color': getattr(entity.dxf, 'color', 7),
+                        'layer': getattr(entity.dxf, 'layer', '0'),
+                        'style': getattr(entity.dxf, 'style', 'Standard')  # 保留文字样式
                     }
                 )
                 
             elif entity.dxftype() == 'MTEXT':
+                if not (hasattr(entity, 'dxf') and hasattr(entity.dxf, 'insert')):
+                    continue
                 insert = entity.dxf.insert
                 # 确保文本内容正确处理
-                text_content = entity.text
+                text_content = getattr(entity, 'text', '')
                 if isinstance(text_content, bytes):
                     text_content = text_content.decode('utf-8')
                 
@@ -219,23 +284,63 @@ def copy_entities_with_offset(source_msp, target_msp, offset_x, offset_y):
                     text_content,
                     dxfattribs={
                         'insert': (insert[0] + offset_x, insert[1] + offset_y),
-                        'char_height': entity.dxf.char_height if hasattr(entity.dxf, 'char_height') else 0.5,
-                        'color': entity.dxf.color,
-                        'layer': entity.dxf.layer,
-                        'style': entity.dxf.style  # 保留文字样式
+                        'char_height': getattr(entity.dxf, 'char_height', 0.5) if hasattr(entity.dxf, 'char_height') else 0.5,
+                        'color': getattr(entity.dxf, 'color', 7),
+                        'layer': getattr(entity.dxf, 'layer', '0'),
+                        'style': getattr(entity.dxf, 'style', 'Standard')  # 保留文字样式
                     }
                 )
                 
             elif entity.dxftype() == 'LWPOLYLINE':
+                if not hasattr(entity, 'vertices'):
+                    continue
                 points = [(p[0] + offset_x, p[1] + offset_y) for p in entity.vertices()]
                 target_msp.add_lwpolyline(
                     points,
                     dxfattribs={
-                        'color': entity.dxf.color,
-                        'layer': entity.dxf.layer,
-                        'closed': entity.closed
+                        'color': getattr(entity.dxf, 'color', 7) if hasattr(entity, 'dxf') else 7,
+                        'layer': getattr(entity.dxf, 'layer', '0') if hasattr(entity, 'dxf') else '0',
+                        'closed': getattr(entity, 'closed', False)
                     }
                 )
+                
+            elif entity.dxftype() == 'INSERT':
+                # 复制INSERT实体
+                try:
+                    # 安全地获取插入点和其他属性
+                    if not hasattr(entity, 'dxf'):
+                        continue
+                        
+                    insert_point = entity.dxf.insert
+                    new_insert_point = (insert_point[0] + offset_x, insert_point[1] + offset_y)
+                    
+                    # 构建INSERT属性
+                    dxfattribs = {
+                        'insert': new_insert_point,
+                        'layer': getattr(entity.dxf, 'layer', '0')
+                    }
+                    
+                    # 复制其他可用属性
+                    attr_mappings = [
+                        ('rotation', 'rotation'),
+                        ('xscale', 'xscale'),
+                        ('yscale', 'yscale'),
+                        ('zscale', 'zscale'),
+                        ('color', 'color')
+                    ]
+                    
+                    for src_attr, dst_attr in attr_mappings:
+                        if hasattr(entity.dxf, src_attr):
+                            dxfattribs[dst_attr] = getattr(entity.dxf, src_attr)
+                    
+                    target_msp.add_blockref(
+                        getattr(entity.dxf, 'name', '*Unknown'),
+                        new_insert_point,
+                        dxfattribs=dxfattribs
+                    )
+                except Exception as e:
+                    logging.warning(f"复制INSERT实体时出错: {e}")
+                    continue
                 
             entity_count += 1
                 
@@ -322,8 +427,8 @@ def merge_dxf_files(input_files, output_file):
                         doc.layers.new(
                             layer.dxf.name,
                             dxfattribs={
-                                'color': layer.dxf.color,
-                                'linetype': layer.dxf.linetype,
+                                'color': getattr(layer.dxf, 'color', 7),
+                                'linetype': getattr(layer.dxf, 'linetype', 'CONTINUOUS'),
                             }
                         )
                     except Exception as e:
@@ -362,16 +467,17 @@ def merge_dxf_files(input_files, output_file):
                         }
                         
                         # 复制更多样式属性
-                        if hasattr(style.dxf, 'big_font'):
-                            style_attribs['big_font'] = style.dxf.big_font
-                        if hasattr(style.dxf, 'flags'):
-                            style_attribs['flags'] = style.dxf.flags
-                        if hasattr(style.dxf, 'text_height'):
-                            style_attribs['text_height'] = style.dxf.text_height
-                        if hasattr(style.dxf, 'width_factor'):
-                            style_attribs['width_factor'] = style.dxf.width_factor
-                        if hasattr(style.dxf, 'oblique_angle'):
-                            style_attribs['oblique_angle'] = style.dxf.oblique_angle
+                        attr_mappings = [
+                            ('big_font', 'big_font'),
+                            ('flags', 'flags'),
+                            ('text_height', 'text_height'),
+                            ('width_factor', 'width_factor'),
+                            ('oblique_angle', 'oblique_angle')
+                        ]
+                        
+                        for src_attr, dst_attr in attr_mappings:
+                            if hasattr(style.dxf, src_attr):
+                                style_attribs[dst_attr] = getattr(style.dxf, src_attr)
                         
                         doc.styles.new(
                             style.dxf.name,
@@ -379,6 +485,20 @@ def merge_dxf_files(input_files, output_file):
                         )
                     except Exception as e:
                         logging.warning(f"文字样式 {style.dxf.name} 复制失败: {e}")
+            
+            # 复制块定义
+            for block in source_doc.blocks:
+                if block.name not in doc.blocks:
+                    try:
+                        # 创建新的块记录
+                        new_block = doc.blocks.new(block.name)
+                        
+                        # 复制块中的实体
+                        for entity in block:
+                            # 这里可以添加更复杂的实体复制逻辑
+                            pass
+                    except Exception as e:
+                        logging.warning(f"块定义 {block.name} 复制失败: {e}")
             
             # 分解所有块
             blocks_broken, exploded_entities = explode_all_blocks(source_msp)

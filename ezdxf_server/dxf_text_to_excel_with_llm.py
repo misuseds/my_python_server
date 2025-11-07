@@ -49,9 +49,13 @@ class DXFTextToExcelConverter:
         
         # 定义提取字段配置，通过修改这个列表可以同时改变提示语句和JSON示例
         self.extraction_fields = [
-            {"key": "part_number", "label": "编号101", "display_name": "零件号"},
-            {"key": "length", "label": "1050", "display_name": "长度"},
-            {"key": "quantity", "label": "1", "display_name": "数量"},
+            {"key": "drawing_number", "label": "ABC123", "display_name": "图号"},
+            {"key": "specification", "label": "PL厚度*宽度*长度", "display_name": "规格"},
+            
+            {"key": "quantity", "label": "5", "display_name": "数量"},
+            {"key": "material", "label": "不锈钢", "display_name": "材料"},
+          
+            {"key": "remark", "label": "不锈钢板", "display_name": "备注"}
         ]
     
     def convert_dwg_to_dxf(self, dwg_file_path):
