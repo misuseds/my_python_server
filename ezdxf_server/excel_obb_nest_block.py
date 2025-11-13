@@ -9,6 +9,7 @@ from tkinter.filedialog import askopenfilename
 import threading
 import time
 from collections import defaultdict
+from itertools import combinations
 
 # ==============================
 # 弹窗输入板材尺寸
@@ -462,9 +463,9 @@ class PackingVisualizer:
                 self.root.update()
 
 # ==============================
-# 装箱算法（分块优化版）
+# 空间管理优化排版算法
 # ==============================
-class VisualBinPacking:
+class SpaceManagedPacking:
     def __init__(self, width, height, visualizer=None):
         self.width = width
         self.height = height
@@ -478,216 +479,188 @@ class VisualBinPacking:
         self.bins.append({
             'rects': [],
             'used_area': 0,
-            'total_area': self.effective_width * self.effective_height
+            'total_area': self.effective_width * self.effective_height,
+            'free_spaces': [{'x': 0, 'y': 0, 'w': self.effective_width, 'h': self.effective_height}]  # 初始可用空间
         })
         
         # 如果有可视化对象，通知添加新板材
         if self.visualizer:
             self.visualizer.add_new_bin()
 
-    def can_fit_in_bin(self, rect_width, rect_height, x, y, bin_data):
-        if x + rect_width > self.effective_width or y + rect_height > self.effective_height:
-            return False
-        for r in bin_data['rects']:
-            if (x < r['x'] + r['w'] + PART_CLEARANCE and x + rect_width + PART_CLEARANCE > r['x'] and
-                y < r['y'] + r['h'] + PART_CLEARANCE and y + rect_height + PART_CLEARANCE > r['y']):
-                return False
-        return True
-
-    def find_placement_in_bin(self, w, h, bin_data):
-        if not bin_data['rects']:
-            return 0, 0
-        candidates = {(0, 0)}
-        for r in bin_data['rects']:
-            candidates.update([
-                (r['x'] + r['w'] + PART_CLEARANCE, r['y']),
-                (r['x'], r['y'] + r['h'] + PART_CLEARANCE),
-                (r['x'] + r['w'] + PART_CLEARANCE, r['y'] + r['h'] + PART_CLEARANCE)
-            ])
-        best_x, best_y = None, None
-        min_y = float('inf')
-        for x, y in candidates:
-            if 0 <= x <= self.effective_width - w and 0 <= y <= self.effective_height - h:
-                if self.can_fit_in_bin(w, h, x, y, bin_data):
-                    if y < min_y or (y == min_y and (best_x is None or x < best_x)):
-                        best_x, best_y = x, y
-                        min_y = y
-        return best_x, best_y
-
-    def place_rect(self, w, h, drawing_number, part_id, rotated=False):
-        placed = False
-        for bin_index, bin_data in enumerate(self.bins):
-            x, y = self.find_placement_in_bin(w, h, bin_data)
-            if x is not None:
-                bin_data['rects'].append({'x': x, 'y': y, 'w': w, 'h': h, 'drawing_number': drawing_number, 'part_id': part_id, 'rotated': rotated})
-                bin_data['used_area'] += w * h
-                
-                # 计算板材利用率
-                utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
-                
-                # 如果有可视化对象，则更新可视化界面
-                if self.visualizer:
-                    self.visualizer.check_pause()
-                    
-                    # 更新板材利用率显示
-                    self.visualizer.update_bin_utilization(bin_index, utilization)
-                    
-                    # 绘制最新添加的零件
-                    match = re.search(r'(\d+-\d+)', drawing_number)
-                    display_drawing_number = match.group(1) if match else drawing_number
-                    
-                    self.visualizer.draw_rectangle(bin_index, x, y, w, h, display_drawing_number)
-                    
-                    # 更新信息
-                    self.visualizer.update_info(
-                        f"板材 {bin_index + 1}: "
-                        f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%"
-                    )
-                    
-                    # 短暂延迟以便观察
-                    time.sleep(0.01)
-                
-                placed = True
-                break
-                
-        if not placed:
-            self.add_new_bin()
-            current_bin = self.bins[-1]
-            x, y = self.find_placement_in_bin(w, h, current_bin)
-            if x is not None:
-                current_bin['rects'].append({'x': x, 'y': y, 'w': w, 'h': h, 'drawing_number': drawing_number, 'part_id': part_id, 'rotated': rotated})
-                current_bin['used_area'] += w * h
-                
-                # 计算板材利用率
-                utilization = (current_bin['used_area'] / current_bin['total_area']) * 100
-                
-                # 如果有可视化对象，则更新可视化界面
-                if self.visualizer:
-                    self.visualizer.check_pause()
-                    bin_index = len(self.bins) - 1
-                    
-                    # 更新板材利用率显示
-                    self.visualizer.update_bin_utilization(bin_index, utilization)
-                    
-                    # 绘制最新添加的零件
-                    match = re.search(r'(\d+-\d+)', drawing_number)
-                    display_drawing_number = match.group(1) if match else drawing_number
-                    
-                    self.visualizer.draw_rectangle(bin_index, x, y, w, h, display_drawing_number)
-                    
-                    # 更新信息
-                    self.visualizer.update_info(
-                        f"板材 {bin_index + 1}: "
-                        f"已放置 {len(current_bin['rects'])} 个零件, 利用率: {utilization:.2f}%"
-                    )
-                    
-                    # 短暂延迟以便观察
-                    time.sleep(0.01)
-                
-                return True
-            return False
-        return True
-
-    def find_best_row_combinations(self, parts_list):
+    def split_free_space(self, free_space, placed_rect):
         """
-        寻找能在宽度方向上完美填充或接近完美填充板材的零件组合
+        将被占用的空间从可用空间中分割出去
+        返回新的可用空间列表
         """
-        # 按面积降序排列
-        parts_list = sorted(parts_list, key=lambda p: p['area'], reverse=True)
+        new_spaces = []
         
-        combinations = []
-        used_parts = set()
+        # 计算被占用矩形的边界
+        placed_left = placed_rect['x']
+        placed_right = placed_rect['x'] + placed_rect['w']
+        placed_top = placed_rect['y']
+        placed_bottom = placed_rect['y'] + placed_rect['h']
         
-        # 寻找完美匹配的组合
-        for i, part1 in enumerate(parts_list):
-            if i in used_parts:
-                continue
-                
-            # 寻找能与part1在宽度方向完美匹配的组合
-            remaining_width = self.effective_width - part1['length'] - PART_CLEARANCE
-            
-            # 尝试寻找单个零件填满剩余空间
-            best_single_match = None
-            best_single_index = -1
-            
-            for j in range(i+1, len(parts_list)):
-                if j in used_parts:
-                    continue
-                    
-                part2 = parts_list[j]
-                if abs(part2['length'] - remaining_width) < 1:  # 完美匹配
-                    best_single_match = part2
-                    best_single_index = j
-                    break
-                elif part2['length'] <= remaining_width and (best_single_match is None or 
-                                                           abs(part2['length'] - remaining_width) < 
-                                                           abs(best_single_match['length'] - remaining_width)):
-                    best_single_match = part2
-                    best_single_index = j
-            
-            if best_single_match is not None:
-                combinations.append([part1, best_single_match])
-                used_parts.add(i)
-                used_parts.add(best_single_index)
+        # 计算原空间的边界
+        space_left = free_space['x']
+        space_right = free_space['x'] + free_space['w']
+        space_top = free_space['y']
+        space_bottom = free_space['y'] + free_space['h']
+        
+        # 创建左侧空间（如果存在）
+        if placed_left > space_left:
+            new_spaces.append({
+                'x': space_left,
+                'y': space_top,
+                'w': placed_left - space_left,
+                'h': space_bottom - space_top
+            })
+        
+        # 创建右侧空间（如果存在）
+        if placed_right < space_right:
+            new_spaces.append({
+                'x': placed_right,
+                'y': space_top,
+                'w': space_right - placed_right,
+                'h': space_bottom - space_top
+            })
+        
+        # 创建上方空间（如果存在）
+        if placed_top > space_top:
+            new_spaces.append({
+                'x': placed_left,
+                'y': space_top,
+                'w': placed_right - placed_left,
+                'h': placed_top - space_top
+            })
+        
+        # 创建下方空间（如果存在）
+        if placed_bottom < space_bottom:
+            new_spaces.append({
+                'x': placed_left,
+                'y': placed_bottom,
+                'w': placed_right - placed_left,
+                'h': space_bottom - placed_bottom
+            })
+        
+        return new_spaces
+
+    def merge_free_spaces(self, free_spaces):
+        """
+        合并相邻的可用空间以减少碎片
+        """
+        # 简化版合并，实际应用中可以更复杂
+        return free_spaces
+
+    def can_place_in_space(self, space, part_length, part_width):
+        """检查零件是否能放入指定空间"""
+        return part_length <= space['w'] and part_width <= space['h']
+
+    def find_best_space(self, bin_index, part_length, part_width):
+        """
+        在指定板材中寻找最适合放置零件的空间
+        返回最佳空间和适配度评分
+        """
+        bin_data = self.bins[bin_index]
+        best_space = None
+        best_fit = float('inf')  # 越小越好（空间浪费越少）
+        
+        for space in bin_data['free_spaces']:
+            if self.can_place_in_space(space, part_length, part_width):
+                # 计算适配度（空间浪费）
+                waste = (space['w'] * space['h']) - (part_length * part_width)
+                if waste < best_fit:
+                    best_fit = waste
+                    best_space = space
+        
+        return best_space
+
+    def place_part_in_bin(self, bin_index, part, space, rotated=False):
+        """
+        在指定板材的指定空间中放置零件
+        """
+        bin_data = self.bins[bin_index]
+        
+        # 确定零件的实际尺寸
+        if rotated:
+            part_length, part_width = part['width'], part['length']
+        else:
+            part_length, part_width = part['length'], part['width']
+        
+        # 创建放置的矩形
+        placed_rect = {
+            'x': space['x'],
+            'y': space['y'],
+            'w': part_length,
+            'h': part_width,
+            'drawing_number': part['drawing_number'],
+            'part_id': part['id'],
+            'rotated': rotated
+        }
+        
+        # 添加到已放置零件列表
+        bin_data['rects'].append(placed_rect)
+        bin_data['used_area'] += part_length * part_width
+        
+        # 更新可用空间
+        new_free_spaces = []
+        space_found = False
+        for free_space in bin_data['free_spaces']:
+            if free_space == space and not space_found:
+                # 分割被占用的空间
+                new_free_spaces.extend(self.split_free_space(free_space, placed_rect))
+                space_found = True
             else:
-                # 尝试寻找多个小零件填满剩余空间
-                multi_parts = self.pack_small_parts(parts_list, i, remaining_width, used_parts)
-                if multi_parts:
-                    combinations.append([part1] + multi_parts)
-                    used_parts.add(i)
-                    for idx in multi_parts:
-                        used_parts.add(idx)
-                else:
-                    combinations.append([part1])
-                    used_parts.add(i)
+                new_free_spaces.append(free_space)
         
-        # 处理剩余未使用的零件
-        remaining_parts = [parts_list[i] for i in range(len(parts_list)) if i not in used_parts]
-        if remaining_parts:
-            combinations.append(remaining_parts)
-            
-        return combinations
+        bin_data['free_spaces'] = self.merge_free_spaces(new_free_spaces)
+        
+        return placed_rect
 
-    def pack_small_parts(self, parts_list, start_index, target_width, used_parts):
+    def find_best_combination(self, parts_list, max_spaces_to_check=5):
         """
-        使用动态规划方法寻找能填满目标宽度的小零件组合
+        寻找最佳零件组合
+        考虑当前可用空间来评估组合
         """
-        small_parts = [(i, part) for i, part in enumerate(parts_list) 
-                      if i > start_index and i not in used_parts and part['length'] <= target_width]
-        
-        if not small_parts:
+        if not parts_list:
             return []
-            
-        # 简化版背包问题求解
-        n = len(small_parts)
-        dp = [0] * (int(target_width) + 1)
-        choice = [-1] * (int(target_width) + 1)
         
-        for i in range(n):
-            idx, part = small_parts[i]
-            part_width = int(part['length'])
-            for w in range(int(target_width), part_width - 1, -1):
-                if dp[w] < dp[w - part_width] + part_width:
-                    dp[w] = dp[w - part_width] + part_width
-                    choice[w] = i
-                    
-        # 回溯找出选择的零件
-        result_indices = []
-        w = int(target_width)
-        while w > 0 and choice[w] != -1:
-            i = choice[w]
-            idx, part = small_parts[i]
-            result_indices.append(idx)
-            w -= int(part['length'])
+        # 按面积排序
+        sorted_parts = sorted(parts_list, key=lambda p: p['area'], reverse=True)
+        best_combination = []
+        best_utilization = 0
+        
+        # 先尝试单个零件
+        for part in sorted_parts[:10]:  # 只检查前10个
+            # 不旋转
+            if part['length'] <= self.effective_width and part['width'] <= self.effective_height:
+                utilization = part['area'] / (self.effective_width * self.effective_height)
+                if utilization > best_utilization:
+                    best_utilization = utilization
+                    best_combination = [part]
             
-        # 只返回利用率较高的组合
-        if dp[int(target_width)] / target_width > 0.8:  # 超过80%的填充率才认为有效
-            return [idx for idx, _ in small_parts if idx in result_indices]
-        return []
+            # 旋转
+            if part['width'] <= self.effective_width and part['length'] <= self.effective_height:
+                utilization = part['area'] / (self.effective_width * self.effective_height)
+                if utilization > best_utilization:
+                    best_utilization = utilization
+                    best_combination = [part]
+        
+        # 尝试组合（最多3个零件）
+        for r in range(2, min(4, len(sorted_parts) + 1)):
+            for combo in combinations(sorted_parts[:min(8, len(sorted_parts))], r):
+                # 简单评估这个组合是否可能适合
+                total_area = sum(p['area'] for p in combo)
+                if total_area <= self.effective_width * self.effective_height:
+                    utilization = total_area / (self.effective_width * self.effective_height)
+                    if utilization > best_utilization:
+                        best_utilization = utilization
+                        best_combination = list(combo)
+        
+        return best_combination
 
-    def pack_with_blocks(self, parts):
+    def pack_with_space_management(self, parts):
         """
-        使用分块优化策略进行排版
+        使用空间管理优化算法进行排版
         """
         if self.visualizer:
             self.visualizer.wait_for_start()
@@ -707,101 +680,249 @@ class VisualBinPacking:
                     'length': length,
                     'width': width,
                     'area': area,
-                    'id': part_id,
-                    'rotated': False
+                    'id': part_id
                 })
-                
-                # 添加旋转后的版本（如果适用）
-                if length != width and length <= self.effective_height and width <= self.effective_width:
-                    all_parts.append({
-                        'index': idx,
-                        'drawing_number': drawing_number,
-                        'length': width,
-                        'width': length,
-                        'area': area,
-                        'id': part_id + "(R)",
-                        'rotated': True
-                    })
         
-        # 按宽度分组并寻找最佳组合
-        combinations = self.find_best_row_combinations(all_parts)
+        # 按面积降序排序
+        all_parts.sort(key=lambda p: -p['area'])
+        remaining_parts = all_parts[:]
         
-        total_combinations = len(combinations)
-        processed_combinations = 0
+        total_parts = len(all_parts)
+        processed_parts = 0
         
-        for combination in combinations:
-            processed_combinations += 1
-            combination_info = f"处理组合 {processed_combinations}/{total_combinations}，包含 {len(combination)} 个零件"
-            
+        while remaining_parts:
+            # 检查是否需要暂停
             if self.visualizer:
-                self.visualizer.update_info(combination_info)
-            print(combination_info)
+                self.visualizer.check_pause()
             
-            # 依次放置组合中的零件
-            for part in combination:
-                drawing_number = part['drawing_number']
-                length, width = part['length'], part['width']
-                part_id = part['id']
-                rotated = part['rotated']
+            combination_placed = False
+            
+            # 寻找最佳组合
+            best_combination = self.find_best_combination(remaining_parts)
+            
+            if best_combination and len(best_combination) > 1:
+                # 尝试放置组合
+                # 简化处理：按顺序在板材中放置组合中的零件
+                combination_parts_placed = []
                 
-                match = re.search(r'(\d+-\d+)', drawing_number)
-                display_drawing_number = match.group(1) if match else drawing_number
+                for part in best_combination:
+                    part_placed = False
+                    
+                    # 尝试在现有板材中放置
+                    for bin_index in range(len(self.bins)):
+                        # 尝试不旋转放置
+                        best_space = self.find_best_space(bin_index, part['length'], part['width'])
+                        if best_space:
+                            placed_rect = self.place_part_in_bin(bin_index, part, best_space, False)
+                            combination_parts_placed.append((bin_index, placed_rect, part))
+                            part_placed = True
+                            break
+                        
+                        # 尝试旋转放置
+                        best_space = self.find_best_space(bin_index, part['width'], part['length'])
+                        if best_space:
+                            placed_rect = self.place_part_in_bin(bin_index, part, best_space, True)
+                            combination_parts_placed.append((bin_index, placed_rect, part))
+                            part_placed = True
+                            break
+                    
+                    # 如果所有现有板材都无法放置，创建新板材
+                    if not part_placed:
+                        self.add_new_bin()
+                        bin_index = len(self.bins) - 1
+                        
+                        # 尝试不旋转放置
+                        best_space = self.find_best_space(bin_index, part['length'], part['width'])
+                        if best_space:
+                            placed_rect = self.place_part_in_bin(bin_index, part, best_space, False)
+                            combination_parts_placed.append((bin_index, placed_rect, part))
+                            part_placed = True
+                        else:
+                            # 尝试旋转放置
+                            best_space = self.find_best_space(bin_index, part['width'], part['length'])
+                            if best_space:
+                                placed_rect = self.place_part_in_bin(bin_index, part, best_space, True)
+                                combination_parts_placed.append((bin_index, placed_rect, part))
+                                part_placed = True
+                    
+                    if part_placed:
+                        if part in remaining_parts:
+                            remaining_parts.remove(part)
+                            processed_parts += 1
+                    else:
+                        # 如果组合中有零件无法放置，回滚已放置的零件
+                        for bin_idx, rect, placed_part in combination_parts_placed:
+                            bin_data = self.bins[bin_idx]
+                            if rect in bin_data['rects']:
+                                bin_data['rects'].remove(rect)
+                                bin_data['used_area'] -= rect['w'] * rect['h']
+                                # 简化处理：不恢复空间
+                        # 将已处理的零件重新加入待处理列表
+                        for _, _, placed_part in combination_parts_placed:
+                            if placed_part not in remaining_parts:
+                                remaining_parts.append(placed_part)
+                                processed_parts -= 1
+                        break
                 
-                # 检查零件是否能放入板材
-                if ((length <= self.effective_width and width <= self.effective_height) or
-                    (width <= self.effective_width and length <= self.effective_height)):
-                    if length <= self.effective_width and width <= self.effective_height:
-                        self.place_rect(length, width, drawing_number, part_id, rotated)
-                    elif width <= self.effective_width and length <= self.effective_height:
-                        self.place_rect(width, length, drawing_number, part_id, not rotated)
-                else:
-                    error_msg = f"错误：零件太大：{length}x{width}"
-                    print(error_msg)
+                # 如果组合成功放置
+                if len(combination_parts_placed) == len(best_combination):
+                    combination_placed = True
+                    
+                    # 更新可视化
                     if self.visualizer:
-                        self.visualizer.update_info(error_msg)
+                        for bin_idx, rect, part in combination_parts_placed:
+                            bin_data = self.bins[bin_idx]
+                            utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
+                            self.visualizer.update_bin_utilization(bin_idx, utilization)
+                            
+                            match = re.search(r'(\d+-\d+)', rect['drawing_number'])
+                            display_drawing_number = match.group(1) if match else rect['drawing_number']
+                            self.visualizer.draw_rectangle(
+                                bin_idx, rect['x'], rect['y'], rect['w'], rect['h'], display_drawing_number
+                            )
+                            
+                        # 更新信息显示
+                        total_processed = processed_parts
+                        self.visualizer.update_info(
+                            f"成功放置组合 ({len(combination_parts_placed)} 个零件), "
+                            f"进度: {total_processed}/{total_parts}"
+                        )
+            
+            # 如果没有找到合适的组合或无法放置组合，单独处理最大的零件
+            if not combination_placed and remaining_parts:
+                largest_part = remaining_parts[0]
+                
+                # 尝试在现有板材中放置
+                part_placed = False
+                for bin_index in range(len(self.bins)):
+                    bin_data = self.bins[bin_index]
+                    
+                    # 尝试不旋转放置
+                    best_space = self.find_best_space(bin_index, largest_part['length'], largest_part['width'])
+                    if best_space:
+                        placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, False)
+                        remaining_parts.remove(largest_part)
+                        processed_parts += 1
+                        part_placed = True
+                        
+                        # 更新可视化
+                        if self.visualizer:
+                            utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
+                            self.visualizer.update_bin_utilization(bin_index, utilization)
+                            
+                            match = re.search(r'(\d+-\d+)', largest_part['drawing_number'])
+                            display_drawing_number = match.group(1) if match else largest_part['drawing_number']
+                            self.visualizer.draw_rectangle(
+                                bin_index, placed_rect['x'], placed_rect['y'], 
+                                placed_rect['w'], placed_rect['h'], display_drawing_number
+                            )
+                            
+                            self.visualizer.update_info(
+                                f"板材 {bin_index + 1}: "
+                                f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%, "
+                                f"进度: {processed_parts}/{total_parts}"
+                            )
+                        break
+                    
+                    # 尝试旋转放置
+                    best_space = self.find_best_space(bin_index, largest_part['width'], largest_part['length'])
+                    if best_space:
+                        placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, True)
+                        remaining_parts.remove(largest_part)
+                        processed_parts += 1
+                        part_placed = True
+                        
+                        # 更新可视化
+                        if self.visualizer:
+                            utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
+                            self.visualizer.update_bin_utilization(bin_index, utilization)
+                            
+                            match = re.search(r'(\d+-\d+)', largest_part['drawing_number'])
+                            display_drawing_number = match.group(1) if match else largest_part['drawing_number']
+                            self.visualizer.draw_rectangle(
+                                bin_index, placed_rect['x'], placed_rect['y'], 
+                                placed_rect['w'], placed_rect['h'], display_drawing_number
+                            )
+                            
+                            self.visualizer.update_info(
+                                f"板材 {bin_index + 1}: "
+                                f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%, "
+                                f"进度: {processed_parts}/{total_parts}"
+                            )
+                        break
+                
+                # 如果所有现有板材都无法放置，创建新板材
+                if not part_placed:
+                    self.add_new_bin()
+                    bin_index = len(self.bins) - 1
+                    bin_data = self.bins[bin_index]
+                    
+                    # 尝试不旋转放置
+                    best_space = self.find_best_space(bin_index, largest_part['length'], largest_part['width'])
+                    if best_space:
+                        placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, False)
+                        remaining_parts.remove(largest_part)
+                        processed_parts += 1
+                        
+                        # 更新可视化
+                        if self.visualizer:
+                            utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
+                            self.visualizer.update_bin_utilization(bin_index, utilization)
+                            
+                            match = re.search(r'(\d+-\d+)', largest_part['drawing_number'])
+                            display_drawing_number = match.group(1) if match else largest_part['drawing_number']
+                            self.visualizer.draw_rectangle(
+                                bin_index, placed_rect['x'], placed_rect['y'], 
+                                placed_rect['w'], placed_rect['h'], display_drawing_number
+                            )
+                            
+                            self.visualizer.update_info(
+                                f"板材 {bin_index + 1}: "
+                                f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%, "
+                                f"进度: {processed_parts}/{total_parts}"
+                            )
+                    else:
+                        # 尝试旋转放置
+                        best_space = self.find_best_space(bin_index, largest_part['width'], largest_part['length'])
+                        if best_space:
+                            placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, True)
+                            remaining_parts.remove(largest_part)
+                            processed_parts += 1
+                            
+                            # 更新可视化
+                            if self.visualizer:
+                                utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
+                                self.visualizer.update_bin_utilization(bin_index, utilization)
+                                
+                                match = re.search(r'(\d+-\d+)', largest_part['drawing_number'])
+                                display_drawing_number = match.group(1) if match else largest_part['drawing_number']
+                                self.visualizer.draw_rectangle(
+                                    bin_index, placed_rect['x'], placed_rect['y'], 
+                                    placed_rect['w'], placed_rect['h'], display_drawing_number
+                                )
+                                
+                                self.visualizer.update_info(
+                                    f"板材 {bin_index + 1}: "
+                                    f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%, "
+                                    f"进度: {processed_parts}/{total_parts}"
+                                )
+            
+            # 短暂延迟以便观察
+            if self.visualizer:
+                time.sleep(0.01)
 
     def pack(self, parts):
-        """标准贪心打包"""
-        if self.visualizer:
-            self.visualizer.wait_for_start()
-            
-        parts = parts.copy()
-        parts['area'] = parts['OBB长度'] * parts['OBB宽度']
-        parts = parts.sort_values('area', ascending=False).reset_index(drop=True)
-        total_rows = len(parts)
-        processed_rows = 0
-        for idx, row in parts.iterrows():
-            processed_rows += 1
-            drawing_number = str(row['图号'])
-            length, width, qty = row['OBB长度'], row['OBB宽度'], row['数量']
-            match = re.search(r'(\d+-\d+)', drawing_number)
-            display_drawing_number = match.group(1) if match else drawing_number
-            
-            info_text = f"正在处理第 {processed_rows}/{total_rows} 种零件 (图号: {display_drawing_number}, {qty} 个 {length}x{width} mm)"
-            if self.visualizer:
-                self.visualizer.update_info(info_text)
-            print(info_text)
-            
-            for i in range(qty):
-                part_id = f"Part_{idx}_{i+1}"
-                if ((length <= self.effective_width and width <= self.effective_height) or
-                    (width <= self.effective_width and length <= self.effective_height)):
-                    if length <= self.effective_width and width <= self.effective_height:
-                        if self.place_rect(length, width, drawing_number, part_id, rotated=False):
-                            continue
-                    if width <= self.effective_width and length <= self.effective_height:
-                        if self.place_rect(width, length, drawing_number, part_id + "(R)", rotated=True):
-                            continue
-                    # 如果都失败，强制尝试（可能失败）
-                    self.place_rect(length, width, drawing_number, part_id, rotated=False)
-                else:
-                    error_msg = f"错误：零件 {idx} 太大：{length}x{width}"
-                    print(error_msg)
-                    if self.visualizer:
-                        self.visualizer.update_info(error_msg)
+        """使用空间管理优化算法进行排版"""
+        self.pack_with_space_management(parts)
 
 # ==============================
 # 创建 DXF 输出（不变）
+# ==============================
+# ==============================
+# 创建 DXF 输出（修改后）
+# ==============================
+# ==============================
+# 创建 DXF 输出（修改后）
 # ==============================
 def create_individual_dxf(bins, base_output_dir, sheet_width, sheet_height, margin):
     base_folder_name = "sheet_dxf_files"
@@ -813,38 +934,135 @@ def create_individual_dxf(bins, base_output_dir, sheet_width, sheet_height, marg
     os.makedirs(dxf_folder)
     effective_sheet_area = (sheet_width - 2*margin) * (sheet_height - 2*margin)
     saved_files_info = []
+    
+    # 创建总DXF文档
+    total_doc = ezdxf.new('R2010')
+    total_msp = total_doc.modelspace()
+    
     for bin_idx, bin_data in enumerate(bins):
         bin_utilization = bin_data['used_area'] / effective_sheet_area * 100
         doc = ezdxf.new('R2010')
         msp = doc.modelspace()
+        
+        # 计算当前板材在总图纸中的位置（横向排列）
+        sheet_offset_x = bin_idx * (sheet_width + 100)  # 板材之间留100mm间隔
+        
         for rect in bin_data['rects']:
             x, y, w, h = rect['x'], rect['y'], rect['w'], rect['h']
-            x1 = round(x + MARGIN, 1)
-            y1 = round(y + MARGIN, 1)
-            x2 = round(x + w + MARGIN, 1)
-            y2 = round(y + h + MARGIN, 1)
+            x1 = round(x + margin, 1)
+            y1 = round(y + margin, 1)
+            x2 = round(x + w + margin, 1)
+            y2 = round(y + h + margin, 1)
+            
+            # 在单个板材DXF中绘制
             msp.add_line((x1, y1), (x2, y1), dxfattribs={'color': 7})
             msp.add_line((x2, y1), (x2, y2), dxfattribs={'color': 7})
             msp.add_line((x2, y2), (x1, y2), dxfattribs={'color': 7})
             msp.add_line((x1, y2), (x1, y1), dxfattribs={'color': 7})
+            
+            # 在总DXF中绘制（带偏移量）
+            total_msp.add_line(
+                (x1 + sheet_offset_x, y1), 
+                (x2 + sheet_offset_x, y1), 
+                dxfattribs={'color': 7}
+            )
+            total_msp.add_line(
+                (x2 + sheet_offset_x, y1), 
+                (x2 + sheet_offset_x, y2), 
+                dxfattribs={'color': 7}
+            )
+            total_msp.add_line(
+                (x2 + sheet_offset_x, y2), 
+                (x1 + sheet_offset_x, y2), 
+                dxfattribs={'color': 7}
+            )
+            total_msp.add_line(
+                (x1 + sheet_offset_x, y2), 
+                (x1 + sheet_offset_x, y1), 
+                dxfattribs={'color': 7}
+            )
+        
+        # 绘制板材边界（单个文件）
         msp.add_line((0, 0), (sheet_width, 0), dxfattribs={'color': 7})
         msp.add_line((sheet_width, 0), (sheet_width, sheet_height), dxfattribs={'color': 7})
         msp.add_line((sheet_width, sheet_height), (0, sheet_height), dxfattribs={'color': 7})
         msp.add_line((0, sheet_height), (0, 0), dxfattribs={'color': 7})
+        
+        # 绘制板材边界（总文件）
+        total_msp.add_line(
+            (sheet_offset_x, 0), 
+            (sheet_offset_x + sheet_width, 0), 
+            dxfattribs={'color': 7}
+        )
+        total_msp.add_line(
+            (sheet_offset_x + sheet_width, 0), 
+            (sheet_offset_x + sheet_width, sheet_height), 
+            dxfattribs={'color': 7}
+        )
+        total_msp.add_line(
+            (sheet_offset_x + sheet_width, sheet_height), 
+            (sheet_offset_x, sheet_height), 
+            dxfattribs={'color': 7}
+        )
+        total_msp.add_line(
+            (sheet_offset_x, sheet_height), 
+            (sheet_offset_x, 0), 
+            dxfattribs={'color': 7}
+        )
+        
+        # 添加零件编号
         for rect in bin_data['rects']:
             x, y, w, h = rect['x'], rect['y'], rect['w'], rect['h']
             match = re.search(r'(\d+-\d+)', rect['drawing_number'])
             display_drawing_number = match.group(1) if match else rect['drawing_number']
+            
+            # 单个板材文件中的文字
             text = msp.add_text(display_drawing_number, dxfattribs={'height': 15})
-            text.set_placement((x + w / 2 + MARGIN, y + h / 2 + MARGIN), align=TextEntityAlignment.MIDDLE_CENTER)
+            text.set_placement((x + w / 2 + margin, y + h / 2 + margin), align=TextEntityAlignment.MIDDLE_CENTER)
+            
+            # 总文件中的文字（带偏移量）
+            total_text = total_msp.add_text(display_drawing_number, dxfattribs={'height': 15})
+            total_text.set_placement(
+                (x + w / 2 + margin + sheet_offset_x, y + h / 2 + margin), 
+                align=TextEntityAlignment.MIDDLE_CENTER
+            )
+        
+        # 添加板材标识（总文件）
+        sheet_label = total_msp.add_text(f"Sheet {bin_idx + 1}", dxfattribs={'height': 20})
+        sheet_label.set_placement(
+            (sheet_offset_x + sheet_width / 2, sheet_height + 30), 
+            align=TextEntityAlignment.MIDDLE_CENTER
+        )
+        
+        # 添加板材利用率（总文件）
+        utilization_text = total_msp.add_text(f"Utilization: {bin_utilization:.2f}%", dxfattribs={'height': 15})
+        utilization_text.set_placement(
+            (sheet_offset_x + sheet_width / 2, sheet_height + 60),
+            align=TextEntityAlignment.MIDDLE_CENTER
+        )
+        
         filename = f"sheet_{bin_idx + 1}_utilization_{bin_utilization:.1f}%.dxf"
         output_file = os.path.join(dxf_folder, filename)
         doc.saveas(output_file)
-        saved_files_info.append({'file_path': output_file, 'utilization': bin_utilization, 'part_count': len(bin_data['rects'])})
+        saved_files_info.append({
+            'file_path': output_file, 
+            'utilization': bin_utilization, 
+            'part_count': len(bin_data['rects'])
+        })
+    
+    # 保存总DXF文件
+    total_filename = f"all_sheets_combined.dxf"
+    total_output_file = os.path.join(dxf_folder, total_filename)
+    total_doc.saveas(total_output_file)
+    saved_files_info.append({
+        'file_path': total_output_file,
+        'is_combined': True
+    })
+    
     return saved_files_info
 
 # ==============================
-# 主程序（分块优化版）
+# 主程序（空间管理优化版）
 # ==============================
 if __name__ == "__main__":
     print(f"当前板材尺寸: {SHEET_WIDTH}mm x {SHEET_HEIGHT}mm")
@@ -853,16 +1071,19 @@ if __name__ == "__main__":
     # 创建可视化对象
     visualizer = PackingVisualizer(SHEET_WIDTH, SHEET_HEIGHT)
     
-    # 创建支持可视化的装箱对象
-    packer = VisualBinPacking(SHEET_WIDTH, SHEET_HEIGHT, visualizer)
+    # 创建支持可视化的空间管理排版对象
+    packer = SpaceManagedPacking(SHEET_WIDTH, SHEET_HEIGHT, visualizer)
     
     # 将packer对象引用传递给visualizer
     visualizer.packer = packer
 
     # 在新线程中执行排版任务，避免阻塞GUI
     def run_packing():
-        # 使用分块优化算法进行排版
-        packer.pack_with_blocks(df)
+        # 计算原始零件总数（考虑数量列）
+        total_original_parts = df['数量'].sum()
+        
+        # 使用空间管理优化算法进行排版
+        packer.pack(df)
 
         # 保存结果
         saved_files = create_individual_dxf(packer.bins, output_dir, SHEET_WIDTH, SHEET_HEIGHT, MARGIN)
@@ -877,7 +1098,9 @@ if __name__ == "__main__":
         completion_info = (
             f"\n✅ 排版完成！\n"
             f"总共使用板材: {total_bins} 张\n"
-            f"总共放置零件: {total_parts} 个\n"
+            f"原始零件种类数: {len(df)} 种\n"
+            f"原始零件总数: {total_original_parts} 个\n"
+            f"实际放置零件: {total_parts} 个\n"
             f"整体材料利用率: {overall_utilization:.2f}%\n"
         )
         
