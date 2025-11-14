@@ -1,12 +1,12 @@
 # cluster_obb_export.py
 import ezdxf
+from ezdxf import select
 import numpy as np
 import math
 import os
-from matplotlib import pyplot as plt
-from matplotlib.collections import LineCollection
 import tkinter as tk
 from tkinter import filedialog
+
 
 def get_points_from_lines(lines):
     """从线段中提取所有点"""
@@ -16,36 +16,6 @@ def get_points_from_lines(lines):
         points.append(line[1])
     return list(set(points))
 
-def get_aabb_bounding_box(points):
-    """获取轴对齐的最小包围矩形"""
-    if len(points) < 1:
-        return None
-    
-    x_coords = [p[0] for p in points]
-    y_coords = [p[1] for p in points]
-    
-    min_x, max_x = min(x_coords), max(x_coords)
-    min_y, max_y = min(y_coords), max(y_coords)
-    
-    width = max_x - min_x
-    height = max_y - min_y
-    
-    corners = [
-        (min_x, min_y),
-        (max_x, min_y),
-        (max_x, max_y),
-        (min_x, max_y)
-    ]
-    
-    return {
-        'type': 'AABB',
-        'corners': corners,
-        'width': width,
-        'height': height,
-        'area': width * height,
-        'angle': 0,
-        'center': ((min_x + max_x) / 2, (min_y + max_y) / 2)
-    }
 
 def rotate_point(point, angle, center=(0, 0)):
     """绕指定中心点旋转点"""
@@ -65,6 +35,7 @@ def rotate_point(point, angle, center=(0, 0)):
     
     return (new_x, new_y)
 
+
 def get_bounding_box_area(points, angle):
     """计算给定角度下的包围盒面积和边界信息"""
     rotated_points = [rotate_point(p, -angle) for p in points]
@@ -80,6 +51,7 @@ def get_bounding_box_area(points, angle):
     area = width * height
     
     return area, (min_x, max_x, min_y, max_y)
+
 
 def ternary_search_min_area(points, left, right, eps=1e-6):
     """使用三分法搜索最小面积角度"""
@@ -98,6 +70,7 @@ def ternary_search_min_area(points, left, right, eps=1e-6):
     optimal_angle = (left + right) / 2
     min_area, bounds = get_bounding_box_area(points, optimal_angle)
     return optimal_angle, min_area, bounds
+
 
 def get_oriented_bounding_box_approx(points):
     """使用三分搜索获取最小面积包围矩形"""
@@ -182,15 +155,6 @@ def get_oriented_bounding_box_approx(points):
         'center': center_original
     }
 
-def create_dxf_with_lines(lines, filename):
-    """创建包含指定线段的DXF文件"""
-    doc = ezdxf.new()
-    msp = doc.modelspace()
-    
-    for line in lines:
-        msp.add_line(line[0], line[1])
-    
-    doc.saveas(filename)
 
 def cluster_lines(lines, distance_threshold=5):
     """聚类线段到不同的聚落"""
@@ -209,24 +173,20 @@ def cluster_lines(lines, distance_threshold=5):
         seed = remaining_lines.pop(0)
         current_cluster = [seed]
         
-        # 初始化聚落的边界
         min_x = min(seed[0][0], seed[1][0])
         max_x = max(seed[0][0], seed[1][0])
         min_y = min(seed[0][1], seed[1][1])
         max_y = max(seed[0][1], seed[1][1])
         
         while True:
-            # 扩展边界
             expanded_min_x = min_x - distance_threshold
             expanded_max_x = max_x + distance_threshold
             expanded_min_y = min_y - distance_threshold
             expanded_max_y = max_y + distance_threshold
             
-            # 寻找在扩展边界内的线段
             to_add = []
             for line in list(remaining_lines):
                 in_cluster = False
-                # 检查线段的两个端点是否在扩展后的边界内
                 for point in line:
                     if (expanded_min_x <= point[0] <= expanded_max_x and
                         expanded_min_y <= point[1] <= expanded_max_y):
@@ -235,15 +195,12 @@ def cluster_lines(lines, distance_threshold=5):
                 if in_cluster:
                     to_add.append(line)
             
-            # 如果没有找到，结束循环
             if not to_add:
                 break
             
-            # 将找到的线段加入当前聚落，并更新边界
             for line in to_add:
                 current_cluster.append(line)
                 remaining_lines.remove(line)
-                # 更新当前聚落的边界
                 line_min_x = min(p[0] for p in line)
                 line_max_x = max(p[0] for p in line)
                 line_min_y = min(p[1] for p in line)
@@ -253,7 +210,6 @@ def cluster_lines(lines, distance_threshold=5):
                 min_y = min(min_y, line_min_y)
                 max_y = max(max_y, line_max_y)
         
-        # 检查是否有包含关系
         to_remove = []
         for cluster in clusters:
             if (min_x <= cluster.min_x and min_y <= cluster.min_y and 
@@ -269,7 +225,6 @@ def cluster_lines(lines, distance_threshold=5):
         for cluster in to_remove:
             clusters.remove(cluster)
         
-        # 将当前聚落加入结果列表
         if current_cluster:
             current_cluster_c = Cluster(
                 lines=current_cluster,
@@ -282,23 +237,49 @@ def cluster_lines(lines, distance_threshold=5):
     
     return clusters
 
-def main():
-    # 创建一个隐藏的根窗口用于文件对话框
-    root = tk.Tk()
-    root.withdraw()  # 隐藏主窗口
 
-    # 弹窗选择DXF文件
+def copy_text_styles(source_doc, target_doc, entities):
+    """复制实体使用的文本样式到目标文档"""
+    style_names = set()
+    
+    # 收集所有使用的样式名称
+    for entity in entities:
+        if hasattr(entity.dxf, 'style'):
+            style_name = entity.dxf.get('style', 'Standard')
+            if style_name:
+                style_names.add(style_name)
+    
+    # 复制样式到新文档
+    for style_name in style_names:
+        if style_name in source_doc.styles:
+            source_style = source_doc.styles.get(style_name)
+            if style_name not in target_doc.styles:
+                # 创建新样式，保留原始属性
+                target_doc.styles.add(
+                    style_name,
+                    font=source_style.dxf.font,
+                    dxfattribs={
+                        "height": source_style.dxf.get("height", 0),
+                        "width": source_style.dxf.get("width", 1.0),
+                        "oblique": source_style.dxf.get("oblique", 0),
+                        "bigfont": source_style.dxf.get("bigfont", ""),
+                    }
+                )
+
+
+def main():
+    root = tk.Tk()
+    root.withdraw()
+
     dxf_file_path = filedialog.askopenfilename(
         title="选择DXF文件",
         filetypes=[("DXF files", "*.dxf"), ("All files", "*.*")]
     )
 
-    # 检查用户是否选择了文件
     if not dxf_file_path:
-        print("未选择文件，程序退出")
+        print("未选择文件,程序退出")
         return
 
-    # 获取文件名（不含扩展名）
     base_filename = os.path.splitext(os.path.basename(dxf_file_path))[0]
     directory = os.path.dirname(dxf_file_path)
     
@@ -307,40 +288,34 @@ def main():
 
     # 加载DXF文件
     doc = ezdxf.readfile(dxf_file_path)
-    msp = doc.modelspace()  # 获取模型空间
+    msp = doc.modelspace()
 
-    # 准备一个列表用于存储所有的线段
+    # 提取线段用于聚类
     lines = []
-            
-    # 遍历模型空间中的所有实体
     for entity in msp:
-        if entity.dxftype() == 'LINE':  # 如果是直线
-            # 添加起点和终点到lines列表
+        if entity.dxftype() == 'LINE':
             lines.append([(entity.dxf.start.x, entity.dxf.start.y), 
                           (entity.dxf.end.x, entity.dxf.end.y)])
-        elif entity.dxftype() == 'LWPOLYLINE':  # 处理轻量多段线
-            points = entity.get_points()  # 获取多段线的所有顶点
-            # 将连续的点连接成线段
+        elif entity.dxftype() == 'LWPOLYLINE':
+            points = entity.get_points()
             for i in range(len(points) - 1):
                 lines.append([(points[i][0], points[i][1]), 
                               (points[i+1][0], points[i+1][1])])
-            # 如果多段线闭合，则连接最后一个点与第一个点
             if entity.is_closed:
                 lines.append([(points[-1][0], points[-1][1]), 
                               (points[0][0], points[0][1])])
-        elif entity.dxftype() == 'ARC':  # 如果是圆弧
+        elif entity.dxftype() == 'ARC':
             arc = entity
             center = np.array([arc.dxf.center.x, arc.dxf.center.y])
             radius = arc.dxf.radius
             start_angle = arc.dxf.start_angle
             end_angle = arc.dxf.end_angle
             if start_angle > end_angle:
-                end_angle += 360  # 确保角度范围正确
-            angle_step = (end_angle - start_angle) / 15  # 分割成小段
+                end_angle += 360
+            angle_step = (end_angle - start_angle) / 15
             angles = np.arange(start_angle, end_angle, angle_step)
             arc_points = [center + radius * np.array([np.cos(np.deg2rad(angle)), 
                           np.sin(np.deg2rad(angle))]) for angle in angles]
-            # 将圆弧分割为多个线段
             for i in range(len(arc_points) - 1):
                 lines.append([tuple(arc_points[i]), tuple(arc_points[i+1])])
 
@@ -350,29 +325,53 @@ def main():
     clusters = cluster_lines(lines)
     print(f"找到 {len(clusters)} 个聚落")
 
-    # 为每个聚落计算OBB并导出DXF
+    # 为每个聚落使用窗口选择导出所有实体
     for i, cluster in enumerate(clusters):
-        # 提取点
+        # 提取点并计算OBB
         points = get_points_from_lines(cluster.lines)
-        
-        # 计算OBB
         obb = get_oriented_bounding_box_approx(points)
         
-        if obb:
-            # 格式化尺寸（保留一位小数）
-            width = round(obb['width'], 1)
-            height = round(obb['height'], 1)
-            
-            # 创建新的文件名
-            new_filename = f"{base_filename}{width}x{height}.dxf"
-            full_path = os.path.join(directory, new_filename)
-            
-            # 导出DXF文件
-            create_dxf_with_lines(cluster.lines, full_path)
-            
-            print(f"聚落 {i+1}: 导出文件 '{new_filename}' (尺寸: {width} x {height})")
-        else:
+        if not obb:
             print(f"聚落 {i+1}: 无法计算OBB")
+            continue
+        
+        # 创建窗口选择形状
+        window = select.Window(
+            (cluster.min_x, cluster.min_y), 
+            (cluster.max_x, cluster.max_y)
+        )
+        
+        # 使用bbox_overlap选择所有与窗口重叠的实体(类似AutoCAD的交叉选择)
+        selected_entities = select.bbox_overlap(window, msp)
+        
+        if len(selected_entities) == 0:
+            print(f"聚落 {i+1}: 未选择到任何实体")
+            continue
+        
+        # 创建新的DXF文档，保持相同DXF版本
+        doc_new = ezdxf.new(dxfversion=doc.dxfversion)
+        msp_new = doc_new.modelspace()
+        
+        # 先复制文本样式
+        copy_text_styles(doc, doc_new, selected_entities)
+        
+        # 将选中的实体添加到新文档
+        for entity in selected_entities:
+            try:
+                msp_new.add_foreign_entity(entity)
+            except Exception as e:
+                print(f"警告: 无法添加实体 {entity.dxftype()}: {e}")
+        
+        # 格式化尺寸并保存
+        width = round(obb['width'], 1)
+        height = round(obb['height'], 1)
+        new_filename = f"{base_filename}_{width}x{height}.dxf"
+        full_path = os.path.join(directory, new_filename)
+        
+        doc_new.saveas(full_path)
+        
+        print(f"聚落 {i+1}: 导出文件 '{new_filename}' (尺寸: {width} x {height}, 实体数: {len(selected_entities)})")
+
 
 if __name__ == "__main__":
     main()

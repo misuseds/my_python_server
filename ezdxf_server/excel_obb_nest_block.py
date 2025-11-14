@@ -548,8 +548,46 @@ class SpaceManagedPacking:
         """
         合并相邻的可用空间以减少碎片
         """
-        # 简化版合并，实际应用中可以更复杂
-        return free_spaces
+        if not free_spaces:
+            return free_spaces
+            
+        # 按坐标排序
+        free_spaces.sort(key=lambda s: (s['x'], s['y']))
+        
+        merged = []
+        for space in free_spaces:
+            merged_with_existing = False
+            for i, existing in enumerate(merged):
+                # 检查是否可以水平合并
+                if (existing['y'] == space['y'] and 
+                    existing['h'] == space['h'] and 
+                    existing['x'] + existing['w'] == space['x']):
+                    merged[i] = {
+                        'x': existing['x'],
+                        'y': existing['y'],
+                        'w': existing['w'] + space['w'],
+                        'h': existing['h']
+                    }
+                    merged_with_existing = True
+                    break
+                
+                # 检查是否可以垂直合并
+                if (existing['x'] == space['x'] and 
+                    existing['w'] == space['w'] and 
+                    existing['y'] + existing['h'] == space['y']):
+                    merged[i] = {
+                        'x': existing['x'],
+                        'y': existing['y'],
+                        'w': existing['w'],
+                        'h': existing['h'] + space['h']
+                    }
+                    merged_with_existing = True
+                    break
+            
+            if not merged_with_existing:
+                merged.append(space)
+        
+        return merged
 
     def can_place_in_space(self, space, part_length, part_width):
         """检查零件是否能放入指定空间"""
@@ -616,7 +654,7 @@ class SpaceManagedPacking:
         
         return placed_rect
 
-    def find_best_combination(self, parts_list, max_spaces_to_check=5):
+    def find_best_combination(self, parts_list):
         """
         寻找最佳零件组合
         考虑当前可用空间来评估组合
@@ -645,9 +683,9 @@ class SpaceManagedPacking:
                     best_utilization = utilization
                     best_combination = [part]
         
-        # 尝试组合（最多3个零件）
-        for r in range(2, min(4, len(sorted_parts) + 1)):
-            for combo in combinations(sorted_parts[:min(8, len(sorted_parts))], r):
+        # 尝试组合（最多4个零件）
+        for r in range(2, min(5, len(sorted_parts) + 1)):
+            for combo in combinations(sorted_parts[:min(10, len(sorted_parts))], r):
                 # 简单评估这个组合是否可能适合
                 total_area = sum(p['area'] for p in combo)
                 if total_area <= self.effective_width * self.effective_height:
@@ -657,6 +695,79 @@ class SpaceManagedPacking:
                         best_combination = list(combo)
         
         return best_combination
+
+    def sort_parts_for_packing(self, parts):
+        """
+        更智能的零件排序方式
+        """
+        # 尝试多种排序策略并选择最优的一种
+        strategies = [
+            lambda p: -p['area'],  # 按面积降序
+            lambda p: -(p['length'] + p['width']),  # 按周长降序
+            lambda p: -max(p['length'], p['width']),  # 按最长边降序
+        ]
+        
+        best_sorted = None
+        best_score = 0
+        
+        for strategy in strategies:
+            sorted_parts = sorted(parts, key=strategy)
+            # 简单评估排序效果（可以进一步完善）
+            score = self.evaluate_sorting_strategy(sorted_parts)
+            if score > best_score:
+                best_score = score
+                best_sorted = sorted_parts
+                
+        return best_sorted or sorted(parts, key=lambda p: -p['area'])
+
+    def evaluate_sorting_strategy(self, sorted_parts):
+        """
+        评估排序策略的效果
+        """
+        # 简单评估：检查前几个大零件能否很好地适应
+        score = 0
+        for i, part in enumerate(sorted_parts[:5]):
+            # 更大的零件获得更高的权重
+            weight = 1.0 / (i + 1)
+            # 检查零件是否能适应板材（不旋转）
+            if part['length'] <= self.effective_width and part['width'] <= self.effective_height:
+                score += weight
+            # 检查零件是否能适应板材（旋转）
+            elif part['width'] <= self.effective_width and part['length'] <= self.effective_height:
+                score += weight
+        return score
+
+    def find_best_fit_position(self, bin_index, part):
+        """
+        寻找最适合的位置放置零件
+        """
+        bin_data = self.bins[bin_index]
+        best_position = None
+        min_waste = float('inf')
+        
+        # 尝试两种方向（原始和旋转）
+        orientations = [
+            (part['length'], part['width'], False),
+            (part['width'], part['length'], True)
+        ]
+        
+        for length, width, rotated in orientations:
+            for space in bin_data['free_spaces']:
+                if length <= space['w'] and width <= space['h']:
+                    # 计算浪费的空间
+                    waste = (space['w'] * space['h']) - (length * width)
+                    if waste < min_waste:
+                        min_waste = waste
+                        best_position = {
+                            'space': space,
+                            'x': space['x'],
+                            'y': space['y'],
+                            'w': length,
+                            'h': width,
+                            'rotated': rotated
+                        }
+        
+        return best_position
 
     def pack_with_space_management(self, parts):
         """
@@ -683,9 +794,8 @@ class SpaceManagedPacking:
                     'id': part_id
                 })
         
-        # 按面积降序排序
-        all_parts.sort(key=lambda p: -p['area'])
-        remaining_parts = all_parts[:]
+        # 使用改进的排序方法
+        remaining_parts = self.sort_parts_for_packing(all_parts)
         
         total_parts = len(all_parts)
         processed_parts = 0
@@ -710,18 +820,12 @@ class SpaceManagedPacking:
                     
                     # 尝试在现有板材中放置
                     for bin_index in range(len(self.bins)):
-                        # 尝试不旋转放置
-                        best_space = self.find_best_space(bin_index, part['length'], part['width'])
-                        if best_space:
-                            placed_rect = self.place_part_in_bin(bin_index, part, best_space, False)
-                            combination_parts_placed.append((bin_index, placed_rect, part))
-                            part_placed = True
-                            break
-                        
-                        # 尝试旋转放置
-                        best_space = self.find_best_space(bin_index, part['width'], part['length'])
-                        if best_space:
-                            placed_rect = self.place_part_in_bin(bin_index, part, best_space, True)
+                        # 使用改进的放置算法
+                        best_position = self.find_best_fit_position(bin_index, part)
+                        if best_position:
+                            placed_rect = self.place_part_in_bin(
+                                bin_index, part, best_position['space'], best_position['rotated']
+                            )
                             combination_parts_placed.append((bin_index, placed_rect, part))
                             part_placed = True
                             break
@@ -731,19 +835,14 @@ class SpaceManagedPacking:
                         self.add_new_bin()
                         bin_index = len(self.bins) - 1
                         
-                        # 尝试不旋转放置
-                        best_space = self.find_best_space(bin_index, part['length'], part['width'])
-                        if best_space:
-                            placed_rect = self.place_part_in_bin(bin_index, part, best_space, False)
+                        # 尝试放置
+                        best_position = self.find_best_fit_position(bin_index, part)
+                        if best_position:
+                            placed_rect = self.place_part_in_bin(
+                                bin_index, part, best_position['space'], best_position['rotated']
+                            )
                             combination_parts_placed.append((bin_index, placed_rect, part))
                             part_placed = True
-                        else:
-                            # 尝试旋转放置
-                            best_space = self.find_best_space(bin_index, part['width'], part['length'])
-                            if best_space:
-                                placed_rect = self.place_part_in_bin(bin_index, part, best_space, True)
-                                combination_parts_placed.append((bin_index, placed_rect, part))
-                                part_placed = True
                     
                     if part_placed:
                         if part in remaining_parts:
@@ -797,37 +896,12 @@ class SpaceManagedPacking:
                 for bin_index in range(len(self.bins)):
                     bin_data = self.bins[bin_index]
                     
-                    # 尝试不旋转放置
-                    best_space = self.find_best_space(bin_index, largest_part['length'], largest_part['width'])
-                    if best_space:
-                        placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, False)
-                        remaining_parts.remove(largest_part)
-                        processed_parts += 1
-                        part_placed = True
-                        
-                        # 更新可视化
-                        if self.visualizer:
-                            utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
-                            self.visualizer.update_bin_utilization(bin_index, utilization)
-                            
-                            match = re.search(r'(\d+-\d+)', largest_part['drawing_number'])
-                            display_drawing_number = match.group(1) if match else largest_part['drawing_number']
-                            self.visualizer.draw_rectangle(
-                                bin_index, placed_rect['x'], placed_rect['y'], 
-                                placed_rect['w'], placed_rect['h'], display_drawing_number
-                            )
-                            
-                            self.visualizer.update_info(
-                                f"板材 {bin_index + 1}: "
-                                f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%, "
-                                f"进度: {processed_parts}/{total_parts}"
-                            )
-                        break
-                    
-                    # 尝试旋转放置
-                    best_space = self.find_best_space(bin_index, largest_part['width'], largest_part['length'])
-                    if best_space:
-                        placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, True)
+                    # 使用改进的放置算法
+                    best_position = self.find_best_fit_position(bin_index, largest_part)
+                    if best_position:
+                        placed_rect = self.place_part_in_bin(
+                            bin_index, largest_part, best_position['space'], best_position['rotated']
+                        )
                         remaining_parts.remove(largest_part)
                         processed_parts += 1
                         part_placed = True
@@ -857,10 +931,12 @@ class SpaceManagedPacking:
                     bin_index = len(self.bins) - 1
                     bin_data = self.bins[bin_index]
                     
-                    # 尝试不旋转放置
-                    best_space = self.find_best_space(bin_index, largest_part['length'], largest_part['width'])
-                    if best_space:
-                        placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, False)
+                    # 尝试放置
+                    best_position = self.find_best_fit_position(bin_index, largest_part)
+                    if best_position:
+                        placed_rect = self.place_part_in_bin(
+                            bin_index, largest_part, best_position['space'], best_position['rotated']
+                        )
                         remaining_parts.remove(largest_part)
                         processed_parts += 1
                         
@@ -881,31 +957,6 @@ class SpaceManagedPacking:
                                 f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%, "
                                 f"进度: {processed_parts}/{total_parts}"
                             )
-                    else:
-                        # 尝试旋转放置
-                        best_space = self.find_best_space(bin_index, largest_part['width'], largest_part['length'])
-                        if best_space:
-                            placed_rect = self.place_part_in_bin(bin_index, largest_part, best_space, True)
-                            remaining_parts.remove(largest_part)
-                            processed_parts += 1
-                            
-                            # 更新可视化
-                            if self.visualizer:
-                                utilization = (bin_data['used_area'] / bin_data['total_area']) * 100
-                                self.visualizer.update_bin_utilization(bin_index, utilization)
-                                
-                                match = re.search(r'(\d+-\d+)', largest_part['drawing_number'])
-                                display_drawing_number = match.group(1) if match else largest_part['drawing_number']
-                                self.visualizer.draw_rectangle(
-                                    bin_index, placed_rect['x'], placed_rect['y'], 
-                                    placed_rect['w'], placed_rect['h'], display_drawing_number
-                                )
-                                
-                                self.visualizer.update_info(
-                                    f"板材 {bin_index + 1}: "
-                                    f"已放置 {len(bin_data['rects'])} 个零件, 利用率: {utilization:.2f}%, "
-                                    f"进度: {processed_parts}/{total_parts}"
-                                )
             
             # 短暂延迟以便观察
             if self.visualizer:
@@ -916,13 +967,7 @@ class SpaceManagedPacking:
         self.pack_with_space_management(parts)
 
 # ==============================
-# 创建 DXF 输出（不变）
-# ==============================
-# ==============================
-# 创建 DXF 输出（修改后）
-# ==============================
-# ==============================
-# 创建 DXF 输出（修改后）
+# 创建 DXF 输出
 # ==============================
 def create_individual_dxf(bins, base_output_dir, sheet_width, sheet_height, margin):
     base_folder_name = "sheet_dxf_files"
