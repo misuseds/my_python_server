@@ -30,7 +30,7 @@ class UniversalFileToExcelConverter:
     def __init__(self):
         # 定义提取字段配置，通过修改这个列表可以同时改变提示语句和JSON示例
         self.extraction_fields = [
-            {"key": "drawing_number", "label": "ABC123", "display_name": "图号"},
+            {"key": "drawing_number", "label": "P7764", "display_name": "图号"},
             {"key": "specification", "label": "PL厚度*宽度*长度", "display_name": "规格"},
             
             {"key": "quantity", "label": "5", "display_name": "数量"},
