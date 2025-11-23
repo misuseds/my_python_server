@@ -34,6 +34,7 @@ class UniversalFileToExcelConverter:
             {"key": "specification", "label": "PL厚度*宽度*长度（类似PL8*504*1000）", "display_name": "规格"},
             
             {"key": "quantity", "label": "5", "display_name": "数量"},
+                {"key": "weight", "label": "1000", "display_name": "重量"},
             {"key": "material", "label": "不锈钢", "display_name": "材料"},
           
             {"key": "remark", "label": "不锈钢板", "display_name": "备注"}

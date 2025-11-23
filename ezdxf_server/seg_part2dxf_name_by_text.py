@@ -6,6 +6,7 @@ import math
 import os
 import tkinter as tk
 from tkinter import filedialog
+import uuid
 
 
 def get_points_from_lines(lines):
@@ -309,8 +310,13 @@ def main():
     base_filename = os.path.splitext(os.path.basename(dxf_file_path))[0]
     directory = os.path.dirname(dxf_file_path)
     
+    # 创建一个基于UUID的唯一文件夹名称
+    unique_output_folder = f"dxf_output_{uuid.uuid4().hex[:8]}"
+    output_directory = os.path.join(directory, unique_output_folder)
+    os.makedirs(output_directory, exist_ok=True)
+    
     print(f"基础文件名: {base_filename}")
-    print(f"目录: {directory}")
+    print(f"输出目录: {output_directory}")
 
     # 加载DXF文件
     doc = ezdxf.readfile(dxf_file_path)
@@ -395,13 +401,16 @@ def main():
         width = round(obb['width'], 1)
         height = round(obb['height'], 1)
         
-        # 根据是否有文本决定文件名
+        # 根据是否有文本决定文件名，并添加UUID确保唯一性
         if text_filename:
-            new_filename = f"{text_filename}.dxf"
+            unique_id = uuid.uuid4().hex[:8]
+            new_filename = f"{text_filename}_{unique_id}.dxf"
         else:
-            new_filename = f"{base_filename}_{width}x{height}.dxf"
+            unique_id = uuid.uuid4().hex[:8]
+            new_filename = f"{base_filename}_{width}x{height}_{unique_id}.dxf"
             
-        full_path = os.path.join(directory, new_filename)
+        # 保存到新创建的输出目录中
+        full_path = os.path.join(output_directory, new_filename)
         
         doc_new.saveas(full_path)
         
