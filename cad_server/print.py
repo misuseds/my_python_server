@@ -25,6 +25,10 @@ acad.prompt("请选择打印窗口的第二个角点:\n")
 point2_raw = doc.Utility.GetPoint()  # 使用 point1 而不是 point1_raw
 point2 = acad.aDouble(point2_raw[0], point2_raw[1])
 
+# 计算并输出两点间的长宽距离
+width = abs(point2_raw[0] - point1_raw[0])
+height = abs(point2_raw[1] - point1_raw[1])
+
 # 设置打印配置
 doc.ActiveLayout.ConfigName = "DWG To PDF.pc3"
 # 在现有打印设置代码中添加以下行
@@ -52,15 +56,30 @@ doc.ActiveLayout.PlotType = 4
 pdf_filename = os.path.splitext(doc.Name)[0] + ".pdf"
 full_pdf_path = os.path.normpath(os.path.join(default_pdf_path, pdf_filename))
 
-# 检查文件是否已存在，如果存在则添加序号
+# # 检查文件是否已存在，如果存在则添加序号
+# counter = 1
+# original_full_pdf_path = full_pdf_path
+# while os.path.exists(full_pdf_path):
+#     name_without_ext = os.path.splitext(doc.Name)[0]
+#     pdf_filename = f"{name_without_ext}_{counter}.pdf"
+#     full_pdf_path = os.path.normpath(os.path.join(default_pdf_path, pdf_filename))
+#     counter += 1
+
+# 检查文件是否已存在，如果存在则使用坐标生成唯一文件名
 counter = 1
 original_full_pdf_path = full_pdf_path
-while os.path.exists(full_pdf_path):
-    name_without_ext = os.path.splitext(doc.Name)[0]
-    pdf_filename = f"{name_without_ext}_{counter}.pdf"
-    full_pdf_path = os.path.normpath(os.path.join(default_pdf_path, pdf_filename))
-    counter += 1
 
+# 使用两点坐标生成唯一标识
+coord_suffix = f"_{point1_raw[0]:.0f}_{point1_raw[1]:.0f}_{point2_raw[0]:.0f}_{point2_raw[1]:.0f}"
+name_without_ext = os.path.splitext(doc.Name)[0]
+pdf_filename = f"{name_without_ext}{coord_suffix}.pdf"
+full_pdf_path = os.path.normpath(os.path.join(default_pdf_path, pdf_filename))
+if os.path.exists(full_pdf_path):
+    try:
+        os.remove(full_pdf_path)
+        print(f"Removed existing file: {full_pdf_path}")
+    except Exception as e:
+        print(f"Could not remove existing file: {e}")
 # 打印到文件
 doc.Plot.PlotToFile(full_pdf_path)
 print(f"Printed: {doc.Name} to {full_pdf_path}")
@@ -72,5 +91,8 @@ if os.path.exists(full_pdf_path):
     print(f"Opened PDF: {pdf_filename}")
 else:
     print(f"Warning: Could not find generated PDF file: {full_pdf_path}")
+print(f"打印窗口宽度: {width:.2f}")
+print(f"打印窗口高度: {height:.2f}")
+print(f"打印窗口尺寸: {width:.2f} x {height:.2f}")
 
 print("Document printed.")
