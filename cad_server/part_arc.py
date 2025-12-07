@@ -1,4 +1,3 @@
-
 # add_divide_arcs.py
 from pyautocad import Autocad, APoint
 import math
@@ -77,6 +76,35 @@ def calculate_current_arc_length(arc):
         print(f"计算圆弧长度时出错: {e}")
         return None
 
+def get_number_of_segments(doc):
+    """
+    通过弹窗获取用户想要的分割段数
+    
+    Args:
+        doc: AutoCAD文档对象
+    
+    Returns:
+        int: 分割段数，如果取消或输入无效则返回默认值5
+    """
+    try:
+        # 使用AutoCAD的输入框获取用户输入
+        input_result = doc.Utility.GetInteger(
+            "请输入要分割的段数(默认为5): "
+        )
+        
+        # 如果用户按下取消或输入无效值，则使用默认值
+        if input_result is None or input_result <= 0:
+            doc.Utility.Prompt("输入无效，使用默认分割段数5\n")
+            return 5
+            
+        segments = int(input_result)
+        doc.Utility.Prompt(f"将圆弧分割成 {segments} 段\n")
+        return segments
+        
+    except Exception as e:
+        doc.Utility.Prompt(f"获取分割段数时出错，使用默认值5: {e}\n")
+        return 5
+
 def divide_arc_into_segments(doc, arc, num_segments=6):
     """
     将圆弧平均分成指定数量的小圆弧段
@@ -142,7 +170,7 @@ def divide_arc_into_segments(doc, arc, num_segments=6):
         doc.Utility.Prompt(f"分割圆弧时出错: {e}\n")
         return False
 
-def process_arc_division(doc, arc, index):
+def process_arc_division(doc, arc, index, num_segments):
     """
     处理单个圆弧的分割
     
@@ -150,6 +178,7 @@ def process_arc_division(doc, arc, index):
         doc: AutoCAD文档对象
         arc: AutoCAD Arc对象
         index: 圆弧索引号
+        num_segments: 分割段数
     
     Returns:
         bool: 是否处理成功
@@ -164,8 +193,8 @@ def process_arc_division(doc, arc, index):
         doc.Utility.Prompt(f"第 {index} 个圆弧长度: {current_length:.2f}\n")
         
         # 分割圆弧
-        if divide_arc_into_segments(doc, arc,6 ):
-            doc.Utility.Prompt(f"成功将第 {index} 个圆弧分割成5段\n")
+        if divide_arc_into_segments(doc, arc, num_segments):
+            doc.Utility.Prompt(f"成功将第 {index} 个圆弧分割成{num_segments}段\n")
             return True
         else:
             doc.Utility.Prompt(f"分割第 {index} 个圆弧时出错\n")
@@ -177,7 +206,7 @@ def process_arc_division(doc, arc, index):
 
 def main():
     """
-    主函数 - 将选中的圆弧平均分成5个小圆弧
+    主函数 - 将选中的圆弧平均分成用户指定数量的小圆弧
     """
     # 连接到正在运行的 AutoCAD
     try:
@@ -189,6 +218,9 @@ def main():
         return
     
     try:
+        # 获取用户想要的分割段数
+        num_segments = get_number_of_segments(doc)
+        
         # 获取用户选择的圆弧
         selected_arcs = get_selected_arcs(acad, doc)
         
@@ -204,10 +236,10 @@ def main():
             doc.Utility.Prompt(f"\n--- 处理第 {i} 个圆弧 ---\n")
             
             # 处理单个圆弧分割
-            if process_arc_division(doc, arc, i):
+            if process_arc_division(doc, arc, i, num_segments):
                 success_count += 1
         
-        doc.Utility.Prompt(f"\n总共成功分割了 {success_count} 个圆弧\n")
+        doc.Utility.Prompt(f"\n总共成功分割了 {success_count} 个圆弧，每段被分割成 {num_segments} 段\n")
         
     except Exception as e:
         print(f"处理过程中发生错误: {e}\n")

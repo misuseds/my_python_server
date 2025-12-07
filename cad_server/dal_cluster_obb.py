@@ -45,12 +45,60 @@ def get_lines_from_entities(entities):
                 lines.append((tuple(start), tuple(end)))
                 print(f"找到线段 {len(lines)}: 起点({start[0]:.2f}, {start[1]:.2f}), 终点({end[0]:.2f}, {end[1]:.2f})")
             # 可以根据需要添加对其他实体类型的处理...
+            elif entity.ObjectName == "AcDbCircle":
+                # 处理圆对象，将其拆分成40个点
+                center = entity.Center[:2]
+                radius = entity.Radius
+                
+                # 在圆上均匀采样40个点并连接成线段
+                circle_points = []
+                for k in range(40):
+                    angle = 2 * math.pi * k / 40
+                    x = center[0] + radius * math.cos(angle)
+                    y = center[1] + radius * math.sin(angle)
+                    circle_points.append((x, y))
+                
+                # 将相邻点连接成线段
+                for k in range(len(circle_points)):
+                    start_point = circle_points[k]
+                    end_point = circle_points[(k + 1) % len(circle_points)]  # 最后一个点连接到第一个点
+                    lines.append((start_point, end_point))
+                    
+                print(f"找到圆 {i+1}: 采样40个点，生成40条线段")
+            elif entity.ObjectName == "AcDbArc":
+                # 处理圆弧对象，将其拆分成20个点
+                center = entity.Center[:2]
+                radius = entity.Radius
+                start_angle = entity.StartAngle
+                end_angle = entity.EndAngle
+                
+                # 确保角度范围正确
+                if end_angle < start_angle:
+                    end_angle += 2 * math.pi
+                    
+                # 在圆弧上均匀采样20个点并连接成线段
+                arc_points = []
+                for k in range(20):
+                    angle = start_angle + (end_angle - start_angle) * k / 19
+                    x = center[0] + radius * math.cos(angle)
+                    y = center[1] + radius * math.sin(angle)
+                    arc_points.append((x, y))
+                
+                # 将相邻点连接成线段
+                for k in range(len(arc_points) - 1):
+                    start_point = arc_points[k]
+                    end_point = arc_points[k + 1]
+                    lines.append((start_point, end_point))
+                    
+                print(f"找到圆弧 {i+1}: 采样20个点，生成19条线段")
         except Exception as e:
             print(f"处理对象 {i+1} 时出错: {e}")
             continue
     
     print(f"共提取到 {len(lines)} 条线段")
     return lines
+                    
+
 
 class LineCluster:
     def __init__(self, lines=[], min_x=0, max_x=0, min_y=0, max_y=0):
@@ -436,7 +484,7 @@ def draw_bounding_box_with_text(acad, box, color_index, cluster_id=None, width=N
         # 在右上角附近放置文本
         text_position = APoint(top_right[0] + 5, top_right[1] + 5, 0)
         text_content = f"{width:.0f}*{height:.0f}"
-        text = model.AddText(text_content, text_position, 5)  # 文本高度设为5
+        text = model.AddText(text_content, text_position, 200)  # 文本高度设为5
         text.Color = color_index
         
         # 将文字设置到"obb_clusters"图层
@@ -516,7 +564,7 @@ def main():
             return
         
         # 对线段进行聚类
-        clusters = cluster_lines(lines, distance_threshold=2000.0)  # 根据您的数据调整阈值
+        clusters = cluster_lines(lines, distance_threshold=200.0)  # 根据您的数据调整阈值
         print(f"\n总共识别到 {len(clusters)} 个聚类")
         
         # 处理每个聚类并绘制OBB框

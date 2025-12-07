@@ -107,7 +107,8 @@ def get_points_from_entities(entities):
                     points.append((x, y))
                     
                 print(f"找到圆 {i+1}: 采样40个点")
-                
+
+                    
             else:
                 print(f"跳过非线段对象 {i+1}: {entity.ObjectName}")
         except Exception as e:
@@ -117,6 +118,7 @@ def get_points_from_entities(entities):
     points = list(set(points))
     print(f"共提取到 {len(points)} 个不重复的点")
     return points
+
 
 def get_aabb_bounding_box(points):
     """获取轴对齐的最小包围矩形"""
