@@ -16,6 +16,7 @@ class YOLODatasetCreator:
         初始化YOLO数据集创建器
         
         Args:
+        
             image_folder: 包含图片的文件夹路径
             output_dir: 输出目录路径
         """
