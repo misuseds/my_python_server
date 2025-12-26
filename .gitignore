@@ -16,3 +16,4 @@ cache
 *pdf_output/*
 pdf_output/*
 exe_output/*
+*/yolo_dataset/*
