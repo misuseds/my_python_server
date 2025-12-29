@@ -2,7 +2,7 @@
 *__pycache__*
 *.pyc
 .env
-micromambavenv
+*micromambavenv
 output/*
 excel_output/*
 dxf_output/*
