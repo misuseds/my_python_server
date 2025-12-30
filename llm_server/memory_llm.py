@@ -1,19 +1,71 @@
 import tkinter as tk
 from tkinter import scrolledtext, messagebox, ttk
 import os
+import subprocess
+import re
+import json
+import sys
+from pathlib import Path
 from llm_server import LLMService
 
-def chat_with_memory(user_message, memory_file=None, use_memory=True):
+def execute_tool(tool_name, *args):
     """
-    简单的记忆聊天函数，将对话保存到文件
-    :param user_message: 用户消息
-    :param memory_file: 记忆文件路径
-    :param use_memory: 是否使用记忆功能
-    :return: AI回复内容
+    执行指定名称的工具
     """
-    # 如果没有指定记忆文件路径，则使用当前脚本所在目录下的memory.txt
+    # 获取项目根目录，然后定位到 llm_server 目录下的 executor.py
+    current_dir = Path(__file__).parent  # llm_server 目录
+    executor_script = current_dir / "executor.py"
+    
+    if not executor_script.exists():
+        return "错误: 执行器脚本不存在"
+    
+    cmd = [sys.executable, str(executor_script), tool_name] + list(args)
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            encoding='utf-8',    # 明确指定UTF-8编码
+            errors='replace'     # 遇到编码错误时替换字符
+        )
+        
+        if result.returncode == 0:
+            return result.stdout.strip()
+        else:
+            return f"工具执行失败: {result.stderr.strip()}"
+    except subprocess.TimeoutExpired:
+        return f"工具执行超时: {tool_name}"
+    except Exception as e:
+        return f"执行工具时出错: {str(e)}"
+
+def get_available_tools_info():
+    """
+    获取所有可用工具的信息
+    """
+    current_dir = Path(__file__).parent  # 获取当前文件的目录
+    config_path = current_dir / "tools_config.json"  # 在同级目录中查找配置文件
+    
+    if not config_path.exists():
+        return "错误: 工具配置文件不存在"
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            return json.dumps(config, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return f"读取工具配置失败: {str(e)}"
+
+def chat_with_memory(user_message, knowledge_file=None, memory_file=None, use_knowledge=True, use_memory=True, use_tools=True):
+    """
+    支持固定知识和记忆聊天的函数
+    """
+    # 如果没有指定文件路径，则使用当前脚本所在目录下的相应文件
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    if knowledge_file is None:
+        knowledge_file = os.path.join(current_dir, "knowledge.txt")
     if memory_file is None:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
         memory_file = os.path.join(current_dir, "memory.txt")
     
     try:
@@ -23,17 +75,31 @@ def chat_with_memory(user_message, memory_file=None, use_memory=True):
         # 准备消息列表
         messages = []
         
+        # 如果启用固定知识且知识文件存在，读取固定知识
+        if use_knowledge and os.path.exists(knowledge_file):
+            with open(knowledge_file, 'r', encoding='utf-8') as f:
+                knowledge_content = f.read()
+                if knowledge_content.strip():
+                    # 将固定知识作为系统提示添加到消息中
+                    messages.append({"role": "system", "content": f"重要知识:\n{knowledge_content}"})
+        
         # 如果启用记忆功能且记忆文件存在，读取历史对话
         if use_memory and os.path.exists(memory_file):
             with open(memory_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                # 这里需要解析历史对话，将它们转换为messages格式
-                # 简单示例：将历史对话按行分割并转换为消息列表
+                # 解析历史对话，将它们转换为messages格式
                 history_messages = parse_history_content(content)
                 messages.extend(history_messages)
         
         # 添加当前用户消息
         messages.append({"role": "user", "content": user_message})
+        
+        # 如果启用工具功能，添加工具使用提示
+        if use_tools:
+            tools_info = get_available_tools_info()
+            tool_instruction = f"\n\n注意：如果需要执行特定任务（如打开网页、执行系统命令等），请使用以下工具: {tools_info}\n使用格式: [TOOL:工具名称,参数1,参数2,...]\n请直接输出工具调用格式，不要额外解释。"
+            # 将工具指令附加到用户消息
+            messages[-1]["content"] += tool_instruction
         
         # 调用LLM服务
         result = llm_service.create(messages)
@@ -41,7 +107,19 @@ def chat_with_memory(user_message, memory_file=None, use_memory=True):
         # 获取AI回复
         ai_response = result['choices'][0]['message']['content']
         
-        # 如果启用了记忆功能，则保存到记忆文件
+        # 如果启用了工具功能，检查AI是否需要执行工具
+        if use_tools:
+            tool_execution_result = process_tool_calls(ai_response)
+            if tool_execution_result:
+                # 如果有工具执行结果，将其添加到对话历史
+                messages.append({"role": "assistant", "content": ai_response})
+                messages.append({"role": "user", "content": f"工具执行结果: {tool_execution_result}"})
+                
+                # 再次调用LLM以获取最终响应
+                final_result = llm_service.create(messages)
+                ai_response = final_result['choices'][0]['message']['content']
+        
+        # 如果启用了记忆功能，则保存到记忆文件（不包括固定知识）
         if use_memory:
             try:
                 # 保存到记忆文件（追加模式）
@@ -57,6 +135,34 @@ def chat_with_memory(user_message, memory_file=None, use_memory=True):
         error_msg = f"连接LLM服务失败: {str(e)}"
         print(error_msg)
         return error_msg
+
+def process_tool_calls(response_text):
+    """
+    解析AI响应中的工具调用指令
+    支持格式: [TOOL:工具名称,arg1,arg2]
+    """
+    # 匹配工具调用模式
+    tool_pattern = r'\[TOOL:([^\],\]]+)(?:,([^\]]+))?\]'
+    matches = re.findall(tool_pattern, response_text)
+    
+    all_results = []
+    
+    if matches:
+        for match in matches:
+            tool_name = match[0]   # 工具名称
+            tool_args_str = match[1] if match[1] else ""
+            
+            # 解析参数
+            tool_args = []
+            if tool_args_str:
+                # 简单的参数分割（可以根据需要扩展）
+                tool_args = [arg.strip() for arg in tool_args_str.split(',')]
+            
+            # 执行工具
+            result = execute_tool(tool_name, *tool_args)
+            all_results.append(f"工具 '{tool_name}' 执行结果: {result}")
+    
+    return "\n".join(all_results) if all_results else None
 
 def parse_history_content(content):
     """
@@ -120,37 +226,84 @@ class MemoryChatApp:
         self.root.title("AI记忆聊天")
         self.root.geometry("800x600")
         
-        # 记忆开关变量
+        # 固定知识开关变量
+        self.use_knowledge_var = tk.BooleanVar(value=True)
+        # 临时记忆开关变量
         self.use_memory_var = tk.BooleanVar(value=True)
+        # 工具开关变量
+        self.use_tools_var = tk.BooleanVar(value=False)
+        # 工具开关的上一个状态，用于检测是否切换
+        self.prev_tools_state = False
         
         # 创建界面
         self.setup_ui()
         
-        # 记忆文件路径
+        # 文件路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
+        self.knowledge_file = os.path.join(current_dir, "knowledge.txt")
         self.memory_file = os.path.join(current_dir, "memory.txt")
+        
+        # 初始化固定知识文件
+        self.init_knowledge_file()
         
         # 加载历史对话
         self.load_history()
 
+    def init_knowledge_file(self):
+        """初始化固定知识文件"""
+        if not os.path.exists(self.knowledge_file):
+            with open(self.knowledge_file, 'w', encoding='utf-8') as f:
+                f.write("# 固定知识库\n")
+                f.write("# 在这里添加固定信息，如用户偏好、重要上下文等\n")
+                f.write("# 此文件不会被清除，只能手动编辑\n\n")
+                f.write("# 示例:\n")
+                f.write("# 用户姓名: 张三\n")
+                f.write("# 工作领域: 软件开发\n")
+                f.write("# 兴趣爱好: Python编程\n")
+
     def setup_ui(self):
-        # 顶部框架 - 记忆开关和清除按钮
+        # 顶部框架 - 开关和按钮
         top_frame = tk.Frame(self.root)
         top_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        # 记忆开关复选框
+        # 固定知识开关复选框
+        knowledge_check = tk.Checkbutton(
+            top_frame,
+            text="启用固定知识",
+            variable=self.use_knowledge_var
+        )
+        knowledge_check.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 临时记忆开关复选框
         memory_check = tk.Checkbutton(
             top_frame,
-            text="启用记忆功能",
+            text="启用临时记忆",
             variable=self.use_memory_var
         )
-        memory_check.pack(side=tk.LEFT)
+        memory_check.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 工具开关复选框
+        tools_check = tk.Checkbutton(
+            top_frame,
+            text="启用工具功能",
+            variable=self.use_tools_var,
+            command=self.on_tools_toggle  # 添加切换事件
+        )
+        tools_check.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 编辑固定知识按钮
+        edit_knowledge_btn = tk.Button(
+            top_frame,
+            text="编辑固定知识",
+            command=self.edit_knowledge
+        )
+        edit_knowledge_btn.pack(side=tk.LEFT, padx=(0, 10))
         
         # 清除对话按钮
         clear_btn = tk.Button(
             top_frame,
-            text="清除对话记录",
-            command=self.clear_history
+            text="清除临时记忆",
+            command=self.clear_memory
         )
         clear_btn.pack(side=tk.RIGHT)
         
@@ -186,6 +339,18 @@ class MemoryChatApp:
         # 绑定回车键发送消息（Shift+Enter 换行）
         self.input_text.bind('<Return>', self.on_enter_key)
         
+    def on_tools_toggle(self):
+        """工具开关切换事件处理"""
+        current_state = self.use_tools_var.get()
+        
+        # 如果从关闭变为开启，显示工具列表
+        if current_state and not self.prev_tools_state:
+            tools_info = get_available_tools_info()
+            messagebox.showinfo("可用工具列表", tools_info)
+        
+        # 更新上一个状态
+        self.prev_tools_state = current_state
+    
     def on_enter_key(self, event):
         # 检测是否同时按下Shift键，如果是则换行，否则发送消息
         if event.state & 0x1:  # Shift键被按下
@@ -206,11 +371,20 @@ class MemoryChatApp:
         # 显示用户消息
         self.display_message("用户", user_message)
         
-        # 获取AI回复
+        # 获取开关状态
+        use_knowledge = self.use_knowledge_var.get()
         use_memory = self.use_memory_var.get()
+        use_tools = self.use_tools_var.get()
         
         try:
-            ai_response = chat_with_memory(user_message, self.memory_file, use_memory)
+            ai_response = chat_with_memory(
+                user_message, 
+                self.knowledge_file, 
+                self.memory_file, 
+                use_knowledge, 
+                use_memory, 
+                use_tools
+            )
             # 显示AI回复
             self.display_message("AI", ai_response)
         except Exception as e:
@@ -235,9 +409,9 @@ class MemoryChatApp:
                     role = "用户" if msg["role"] == "user" else "AI"
                     self.display_message(role, msg["content"])
     
-    def clear_history(self):
-        """清除对话记录"""
-        if messagebox.askyesno("确认", "确定要清除所有对话记录吗？"):
+    def clear_memory(self):
+        """清除临时记忆"""
+        if messagebox.askyesno("确认", "确定要清除临时记忆吗？\n（固定知识将保留）"):
             try:
                 # 清空记忆文件
                 with open(self.memory_file, 'w', encoding='utf-8') as f:
@@ -248,9 +422,42 @@ class MemoryChatApp:
                 self.chat_history.delete(1.0, tk.END)
                 self.chat_history.config(state='disabled')
                 
-                messagebox.showinfo("提示", "对话记录已清除")
+                # 重新加载固定知识相关的对话
+                self.load_history()
+                
+                messagebox.showinfo("提示", "临时记忆已清除")
             except Exception as e:
                 messagebox.showerror("错误", f"清除记录时出错: {str(e)}")
+    
+    def edit_knowledge(self):
+        """编辑固定知识"""
+        # 创建新窗口
+        knowledge_window = tk.Toplevel(self.root)
+        knowledge_window.title("编辑固定知识")
+        knowledge_window.geometry("600x400")
+        
+        # 文本框
+        text_area = scrolledtext.ScrolledText(knowledge_window, wrap=tk.WORD)
+        text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        
+        # 加载现有知识
+        if os.path.exists(self.knowledge_file):
+            with open(self.knowledge_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                text_area.insert(tk.END, content)
+        
+        # 保存按钮
+        def save_knowledge():
+            try:
+                with open(self.knowledge_file, 'w', encoding='utf-8') as f:
+                    f.write(text_area.get("1.0", tk.END))
+                messagebox.showinfo("提示", "固定知识已保存")
+                knowledge_window.destroy()
+            except Exception as e:
+                messagebox.showerror("错误", f"保存知识时出错: {str(e)}")
+        
+        save_btn = tk.Button(knowledge_window, text="保存", command=save_knowledge)
+        save_btn.pack(pady=5)
 
 def main():
     root = tk.Tk()
