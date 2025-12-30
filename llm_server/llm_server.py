@@ -87,7 +87,7 @@ class LLMService:
 class VLMService:
     def __init__(self):
         # 从环境变量中获取 VLM 参数
-        dotenv_path = r'E:\code\apikey\.env'
+        dotenv_path = r'E:\code\my_python_server_private\.env'
         load_dotenv(dotenv_path)
         self.api_url = os.getenv('VLM_OPENAI_API_URL')
         self.model_name = os.getenv('VLM_MODEL_NAME')
