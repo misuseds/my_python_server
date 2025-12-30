@@ -231,7 +231,7 @@ class MemoryChatApp:
         # 临时记忆开关变量
         self.use_memory_var = tk.BooleanVar(value=True)
         # 工具开关变量
-        self.use_tools_var = tk.BooleanVar(value=False)
+        self.use_tools_var = tk.BooleanVar(value=True)
         # 工具开关的上一个状态，用于检测是否切换
         self.prev_tools_state = False
         
