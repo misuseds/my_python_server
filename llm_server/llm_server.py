@@ -80,7 +80,7 @@ class LLMService:
 
         # 关闭连接
         conn.close()
-        
+         
         print("LLM服务调用完成")
         return data
 
