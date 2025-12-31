@@ -9,6 +9,12 @@ from io import BytesIO
 from PIL import Image
 dotenv_path = r'E:\code\my_python_server_private\.env'
 load_dotenv(dotenv_path)
+import ssl
+import urllib3
+
+# 在程序开始时禁用SSL警告（仅在开发环境中使用）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 class LLMService:
     def __init__(self):
         # 从环境变量中获取 DeepSeek 参数

@@ -5,7 +5,7 @@
 """
 import sys
 import webbrowser
-
+import time
 def normalize_url(url):
     """
     标准化URL格式，处理可能的错误格式
@@ -27,16 +27,15 @@ def normalize_url(url):
     return url
 
 def main():
-    if len(sys.argv) < 2:
-        print("用法: python net_server/open_browser.py <URL>")
-        sys.exit(1)
+
     
-    raw_url = sys.argv[1]
+    raw_url = sys.argv[2]
     url = normalize_url(raw_url)
     
     try:
         webbrowser.open(url)
         print(f"成功打开网页: {url}")
+        time.sleep(2)
     except Exception as e:
         print(f"打开网页失败: {str(e)}")
         sys.exit(1)

@@ -24,8 +24,9 @@ def execute_python_script(script_path, *args):
         return f"错误: 文件必须是Python脚本 (.py文件)"
     
     try:
-        # 构建命令
+        # 构建命令：工具名称作为脚本的第一个参数
         cmd = [sys.executable, str(script_full_path)] + list(args)
+        print("cmd:", cmd)
         
         # 执行Python脚本，指定编码为UTF-8
         result = subprocess.run(
@@ -47,6 +48,7 @@ def execute_python_script(script_path, *args):
         return f"脚本执行超时: {script_path}"
     except Exception as e:
         return f"执行脚本时出错: {str(e)}"
+
 def list_available_tools():
     """
     从配置文件中列出所有可用工具
@@ -93,7 +95,10 @@ def main():
         sys.exit(1)
     
     script_path = tool_info['path']
-    result = execute_python_script(script_path, *tool_args)
+    
+    # 修复：将工具名称作为脚本的第一个参数
+    # 需要将工具名称添加到参数列表前面
+    result = execute_python_script(script_path, tool_name, *tool_args)
     print(result)
 
 if __name__ == "__main__":

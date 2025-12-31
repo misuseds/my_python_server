@@ -30,7 +30,7 @@ def execute_tool(tool_name, *args):
             cmd,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=300,
             encoding='utf-8',
             errors='replace'
         )
@@ -102,7 +102,7 @@ def is_task_completed(ai_response, tool_result):
     return any(indicator in combined_text for indicator in completion_indicators)
 
 
-def vision_task_loop(task_description, knowledge_file=None, memory_file=None):
+def vision_task_loop(task_description, knowledge_file=None, memory_file=None, reset_first_iteration=True):
     """
     基于视觉的循环任务执行器
     """
@@ -134,6 +134,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None):
     
     iteration_count = 0
     max_iterations = 50  # 设置最大迭代次数，防止无限循环
+    first_iteration = reset_first_iteration  # 使用参数来决定是否重置首次迭代标志
     
     while iteration_count < max_iterations:
         iteration_count += 1
@@ -154,7 +155,12 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None):
             })
         
         # 添加任务描述和当前截图信息 - 使用更清晰的格式
-        user_message = f"当前任务: {task_description}\n请分析当前屏幕截图，判断任务完成情况，并按需执行相应操作。如果任务已经完成，请明确说明任务已完成。"
+        if first_iteration:
+            # 首次迭代时，AI只需要开始分析任务
+            user_message = f"当前任务: {task_description}\n请分析当前屏幕截图，并开始执行任务。"
+        else:
+            # 非首次迭代时，询问任务完成情况
+            user_message = f"当前任务: {task_description}\n请分析当前屏幕截图，判断任务完成情况，并按需执行相应操作。如果任务已经完成，请明确说明任务已完成。"
         
         # 构建包含图像的消息内容
         image_content = {
@@ -189,15 +195,21 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None):
             # 显示AI响应
             yield f"AI分析: {ai_response}"
             
+            # 只在非首次迭代时检查任务完成状态
+            if not first_iteration:
+                # 检查任务是否完成
+                if is_task_completed(ai_response, tool_execution_result or ""):
+                    yield "任务已完成，退出循环"
+                    break
+            
+            # 更新标志，表示不再是第一次迭代
+            first_iteration = False
      
             # 如果没有工具执行结果，检查AI响应是否表明任务已完成
             if any(indicator in ai_response.lower() for indicator in 
                     ["任务完成", "完成任务", "已完成", "task completed", "finished", "done"]):
                 yield "任务已完成，退出循环"
-                # 删除短期记忆文件
-                if os.path.exists(memory_file):
-                    os.remove(memory_file)
-                    yield "短期记忆已删除"
+                # 取消自动删除短期记忆，改为手动删除
                 break
         except Exception as e:
             error_msg = f"执行任务时出错: {str(e)}"
@@ -206,23 +218,25 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None):
     
     if iteration_count >= max_iterations:
         yield "达到最大迭代次数，停止任务执行"
-
-
 def process_tool_calls(response_text):
     """
     解析AI响应中的工具调用指令
-    支持格式: [TOOL:工具名称,arg1,arg2]
+    支持格式: [TOOL:工具名称,arg1,arg2,arg3...]
     """
-    # 支持更灵活的工具调用格式
-    tool_pattern = r'\[TOOL:([^\],\]]+)(?:,([^\]]+))?\]'
+
+    # 修复正则表达式以正确捕获工具名称和所有参数
+    tool_pattern = r'\[TOOL:([^\],\]]+),([^\]]+)\]'
     matches = re.findall(tool_pattern, response_text)
     
+
     all_results = []
     
     if matches:
         for match in matches:
             tool_name = match[0]
-            tool_args_str = match[1] if match[1] else ""
+            tool_args_str = match[1]  # 包含所有参数的字符串
+            
+            print(f"DEBUG: 解析到工具名称: '{tool_name}', 参数字符串: '{tool_args_str}'")
             
             # 验证工具是否存在
             tools = get_available_tools_info()
@@ -235,16 +249,42 @@ def process_tool_calls(response_text):
                 all_results.append(f"工具 '{tool_name}' 执行失败: 工具不存在")
                 continue
             
+            # 正确解析参数，处理带引号的参数值
             tool_args = []
-            if tool_args_str:
-                tool_args = [arg.strip() for arg in tool_args_str.split(',')]
+            current_arg = ""
+            inside_quotes = False
+            quote_char = None
             
+            i = 0
+            while i < len(tool_args_str):
+                char = tool_args_str[i]
+                
+                if char in ['"', "'"] and not inside_quotes:
+                    # 开始引号
+                    inside_quotes = True
+                    quote_char = char
+                elif char == quote_char and inside_quotes:
+                    # 结束引号
+                    inside_quotes = False
+                    quote_char = None
+                elif char == ',' and not inside_quotes:
+                    # 参数分隔符，不在引号内
+                    tool_args.append(current_arg.strip())
+                    current_arg = ""
+                else:
+                    current_arg += char
+                i += 1
+            
+            # 添加最后一个参数
+            if current_arg:
+                tool_args.append(current_arg.strip())
+            
+        
             result = execute_tool(tool_name, *tool_args)
             all_results.append(f"工具 '{tool_name}' 执行结果: {result}")
     
+ 
     return "\n".join(all_results) if all_results else None
-
-
 def parse_history_content(content):
     """
     解析历史对话内容，转换为messages格式
@@ -304,7 +344,7 @@ class VLMTaskApp:
         self.root.attributes('-topmost', True)  # 设置窗口置顶
         
         # 任务执行标志
-        self.is_executing = False
+        self.is_executing = False 
         
         # 创建界面
         self.setup_ui()
@@ -313,6 +353,9 @@ class VLMTaskApp:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.knowledge_file = os.path.join(current_dir, "knowledge.txt")
         self.memory_file = os.path.join(current_dir, "memory.txt")
+        
+        # 启动时加载记忆文件内容到显示区域
+        self.load_memory_content()
 
     def setup_ui(self):
         # 任务描述输入区域
@@ -341,7 +384,15 @@ class VLMTaskApp:
             command=self.stop_task,
             state=tk.DISABLED
         )
-        self.stop_button.pack(side=tk.LEFT)
+        self.stop_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 添加清除短期记忆按钮
+        self.clear_memory_button = tk.Button(
+            control_frame,
+            text="清除短期记忆",
+            command=self.clear_short_term_memory
+        )
+        self.clear_memory_button.pack(side=tk.LEFT)
         
         # 聊天历史显示区域
         self.chat_history = scrolledtext.ScrolledText(
@@ -355,6 +406,30 @@ class VLMTaskApp:
         # 任务状态标签
         self.status_label = tk.Label(self.root, text="状态: 等待任务开始", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def load_memory_content(self):
+        """启动时加载记忆文件内容到显示区域"""
+        if os.path.exists(self.memory_file):
+            try:
+                with open(self.memory_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    if content.strip():
+                        # 启用文本框编辑
+                        self.chat_history.config(state='normal')
+                        # 清空当前内容
+                        self.chat_history.delete(1.0, tk.END)
+                        # 插入记忆文件内容
+                        self.chat_history.insert(tk.END, content)
+                        # 禁用编辑并滚动到底部
+                        self.chat_history.config(state='disabled')
+                        self.chat_history.see(tk.END)
+            except Exception as e:
+                print(f"加载记忆文件失败: {str(e)}")
+        else:
+            # 如果记忆文件不存在，清空显示区域
+            self.chat_history.config(state='normal')
+            self.chat_history.delete(1.0, tk.END)
+            self.chat_history.config(state='disabled')
 
     def start_task(self):
         """开始执行任务"""
@@ -387,19 +462,21 @@ class VLMTaskApp:
     def run_task(self, task_description):
         """执行任务的主循环"""
         try:
-            # 清空记忆文件开始新任务
-            if os.path.exists(self.memory_file):
-                with open(self.memory_file, 'w', encoding='utf-8') as f:
-                    f.write("")
+            # 显示用户输入的任务
+            self.display_message("用户", task_description)
             
-            # 执行任务循环
-            for output in vision_task_loop(task_description, self.knowledge_file, self.memory_file):
+            # 追加到记忆文件而不是覆盖
+            with open(self.memory_file, 'a', encoding='utf-8') as f:
+                f.write(f"用户: {task_description}\n\n")
+            
+            # 执行任务循环，确保重置首次迭代标志
+            for output in vision_task_loop(task_description, self.knowledge_file, self.memory_file, reset_first_iteration=True):
                 if not self.is_executing:
                     break
                 
                 self.display_message("系统", output)
                 
-                # 将输出保存到记忆文件
+                # 将输出追加到记忆文件
                 with open(self.memory_file, 'a', encoding='utf-8') as f:
                     f.write(f"系统: {output}\n\n")
         
@@ -409,8 +486,7 @@ class VLMTaskApp:
             self.is_executing = False
             self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
-            self.root.after(0, lambda: self.update_status("状态: 任务执行完成"))
-
+            self.root.after(0, lambda: self.update_status("状态: 任务执行完成"))    
     def display_message(self, sender, message):
         """显示消息"""
         self.root.after(0, self._display_message, sender, message)
@@ -426,7 +502,20 @@ class VLMTaskApp:
         """更新状态栏"""
         self.status_label.config(text=status_text)
 
-
+    def clear_short_term_memory(self):
+        """手动清除短期记忆"""
+        if os.path.exists(self.memory_file):
+            try:
+                os.remove(self.memory_file)
+                # 同时清空显示区域
+                self.chat_history.config(state='normal')
+                self.chat_history.delete(1.0, tk.END)
+                self.chat_history.config(state='disabled')
+                self.display_message("系统", "短期记忆已手动清除")
+            except Exception as e:
+                messagebox.showerror("错误", f"清除短期记忆失败: {str(e)}")
+        else:
+            self.display_message("系统", "短期记忆文件不存在")
 def main():
     root = tk.Tk()
     app = VLMTaskApp(root)
