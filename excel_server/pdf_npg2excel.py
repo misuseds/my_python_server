@@ -9,7 +9,7 @@ import tempfile
 import sys
 import tkinter as tk
 from tkinter import filedialog
-import logging
+import logging 
 import fitz  # PyMuPDF
 import re
 
