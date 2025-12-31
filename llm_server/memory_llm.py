@@ -1,3 +1,4 @@
+# e:\code\my_python_server\llm_server\memory_llm.py
 import tkinter as tk
 from tkinter import scrolledtext, messagebox, ttk
 import os
@@ -6,43 +7,95 @@ import re
 import json
 import sys
 from pathlib import Path
-from llm_server import VLMService  # 假设VLMService基于LLMService
+from llm_class import VLMService  # 假设VLMService基于LLMService
 import pyautogui
 from PIL import Image
 import base64
 from io import BytesIO
 
 
-def execute_tool(tool_name, *args):
+def execute_python_script(script_path, *args):
     """
-    执行指定名称的工具
+    执行指定路径的Python脚本
     """
-    current_dir = Path(__file__).parent
-    executor_script = current_dir / "executor.py"
+    # 获取项目根目录（从当前脚本位置向上一级）
+    current_dir = Path(__file__).parent.parent  # 回到项目根目录
+    script_full_path = current_dir / script_path
     
-    if not executor_script.exists():
-        return "错误: 执行器脚本不存在"
+    if not script_full_path.exists():
+        return f"错误: 脚本 '{script_path}' 不存在"
     
-    cmd = [sys.executable, str(executor_script), tool_name] + list(args)
+    if script_full_path.suffix != '.py':
+        return f"错误: 文件必须是Python脚本 (.py文件)"
     
     try:
+        # 构建命令：工具名称作为脚本的第一个参数
+        cmd = [sys.executable, str(script_full_path)] + list(args)
+       
+        
+        # 执行Python脚本，指定编码为UTF-8
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,
-            encoding='utf-8',
-            errors='replace'
+            timeout=30,
+            cwd=str(current_dir),
+            encoding='utf-8',      # 明确指定UTF-8编码
+            errors='replace'       # 遇到编码错误时替换字符
         )
-        
+        print( "",result.stdout.strip())
         if result.returncode == 0:
             return result.stdout.strip()
         else:
-            return f"工具执行失败: {result.stderr.strip()}"
+            return f"脚本执行失败: {result.stderr.strip()}"
+     
     except subprocess.TimeoutExpired:
-        return f"工具执行超时: {tool_name}"
+        return f"脚本执行超时: {script_path}"
     except Exception as e:
-        return f"执行工具时出错: {str(e)}"
+        return f"执行脚本时出错: {str(e)}"
+
+
+def list_available_tools():
+    """
+    从配置文件中列出所有可用工具
+    """
+    current_dir = Path(__file__).parent
+    config_path = current_dir / "tools_config.json"
+    
+    if not config_path.exists():
+        return []
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            return config.get('tools', [])
+    except Exception as e:
+        return []
+
+
+def get_tool_by_name(tool_name):
+    """
+    根据工具名称获取工具信息
+    """
+    tools = list_available_tools()
+    for tool in tools:
+        if tool['name'] == tool_name:
+            return tool
+    return None
+
+
+def execute_tool(tool_name, *args):
+    """
+    执行指定名称的工具
+    """
+    tool_info = get_tool_by_name(tool_name)
+    if not tool_info:
+        return f"错误: 未找到工具 '{tool_name}'"
+    
+    script_path = tool_info['path']
+    result = execute_python_script(script_path, tool_name, *args)
+   
+    return result
 
 
 def get_available_tools_info():
@@ -136,6 +189,10 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
     max_iterations = 50  # 设置最大迭代次数，防止无限循环
     first_iteration = reset_first_iteration  # 使用参数来决定是否重置首次迭代标志
     
+    # 记录之前的AI响应，用于检测重复行为
+    previous_ai_response = ""
+    previous_tool_result = ""
+    
     while iteration_count < max_iterations:
         iteration_count += 1
         
@@ -159,8 +216,14 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             # 首次迭代时，AI只需要开始分析任务
             user_message = f"当前任务: {task_description}\n请分析当前屏幕截图，并开始执行任务。"
         else:
-            # 非首次迭代时，询问任务完成情况
-            user_message = f"当前任务: {task_description}\n请分析当前屏幕截图，判断任务完成情况，并按需执行相应操作。如果任务已经完成，请明确说明任务已完成。"
+            # 非首次迭代时，询问任务完成情况，避免重复之前的操作
+            user_message = (
+                f"当前任务: {task_description}\n"
+                f"上一轮AI分析: {previous_ai_response}\n"
+                f"上一轮工具执行结果: {previous_tool_result}\n"
+                f"请分析当前屏幕截图，判断任务完成情况，避免重复执行相同操作，并按需执行相应操作。"
+                f"如果任务已经完成，请明确说明任务已完成。"
+            )
         
         # 构建包含图像的消息内容
         image_content = {
@@ -190,8 +253,12 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             print(f"VLM响应: {ai_response}")
             
             # 执行AI返回的工具指令
-            tool_execution_result = process_tool_calls(ai_response)
-            print(f"工具执行结果: {tool_execution_result}")
+            tool_execution_result = process_tool_calls(ai_response, memory_file)
+            
+            # 更新历史记录
+            previous_ai_response = ai_response
+            previous_tool_result = tool_execution_result or ""
+            
             # 显示AI响应
             yield f"AI分析: {ai_response}"
             
@@ -204,7 +271,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             
             # 更新标志，表示不再是第一次迭代
             first_iteration = False
-     
+ 
             # 如果没有工具执行结果，检查AI响应是否表明任务已完成
             if any(indicator in ai_response.lower() for indicator in 
                     ["任务完成", "完成任务", "已完成", "task completed", "finished", "done"]):
@@ -218,39 +285,36 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
     
     if iteration_count >= max_iterations:
         yield "达到最大迭代次数，停止任务执行"
-def process_tool_calls(response_text):
+
+def process_tool_calls(response_text, memory_file_path=None):
     """
     解析AI响应中的工具调用指令
-    支持格式: [TOOL:工具名称,arg1,arg2,arg3...]
+    支持格式: [TOOL:工具名称,arg1,arg2,arg3...] 
     """
-
     # 修复正则表达式以正确捕获工具名称和所有参数
-    tool_pattern = r'\[TOOL:([^\],\]]+),([^\]]+)\]'
+    tool_pattern = r'\[TOOL:([^\],\]]+)(?:,([^\]]*))?\]'
     matches = re.findall(tool_pattern, response_text)
     
-
     all_results = []
-    
-    if matches:
-        for match in matches:
-            tool_name = match[0]
-            tool_args_str = match[1]  # 包含所有参数的字符串
+    if not matches: print ("未找到工具调用指令")
+    for match in matches:
+        tool_name = match[0]
+        tool_args_str = match[1]  # 包含所有参数的字符串，可能为空
+
+        # 验证工具是否存在
+        tools = get_available_tools_info()
+        if not tools or isinstance(tools, str):  # 检查是否返回错误
+            all_results.append(f"工具 '{tool_name}' 执行失败: 无法获取工具列表")
+            continue
             
-            print(f"DEBUG: 解析到工具名称: '{tool_name}', 参数字符串: '{tool_args_str}'")
-            
-            # 验证工具是否存在
-            tools = get_available_tools_info()
-            if not tools or isinstance(tools, str):  # 检查是否返回错误
-                all_results.append(f"工具 '{tool_name}' 执行失败: 无法获取工具列表")
-                continue
-                
-            tool_exists = any(tool['name'] == tool_name for tool in tools)
-            if not tool_exists:
-                all_results.append(f"工具 '{tool_name}' 执行失败: 工具不存在")
-                continue
-            
-            # 正确解析参数，处理带引号的参数值
-            tool_args = []
+        tool_exists = any(tool['name'] == tool_name for tool in tools)
+        if not tool_exists:
+            all_results.append(f"工具 '{tool_name}' 执行失败: 工具不存在")
+            continue
+        
+        # 解析参数，处理带引号的参数值（如果存在参数）
+        tool_args = []
+        if tool_args_str:  # 如果有参数
             current_arg = ""
             inside_quotes = False
             quote_char = None
@@ -278,12 +342,24 @@ def process_tool_calls(response_text):
             # 添加最后一个参数
             if current_arg:
                 tool_args.append(current_arg.strip())
-            
+        print(f"正在执行工具：{tool_name}")
+        print(f"参数列表：{tool_args}")
+        result = execute_tool(tool_name, *tool_args) if tool_args else execute_tool(tool_name)
+        print("结果：",result)
+        # 处理执行结果为None的情况
+        if result is None:
+            result = "工具执行结果为空"
         
-            result = execute_tool(tool_name, *tool_args)
-            all_results.append(f"工具 '{tool_name}' 执行结果: {result}")
+        # 将所有工具的结果写入记忆文件，这样AI可以看到
+        if memory_file_path:
+            try:
+                with open(memory_file_path, 'a', encoding='utf-8') as f:
+                    f.write(f"工具 '{tool_name}' 执行结果:\n{result}\n\n")
+            except Exception as e:
+                print(f"写入记忆文件失败: {e}")
+        
+        all_results.append(f"工具 '{tool_name}' 执行结果: {result}")
     
- 
     return "\n".join(all_results) if all_results else None
 def parse_history_content(content):
     """
@@ -463,7 +539,7 @@ class VLMTaskApp:
         """执行任务的主循环"""
         try:
             # 显示用户输入的任务
-            self.display_message("用户", task_description)
+            self.display_message(f"用户: {task_description}")
             
             # 追加到记忆文件而不是覆盖
             with open(self.memory_file, 'a', encoding='utf-8') as f:
@@ -472,31 +548,34 @@ class VLMTaskApp:
             # 执行任务循环，确保重置首次迭代标志
             for output in vision_task_loop(task_description, self.knowledge_file, self.memory_file, reset_first_iteration=True):
                 if not self.is_executing:
+                    self.display_message("系统: 任务已手动停止")
                     break
                 
-                self.display_message("系统", output)
+                self.display_message(f"AI: {output}")
                 
                 # 将输出追加到记忆文件
                 with open(self.memory_file, 'a', encoding='utf-8') as f:
-                    f.write(f"系统: {output}\n\n")
-        
+                    f.write(f"AI: {output}\n\n")
+
         except Exception as e:
-            self.display_message("系统", f"执行任务时出错: {str(e)}")
+            self.display_message(f"系统: 执行任务时出错: {str(e)}")
         finally:
             self.is_executing = False
             self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
-            self.root.after(0, lambda: self.update_status("状态: 任务执行完成"))    
-    def display_message(self, sender, message):
-        """显示消息"""
-        self.root.after(0, self._display_message, sender, message)
+            self.root.after(0, lambda: self.update_status("状态: 任务执行完成"))
 
-    def _display_message(self, sender, message):
+    def display_message(self, message):
+        """显示消息"""
+        self.root.after(0, self._display_message, message)
+
+    def _display_message(self, message):
         """在主线程中更新UI"""
         self.chat_history.config(state='normal')
-        self.chat_history.insert(tk.END, f"{sender}: {message}\n\n")
+        self.chat_history.insert(tk.END, f"{message}\n\n")
         self.chat_history.config(state='disabled')
         self.chat_history.see(tk.END)
+
 
     def update_status(self, status_text):
         """更新状态栏"""
@@ -511,11 +590,11 @@ class VLMTaskApp:
                 self.chat_history.config(state='normal')
                 self.chat_history.delete(1.0, tk.END)
                 self.chat_history.config(state='disabled')
-                self.display_message("系统", "短期记忆已手动清除")
+                self.display_message( "短期记忆已手动清除")
             except Exception as e:
                 messagebox.showerror("错误", f"清除短期记忆失败: {str(e)}")
         else:
-            self.display_message("系统", "短期记忆文件不存在")
+            self.display_message("短期记忆文件不存在")
 def main():
     root = tk.Tk()
     app = VLMTaskApp(root)

@@ -2,7 +2,7 @@
   "tools": [
     {
       "name": "open_browser",
-      "path": "net_server/open_browser.py",
+      "path": "browser_server/open_browser.py",
       "description": "打开指定的网页浏览器",
       "parameters": [
         {
@@ -87,6 +87,32 @@
         "[TOOL:move_mouse,300,400,0.5]",
         "[TOOL:move_mouse,500,600,1.0]"
       ]
-    }
+    },
+
+    {
+      "name": "find_text_coordinates",
+      "path": "ocr/ocr.py",
+      "description": "查找指定文字的中心点坐标",
+      "parameters": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "要查找的文字内容"
+        }
+      ],
+      "examples": [
+        "[TOOL:find_text_coordinates,赞助模之屋]",
+        "[TOOL:find_text_coordinates,开始游戏]"
+      ]
+    },
+    {
+  "name": "get_all_text",
+  "path": "ocr/ocr.py",
+  "description": "获取全屏所有识别到的文本",
+  "parameters": [],
+  "examples": [
+    "[TOOL:get_all_text]"
+  ]
+}
   ]
 }

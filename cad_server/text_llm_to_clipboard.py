@@ -14,7 +14,7 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from llm_server.llm_server import LLMService
+from llm_server.llm_class import LLMService
 
 llm_service = LLMService()
 

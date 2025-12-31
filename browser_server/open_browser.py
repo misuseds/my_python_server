@@ -34,7 +34,7 @@ def main():
     
     try:
         webbrowser.open(url)
-        print(f"成功打开网页: {url}")
+        print(f"成功 打开网页: {url}")
         time.sleep(2)
     except Exception as e:
         print(f"打开网页失败: {str(e)}")

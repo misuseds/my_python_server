@@ -23,7 +23,7 @@ if parent_dir not in sys.path:
 
 # 尝试导入LLM服务类
 try:
-    from llm_server.llm_server import LLMService
+    from llm_server.llm_class import LLMService
     llm_service_available = True
 except ImportError as e:
     logger.warning(f"无法导入LLM服务: {e}")
