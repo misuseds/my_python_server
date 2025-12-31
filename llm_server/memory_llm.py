@@ -107,6 +107,7 @@ def chat_with_memory(user_message, knowledge_file=None, memory_file=None, use_kn
         # 获取AI回复
         ai_response = result['choices'][0]['message']['content']
         
+        print(f"AI回复: {ai_response}")
         # 如果启用了工具功能，检查AI是否需要执行工具
         if use_tools:
             tool_execution_result = process_tool_calls(ai_response)
