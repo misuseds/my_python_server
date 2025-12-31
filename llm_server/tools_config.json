@@ -52,45 +52,11 @@
         "[TOOL:click_mouse,300,400,right,1,0.1]",
         "[TOOL:click_mouse,None,None,left,2,0.2]"
       ]
-    },
-    {
-      "name": "get_position",
-      "path": "keyboard_server/mousecontrol.py",
-      "description": "获取当前鼠标位置的坐标",
-      "parameters": [],
-      "examples": [
-        "[TOOL:get_position]"
-      ]
-    },
-    {
-      "name": "move_mouse",
-      "path": "keyboard_server/mousecontrol.py",
-      "description": "移动鼠标到指定位置",
-      "parameters": [
-        {
-          "name": "x",
-          "type": "number",
-          "description": "目标x坐标"
-        },
-        {
-          "name": "y",
-          "type": "number",
-          "description": "目标y坐标"
-        },
-        {
-          "name": "duration",
-          "type": "number",
-          "description": "移动持续时间，控制移动速度，默认为0.0"
-        }
-      ],
-      "examples": [
-        "[TOOL:move_mouse,300,400,0.5]",
-        "[TOOL:move_mouse,500,600,1.0]"
-      ]
-    },
+    }
+   ,
 
     {
-      "name": "find_text_coordinates",
+      "name": "ocr_detect",
       "path": "ocr/ocr.py",
       "description": "查找指定文字的中心点坐标",
       "parameters": [
@@ -101,18 +67,9 @@
         }
       ],
       "examples": [
-        "[TOOL:find_text_coordinates,赞助模之屋]",
-        "[TOOL:find_text_coordinates,开始游戏]"
+        "[TOOL:ocr_detect,赞助模之屋]",
+        "[TOOL:ocr_detect,开始游戏]"
       ]
-    },
-    {
-  "name": "get_all_text",
-  "path": "ocr/ocr.py",
-  "description": "获取全屏所有识别到的文本",
-  "parameters": [],
-  "examples": [
-    "[TOOL:get_all_text]"
-  ]
-}
+    }
   ]
 }
