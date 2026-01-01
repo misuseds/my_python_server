@@ -3,6 +3,21 @@ import yaml
 from ultralytics import YOLO
 import cv2
 import numpy as np
+import tkinter as tk
+from tkinter import filedialog
+
+def select_dataset_folder():
+    """
+    弹窗选择数据集文件夹
+    
+    Returns:
+        str: 选择的文件夹路径，如果取消选择则返回None
+    """
+    root = tk.Tk()
+    root.withdraw()  # 隐藏主窗口
+    folder_path = filedialog.askdirectory(title="选择数据集文件夹")
+    root.destroy()
+    return folder_path
 
 def train_yolo_with_single_image(data_yaml_path, model_type='yolov8n.pt'):
     """
@@ -125,26 +140,49 @@ def prepare_data_yaml_for_training(output_dir, class_names):
 
 # 使用示例
 if __name__ == "__main__":
+    # 弹窗选择数据集文件夹
+    dataset_dir = select_dataset_folder()
+    
+    if not dataset_dir:
+        print("未选择数据集文件夹，程序退出。")
+        exit()
+    
+    print(f"选择的数据集文件夹: {dataset_dir}")
+    
     # 假设你已经有了单张图片的数据集
-    dataset_dir = "path/to/your/dataset"  # 替换为你的数据集路径
     class_names = ["person", "car", "dog"]  # 替换为你的类别名称
     
     # 扩充数据集
     images_dir = os.path.join(dataset_dir, "images", "train")
     labels_dir = os.path.join(dataset_dir, "labels", "train")
     
+    # 检查目录是否存在
+    if not os.path.exists(images_dir) or not os.path.exists(labels_dir):
+        print(f"数据集目录结构不正确。请确保存在 {images_dir} 和 {labels_dir} 目录。")
+        exit()
+    
     # 找到第一个图片和标签文件
     img_files = [f for f in os.listdir(images_dir) if f.endswith(('.jpg', '.jpeg', '.png'))]
-    if img_files:
-        first_img = os.path.join(images_dir, img_files[0])
-        first_lbl = os.path.join(labels_dir, os.path.splitext(img_files[0])[0] + '.txt')
-        
-        # 扩增数据集
-        augment_single_image_dataset(
-            first_img, first_lbl, 
-            dataset_dir, 
-            augmentation_factor=50  # 扩增50倍
-        )
+    if not img_files:
+        print("在图片目录中未找到图片文件。")
+        exit()
+    
+    first_img = os.path.join(images_dir, img_files[0])
+    first_lbl = os.path.join(labels_dir, os.path.splitext(img_files[0])[0] + '.txt')
+    
+    if not os.path.exists(first_lbl):
+        print(f"未找到对应的标签文件: {first_lbl}")
+        exit()
+    
+    print(f"使用图片: {first_img}")
+    print(f"使用标签: {first_lbl}")
+    
+    # 扩增数据集
+    augment_single_image_dataset(
+        first_img, first_lbl, 
+        dataset_dir, 
+        augmentation_factor=50  # 扩增50倍
+    )
     
     # 准备数据配置文件
     data_yaml_path = prepare_data_yaml_for_training(dataset_dir, class_names)

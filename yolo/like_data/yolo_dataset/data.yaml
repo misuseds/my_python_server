@@ -1,16 +1,9 @@
 names:
 - person
-- bicycle
 - car
-- motorcycle
-- airplane
-- bus
-- train
-- truck
-- boat
-- traffic light
-nc: 10
-path: E:/code/my_python_server/yolo/like_data\yolo_dataset
+- dog
+nc: 3
+path: E:/code/my_python_server/yolo/like_data/yolo_dataset
 test: images/test
 train: images/train
 val: images/val

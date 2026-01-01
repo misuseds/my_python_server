@@ -1,10 +1,327 @@
 {
   "dataset_info": {
-    "total_images": 0,
-    "created_at": "1304.8288919",
+    "total_images": 8,
+    "created_at": "4758.6226122",
     "image_folder": "E:/code/my_python_server/yolo/like_data",
-    "image_width": 0,
-    "image_height": 0
+    "image_width": 1920,
+    "image_height": 1080,
+    "class_names": [
+      "点赞",
+      "收藏"
+    ]
   },
-  "annotations": []
+  "annotations": [
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 095950.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            88,
+            423,
+            114,
+            452
+          ],
+          "bbox_normalized": [
+            0.05260416666666667,
+            0.4050925925925926,
+            0.013541666666666667,
+            0.026851851851851852
+          ]
+        },
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            141,
+            427,
+            162,
+            451
+          ],
+          "bbox_normalized": [
+            0.07890625,
+            0.4064814814814815,
+            0.0109375,
+            0.022222222222222223
+          ]
+        }
+      ]
+    },
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 100115.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            90,
+            299,
+            114,
+            325
+          ],
+          "bbox_normalized": [
+            0.053125,
+            0.28888888888888886,
+            0.0125,
+            0.024074074074074074
+          ]
+        },
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            146,
+            302,
+            170,
+            324
+          ],
+          "bbox_normalized": [
+            0.08229166666666667,
+            0.2898148148148148,
+            0.0125,
+            0.020370370370370372
+          ]
+        }
+      ]
+    },
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 100156.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            135,
+            344,
+            161,
+            369
+          ],
+          "bbox_normalized": [
+            0.07708333333333334,
+            0.3300925925925926,
+            0.013541666666666667,
+            0.023148148148148147
+          ]
+        },
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            87,
+            343,
+            114,
+            368
+          ],
+          "bbox_normalized": [
+            0.05234375,
+            0.32916666666666666,
+            0.0140625,
+            0.023148148148148147
+          ]
+        }
+      ]
+    },
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 100231.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            89,
+            153,
+            113,
+            179
+          ],
+          "bbox_normalized": [
+            0.05260416666666667,
+            0.1537037037037037,
+            0.0125,
+            0.024074074074074074
+          ]
+        },
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            138,
+            156,
+            163,
+            179
+          ],
+          "bbox_normalized": [
+            0.07838541666666667,
+            0.1550925925925926,
+            0.013020833333333334,
+            0.021296296296296296
+          ]
+        }
+      ]
+    },
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 100301.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            145,
+            363,
+            167,
+            388
+          ],
+          "bbox_normalized": [
+            0.08125,
+            0.3476851851851852,
+            0.011458333333333333,
+            0.023148148148148147
+          ]
+        },
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            89,
+            363,
+            112,
+            392
+          ],
+          "bbox_normalized": [
+            0.05234375,
+            0.34953703703703703,
+            0.011979166666666667,
+            0.026851851851851852
+          ]
+        }
+      ]
+    },
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 100345.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            90,
+            271,
+            114,
+            297
+          ],
+          "bbox_normalized": [
+            0.053125,
+            0.26296296296296295,
+            0.0125,
+            0.024074074074074074
+          ]
+        },
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            146,
+            273,
+            171,
+            300
+          ],
+          "bbox_normalized": [
+            0.08255208333333333,
+            0.2652777777777778,
+            0.013020833333333334,
+            0.025
+          ]
+        }
+      ]
+    },
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 100420.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            140,
+            255,
+            165,
+            280
+          ],
+          "bbox_normalized": [
+            0.07942708333333333,
+            0.24768518518518517,
+            0.013020833333333334,
+            0.023148148148148147
+          ]
+        },
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            89,
+            255,
+            114,
+            279
+          ],
+          "bbox_normalized": [
+            0.05286458333333333,
+            0.24722222222222223,
+            0.013020833333333334,
+            0.022222222222222223
+          ]
+        }
+      ]
+    },
+    {
+      "image_path": "E:/code/my_python_server/yolo/like_data\\屏幕截图 2026-01-01 100455.png",
+      "image_width": 1920,
+      "image_height": 1080,
+      "annotations": [
+        {
+          "class_id": 0,
+          "class_name": "点赞",
+          "bbox": [
+            89,
+            247,
+            115,
+            271
+          ],
+          "bbox_normalized": [
+            0.053125,
+            0.23981481481481481,
+            0.013541666666666667,
+            0.022222222222222223
+          ]
+        },
+        {
+          "class_id": 1,
+          "class_name": "收藏",
+          "bbox": [
+            136,
+            246,
+            164,
+            271
+          ],
+          "bbox_normalized": [
+            0.078125,
+            0.23935185185185184,
+            0.014583333333333334,
+            0.023148148148148147
+          ]
+        }
+      ]
+    }
+  ]
 }

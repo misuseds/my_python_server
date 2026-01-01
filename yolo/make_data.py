@@ -9,6 +9,8 @@ import shutil
 # 添加用于弹窗选择文件夹的库
 import tkinter as tk
 from tkinter import filedialog, simpledialog
+from PIL import Image, ImageDraw, ImageFont
+import cv2
 
 # 设置系统编码
 import sys
@@ -99,6 +101,33 @@ class YOLODatasetCreator:
             }
             self.current_bboxes.append(bbox)
             
+    def draw_chinese_text(self, img, text, position, font_size=20, color=(255, 0, 0)):
+        """
+        在图片上绘制中文文本
+        """
+        # 将OpenCV图像转换为PIL图像
+        img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(img_pil)
+        
+        # 尝试使用系统字体，如果找不到则使用默认字体
+        try:
+            # Windows系统常用中文字体路径
+            font = ImageFont.truetype("C:/Windows/Fonts/simhei.ttf", font_size)
+        except:
+            try:
+                # Linux系统常用中文字体路径
+                font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+            except:
+                # 如果找不到字体，使用默认字体
+                font = ImageFont.load_default()
+        
+        # 绘制文本
+        draw.text(position, text, font=font, fill=(color[2], color[1], color[0]))
+        
+        # 将PIL图像转换回OpenCV格式
+        img = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+        return img
+
     def draw_bboxes(self, img: np.ndarray) -> np.ndarray:
         """在图片上绘制当前的边界框"""
         img_copy = img.copy()
@@ -115,9 +144,8 @@ class YOLODatasetCreator:
             class_id = bbox['class_id']
             class_name = bbox['class_name']
             label = f"{class_id}:{class_name}"
-            cv2.putText(img_copy, label, 
-                       (int(x1), int(y1) - 10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+            # 使用自定义函数绘制中文文本
+            img_copy = self.draw_chinese_text(img_copy, label, (int(x1), int(y1) - 20), 16, (255, 0, 0))
         
         return img_copy
 
@@ -218,12 +246,13 @@ class YOLODatasetCreator:
             while True:
                 display_img = self.draw_bboxes(resized_image)
                 
-                # 显示当前类别ID和名称
+                # 显示当前类别ID和名称 - 使用中文绘制函数
                 current_class_name = self.class_names[self.current_class_id] if self.current_class_id < len(self.class_names) else f"class_{self.current_class_id}"
-                cv2.putText(display_img, f"Current Class: {self.current_class_id} - {current_class_name}", 
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                cv2.putText(display_img, "Press 'h' for help", 
-                           (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                class_info = f"Current Class: {self.current_class_id} - {current_class_name}"
+                display_img = self.draw_chinese_text(display_img, class_info, (10, 30), 18, (0, 255, 255))
+                
+                help_text = "Press 'h' for help"
+                display_img = self.draw_chinese_text(display_img, help_text, (10, 60), 14, (0, 255, 255))
                 
                 # 在窗口标题中显示图片尺寸信息
                 original_h, original_w = self.current_image.shape[:2]

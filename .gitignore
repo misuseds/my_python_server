@@ -19,3 +19,5 @@ exe_output/*
 */yolo_dataset/*
 *current_screen.png
 *memory.txt
+*runs*
+*yolo_dataset*
