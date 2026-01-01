@@ -40,6 +40,15 @@ class YOLODatasetCreator:
         self.end_point = (0, 0)
         self.current_class_id = 0
         
+        # 添加缩放和偏移参数，用于坐标转换
+        self.scale = 1.0
+        self.offset_x = 0
+        self.offset_y = 0
+        
+        # 创建可视化目录
+        self.visual_output_dir = os.path.join(output_dir, "visualized_annotations")
+        os.makedirs(self.visual_output_dir, exist_ok=True)
+        
     def get_image_files(self) -> List[str]:
         """获取文件夹中所有图片文件，支持中文路径"""
         image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp', '.gif']
@@ -65,18 +74,22 @@ class YOLODatasetCreator:
 
     def mouse_callback(self, event: int, x: int, y: int, flags: int, param):
         """鼠标回调函数，用于绘制边界框"""
+        # 将鼠标坐标从显示图像映射到原始图像
+        x_raw = (x - self.offset_x) / self.scale
+        y_raw = (y - self.offset_y) / self.scale
+        
         if event == cv2.EVENT_LBUTTONDOWN:
             self.drawing = True
-            self.start_point = (x, y)
-            self.end_point = (x, y)
+            self.start_point = (x_raw, y_raw)
+            self.end_point = (x_raw, y_raw)
             
         elif event == cv2.EVENT_MOUSEMOVE:
             if self.drawing:
-                self.end_point = (x, y)
+                self.end_point = (x_raw, y_raw)
                 
         elif event == cv2.EVENT_LBUTTONUP:
             self.drawing = False
-            self.end_point = (x, y)
+            self.end_point = (x_raw, y_raw)
             
             # 确保坐标顺序正确
             x1, y1 = self.start_point
@@ -91,7 +104,7 @@ class YOLODatasetCreator:
             bbox = {
                 'class_id': self.current_class_id,
                 'class_name': self.class_names[self.current_class_id] if self.current_class_id < len(self.class_names) else f"class_{self.current_class_id}",
-                'bbox': [left, top, right, bottom],  # 原始坐标
+                'bbox': [left, top, right, bottom],  # 原始坐标（已校正）
                 'bbox_normalized': [  # YOLO格式 (x_center, y_center, width, height)
                     (left + right) / 2.0 / width,  # x_center
                     (top + bottom) / 2.0 / height,  # y_center
@@ -134,23 +147,33 @@ class YOLODatasetCreator:
         
         # 绘制临时正在绘制的框
         if self.drawing:
-            cv2.rectangle(img_copy, self.start_point, self.end_point, (0, 255, 0), 2)
+            # 将原始坐标转换为显示坐标
+            x1 = int(self.start_point[0] * self.scale + self.offset_x)
+            y1 = int(self.start_point[1] * self.scale + self.offset_y)
+            x2 = int(self.end_point[0] * self.scale + self.offset_x)
+            y2 = int(self.end_point[1] * self.scale + self.offset_y)
+            cv2.rectangle(img_copy, (x1, y1), (x2, y2), (0, 255, 0), 2)
         
         # 绘制已确认的框
         for bbox in self.current_bboxes:
             x1, y1, x2, y2 = bbox['bbox']
-            cv2.rectangle(img_copy, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+            # 将原始坐标转换为显示坐标
+            x1 = int(x1 * self.scale + self.offset_x)
+            y1 = int(y1 * self.scale + self.offset_y)
+            x2 = int(x2 * self.scale + self.offset_x)
+            y2 = int(y2 * self.scale + self.offset_y)
+            cv2.rectangle(img_copy, (x1, y1), (x2, y2), (255, 0, 0), 2)
             # 显示类别ID和名称
             class_id = bbox['class_id']
             class_name = bbox['class_name']
             label = f"{class_id}:{class_name}"
             # 使用自定义函数绘制中文文本
-            img_copy = self.draw_chinese_text(img_copy, label, (int(x1), int(y1) - 20), 16, (255, 0, 0))
+            img_copy = self.draw_chinese_text(img_copy, label, (x1, y1 - 20), 16, (255, 0, 0))
         
         return img_copy
 
     def resize_image_to_window(self, image, max_width, max_height):
-        """调整图片大小以适应窗口，保持宽高比"""
+        """调整图片大小以适应窗口，保持宽高比，并记录缩放比例和偏移"""
         h, w = image.shape[:2]
         
         # 计算缩放比例，确保图片完全适应窗口
@@ -166,6 +189,11 @@ class YOLODatasetCreator:
         
         resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
         
+        # 记录缩放比例和偏移量
+        self.scale = scale
+        self.offset_x = 0
+        self.offset_y = 0
+        
         # 如果需要，创建一个带有边框的图像以填充整个窗口
         if new_width < max_width or new_height < max_height:
             # 创建一个黑色背景的窗口大小图像
@@ -177,9 +205,41 @@ class YOLODatasetCreator:
             
             # 将缩放后的图像放置在中心位置
             window_img[y_offset:y_offset+new_height, x_offset:x_offset+new_width] = resized_image
+            
+            # 更新偏移量
+            self.offset_x = x_offset
+            self.offset_y = y_offset
             return window_img
         
         return resized_image
+
+    def save_annotated_image(self, image_path: str, bboxes: List[Dict], output_dir: str):
+        """
+        保存带有标注框的图片
+        """
+        # 读取原始图片
+        img_array = np.fromfile(image_path, dtype=np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        
+        # 绘制标注框
+        for bbox in bboxes:
+            x1, y1, x2, y2 = bbox['bbox']
+            cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
+            # 显示类别ID和名称
+            class_id = bbox['class_id']
+            class_name = bbox['class_name']
+            label = f"{class_id}:{class_name}"
+            img = self.draw_chinese_text(img, label, (int(x1), int(y1) - 10), 16, (255, 0, 0))
+        
+        # 生成输出路径
+        image_filename = os.path.basename(image_path)
+        name, ext = os.path.splitext(image_filename)
+        output_path = os.path.join(output_dir, f"{name}_annotated{ext}")
+        
+        # 保存图片（支持中文路径）
+        cv2.imencode(ext, img)[1].tofile(output_path)
+        
+        return output_path
 
     def run(self):
         """运行标注工具"""
@@ -307,12 +367,16 @@ class YOLODatasetCreator:
                     'annotations': self.current_bboxes
                 }
                 self.annotations.append(annotation)
+                
+                # 同时保存可视化图片
+                self.save_annotated_image(self.current_image_path, self.current_bboxes, self.visual_output_dir)
             
             current_idx += 1
         
         cv2.destroyAllWindows()
         self.save_annotations()
         print(f"标注完成！数据已保存到 {self.output_dir}")
+        print(f"可视化标注图片已保存到 {self.visual_output_dir}")
     
     def save_annotations(self):
         """保存标注数据到JSON文件"""
@@ -331,7 +395,12 @@ class YOLODatasetCreator:
         json_path = os.path.join(self.output_dir, "annotations.json")
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-
+        
+        # 保存可视化图片
+        for annotation in self.annotations:
+            image_path = annotation['image_path']
+            bboxes = annotation['annotations']
+            self.save_annotated_image(image_path, bboxes, self.visual_output_dir)
 
 def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_names: List[str] = None):
     """

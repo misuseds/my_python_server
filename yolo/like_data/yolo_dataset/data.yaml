@@ -1,8 +1,7 @@
 names:
-- person
-- car
-- dog
-nc: 3
+- like
+- favorite
+nc: 2
 path: E:/code/my_python_server/yolo/like_data/yolo_dataset
 test: images/test
 train: images/train
