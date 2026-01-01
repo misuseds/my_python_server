@@ -8,10 +8,15 @@ from sklearn.model_selection import train_test_split
 import shutil
 # 添加用于弹窗选择文件夹的库
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, simpledialog
+
+# 设置系统编码
+import sys
+if sys.platform.startswith('win'):
+    os.system('chcp 65001 > nul')  # 设置控制台为UTF-8编码
 
 class YOLODatasetCreator:
-    def __init__(self, image_folder: str, output_dir: str):
+    def __init__(self, image_folder: str, output_dir: str, class_names: List[str] = None):
         """
         初始化YOLO数据集创建器
         
@@ -19,9 +24,11 @@ class YOLODatasetCreator:
         
             image_folder: 包含图片的文件夹路径
             output_dir: 输出目录路径
+            class_names: 类别名称列表
         """
         self.image_folder = image_folder
         self.output_dir = output_dir
+        self.class_names = class_names or [f"class_{i}" for i in range(10)]  # 使用传入的类名或默认类名
         self.current_image = None
         self.current_image_path = None
         self.annotations = []
@@ -32,16 +39,28 @@ class YOLODatasetCreator:
         self.current_class_id = 0
         
     def get_image_files(self) -> List[str]:
-        """获取文件夹中所有图片文件"""
-        image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
+        """获取文件夹中所有图片文件，支持中文路径"""
+        image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp', '.gif']
         image_files = []
         
         for file in os.listdir(self.image_folder):
             if any(file.lower().endswith(ext) for ext in image_extensions):
-                image_files.append(os.path.join(self.image_folder, file))
+                image_path = os.path.join(self.image_folder, file)
+                # 检查文件是否可以被正确读取
+                if self.can_read_image(image_path):
+                    image_files.append(image_path)
         
         return sorted(image_files)
     
+    def can_read_image(self, image_path: str) -> bool:
+        """检查是否可以读取图片，支持中文路径"""
+        try:
+            img_array = np.fromfile(image_path, dtype=np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            return img is not None
+        except:
+            return False
+
     def mouse_callback(self, event: int, x: int, y: int, flags: int, param):
         """鼠标回调函数，用于绘制边界框"""
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -69,6 +88,7 @@ class YOLODatasetCreator:
             height, width = self.current_image.shape[:2]
             bbox = {
                 'class_id': self.current_class_id,
+                'class_name': self.class_names[self.current_class_id] if self.current_class_id < len(self.class_names) else f"class_{self.current_class_id}",
                 'bbox': [left, top, right, bottom],  # 原始坐标
                 'bbox_normalized': [  # YOLO格式 (x_center, y_center, width, height)
                     (left + right) / 2.0 / width,  # x_center
@@ -91,34 +111,97 @@ class YOLODatasetCreator:
         for bbox in self.current_bboxes:
             x1, y1, x2, y2 = bbox['bbox']
             cv2.rectangle(img_copy, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
-            # 显示类别ID
-            cv2.putText(img_copy, f"Class: {bbox['class_id']}", 
+            # 显示类别ID和名称
+            class_id = bbox['class_id']
+            class_name = bbox['class_name']
+            label = f"{class_id}:{class_name}"
+            cv2.putText(img_copy, label, 
                        (int(x1), int(y1) - 10), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
         
         return img_copy
-    
+
+    def resize_image_to_window(self, image, max_width, max_height):
+        """调整图片大小以适应窗口，保持宽高比"""
+        h, w = image.shape[:2]
+        
+        # 计算缩放比例，确保图片完全适应窗口
+        scale_width = max_width / w
+        scale_height = max_height / h
+        scale = min(scale_width, scale_height)
+        
+        # 如果图片比窗口小，则不放大
+        scale = min(scale, 1.0)
+        
+        new_width = int(w * scale)
+        new_height = int(h * scale)
+        
+        resized_image = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        
+        # 如果需要，创建一个带有边框的图像以填充整个窗口
+        if new_width < max_width or new_height < max_height:
+            # 创建一个黑色背景的窗口大小图像
+            window_img = np.zeros((max_height, max_width, 3), dtype=np.uint8)
+            
+            # 计算居中位置
+            y_offset = (max_height - new_height) // 2
+            x_offset = (max_width - new_width) // 2
+            
+            # 将缩放后的图像放置在中心位置
+            window_img[y_offset:y_offset+new_height, x_offset:x_offset+new_width] = resized_image
+            return window_img
+        
+        return resized_image
+
     def run(self):
         """运行标注工具"""
+        # 确保输出编码为UTF-8
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+        
         image_files = self.get_image_files()
         if not image_files:
             print(f"在文件夹 {self.image_folder} 中未找到图片文件")
             return
         
-        cv2.namedWindow('YOLO Dataset Creator')
+        cv2.namedWindow('YOLO Dataset Creator', cv2.WINDOW_AUTOSIZE)
+        
+        # 设置固定窗口大小
+        WINDOW_WIDTH = 800
+        WINDOW_HEIGHT = 600
+        cv2.resizeWindow('YOLO Dataset Creator', WINDOW_WIDTH, WINDOW_HEIGHT)
+        
         cv2.setMouseCallback('YOLO Dataset Creator', self.mouse_callback)
         
         current_idx = 0
         
+        print("可用类别:")
+        for i, name in enumerate(self.class_names):
+            try:
+                print(f"  {i}: {name}")
+            except UnicodeEncodeError:
+                print(f"  {i}: {name.encode('utf-8', errors='replace').decode('utf-8', errors='replace')}")
+        
         while current_idx < len(image_files):
             self.current_image_path = image_files[current_idx]
-            self.current_image = cv2.imread(self.current_image_path)
+            
+            # 使用支持中文路径的方式读取图像
+            try:
+                img_array = np.fromfile(self.current_image_path, dtype=np.uint8)
+                self.current_image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            except Exception as e:
+                print(f"无法加载图像: {self.current_image_path}, 错误: {e}")
+                current_idx += 1
+                continue
             
             # 检查图像是否成功加载
             if self.current_image is None:
                 print(f"无法加载图像: {self.current_image_path}")
                 current_idx += 1
                 continue
+            
+            # 调整图片大小以适应固定窗口（保持宽高比）
+            resized_image = self.resize_image_to_window(self.current_image, WINDOW_WIDTH, WINDOW_HEIGHT)
             
             self.current_bboxes = []
             
@@ -127,19 +210,24 @@ class YOLODatasetCreator:
             print("- 鼠标拖拽绘制边界框")
             print("- 按 'n' 进入下一张图片")
             print("- 按 'p' 返回上一张图片")
-            print("- 按 'c' 切换类别ID (当前: {})".format(self.current_class_id))
+            print("- 按 'c' 切换类别ID (当前: {} - {})".format(self.current_class_id, self.class_names[self.current_class_id] if self.current_class_id < len(self.class_names) else f"class_{self.current_class_id})"))
             print("- 按 'd' 删除最后一个标注框")
             print("- 按 's' 保存当前进度")
             print("- 按 'q' 退出程序")
             
             while True:
-                display_img = self.draw_bboxes(self.current_image)
+                display_img = self.draw_bboxes(resized_image)
                 
-                # 显示当前类别ID
-                cv2.putText(display_img, f"Current Class: {self.current_class_id}", 
+                # 显示当前类别ID和名称
+                current_class_name = self.class_names[self.current_class_id] if self.current_class_id < len(self.class_names) else f"class_{self.current_class_id}"
+                cv2.putText(display_img, f"Current Class: {self.current_class_id} - {current_class_name}", 
                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
                 cv2.putText(display_img, "Press 'h' for help", 
                            (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                
+                # 在窗口标题中显示图片尺寸信息
+                original_h, original_w = self.current_image.shape[:2]
+                cv2.setWindowTitle('YOLO Dataset Creator', f'YOLO Dataset Creator - {original_w}x{original_h} (resized for display)')
                 
                 cv2.imshow('YOLO Dataset Creator', display_img)
                 key = cv2.waitKey(1) & 0xFF
@@ -153,8 +241,12 @@ class YOLODatasetCreator:
                             current_idx = -1
                     break
                 elif key == ord('c'):  # 切换类别
-                    self.current_class_id = (self.current_class_id + 1) % 10  # 支持0-9类
-                    print(f"类别ID已切换为: {self.current_class_id}")
+                    self.current_class_id = (self.current_class_id + 1) % len(self.class_names)  # 根据类名数量循环
+                    current_class_name = self.class_names[self.current_class_id]
+                    try:
+                        print(f"类别已切换为: {self.current_class_id} - {current_class_name}")
+                    except UnicodeEncodeError:
+                        print(f"类别已切换为: {self.current_class_id} - {current_class_name.encode('utf-8', errors='replace').decode('utf-8', errors='replace')}")
                 elif key == ord('d'):  # 删除最后一个框
                     if self.current_bboxes:
                         self.current_bboxes.pop()
@@ -201,7 +293,8 @@ class YOLODatasetCreator:
                 'created_at': str(cv2.getTickCount() / cv2.getTickFrequency()),
                 'image_folder': self.image_folder,  # 添加图片文件夹路径信息
                 'image_width': self.current_image.shape[1] if self.current_image is not None else 0,  # 当前图像宽度
-                'image_height': self.current_image.shape[0] if self.current_image is not None else 0  # 当前图像高度
+                'image_height': self.current_image.shape[0] if self.current_image is not None else 0,  # 当前图像高度
+                'class_names': self.class_names  # 保存类名信息
             },
             'annotations': self.annotations
         }
@@ -220,9 +313,12 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
         output_dir: 输出的YOLO格式文件目录
         class_names: 类别名称列表
     """
-    # 设置默认类别名
+    with open(json_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    # 从JSON文件中获取类名信息，如果传入了class_names则使用传入的
     if class_names is None:
-        class_names = [f"class_{i}" for i in range(10)]
+        class_names = data.get('dataset_info', {}).get('class_names', [f"class_{i}" for i in range(10)])
     
     # 创建目录结构
     images_dir = os.path.join(output_dir, "images")
@@ -235,9 +331,6 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
     for subdir in ["train", "val", "test"]:
         os.makedirs(os.path.join(images_dir, subdir), exist_ok=True)
         os.makedirs(os.path.join(labels_dir, subdir), exist_ok=True)
-    
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
     
     # 收集所有图片路径和对应的标注
     all_image_paths = []
@@ -254,7 +347,7 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
         # 为每张图片生成YOLO格式的txt文件
         txt_path = os.path.join(labels_dir, "train", f"{image_name}.txt")
         
-        with open(txt_path, 'w') as f:
+        with open(txt_path, 'w', encoding='utf-8') as f:
             for bbox in bboxes:
                 class_id = bbox['class_id']
                 # YOLO格式: class_id x_center y_center width height (全部归一化)
@@ -263,7 +356,16 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
         
         # 复制图片到images/train目录
         dst_image_path = os.path.join(images_dir, "train", image_filename)
-        shutil.copy2(image_path, dst_image_path)
+        # 使用支持中文路径的复制方式
+        try:
+            # 读取原图片
+            img_array = np.fromfile(image_path, dtype=np.uint8)
+            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            # 保存到目标位置
+            cv2.imencode(image_ext, img)[1].tofile(dst_image_path)
+        except:
+            # 如果中文路径方式失败，使用原始方式
+            shutil.copy2(image_path, dst_image_path)
         
         all_image_paths.append(dst_image_path)
         all_annotation_paths.append(txt_path)
@@ -273,12 +375,12 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
     if num_samples < 3:
         print(f"数据集样本数为 {num_samples}，不足以进行标准数据集划分，所有数据将放在训练集")
         
-        # 确定各类别数量
+        # 从标注中获取实际的类别数量
         all_class_ids = set()
         for annotation in data['annotations']:
             for bbox in annotation['annotations']:
                 all_class_ids.add(bbox['class_id'])
-        num_classes = max(all_class_ids) + 1 if all_class_ids else 10
+        num_classes = max(all_class_ids) + 1 if all_class_ids else len(class_names)
         
         # 生成data.yaml配置文件
         data_yaml = {
@@ -309,17 +411,29 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
     
     # 移动文件到对应的子目录
     def move_files_to_subdir(file_paths, subdir):
-        """将文件移动到指定子目录"""
+        """将文件移动到指定子目录，支持中文路径"""
         for file_path in file_paths:
             filename = os.path.basename(file_path)
             dst_path = os.path.join(os.path.dirname(os.path.dirname(file_path)), subdir, filename)
             
-            # 如果是图片文件，需要重新复制
-            if os.path.splitext(filename)[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']:
+            # 如果是图片文件，需要重新复制（处理中文路径）
+            if os.path.splitext(filename)[1].lower() in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp', '.gif']:
                 src_img_path = os.path.join(output_dir, "images", "train", filename)
                 dst_img_path = os.path.join(output_dir, "images", subdir, filename)
-                if os.path.exists(src_img_path):
-                    shutil.move(src_img_path, dst_img_path)
+                
+                # 读取原图片并保存到新位置
+                try:
+                    img_array = np.fromfile(src_img_path, dtype=np.uint8)
+                    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                    img_ext = os.path.splitext(filename)[1]
+                    cv2.imencode(img_ext, img)[1].tofile(dst_img_path)
+                    
+                    # 删除原文件
+                    os.remove(src_img_path)
+                except:
+                    # 如果中文路径方式失败，使用原始方式
+                    if os.path.exists(src_img_path):
+                        shutil.move(src_img_path, dst_img_path)
             else:  # 标注文件
                 dst_lbl_path = os.path.join(output_dir, "labels", subdir, filename)
                 if os.path.exists(file_path):
@@ -329,9 +443,12 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
     move_files_to_subdir(test_img, "test")
     
     # 生成data.yaml配置文件
-    num_classes = max([int(class_name.split('_')[-1]) if '_' in class_name else i for i, class_name in enumerate(class_names)]) + 1
-    if num_classes < 10:
-        num_classes = 10  # 假设最多支持10个类别
+    # 从标注中获取实际的类别数量
+    all_class_ids = set()
+    for annotation in data['annotations']:
+        for bbox in annotation['annotations']:
+            all_class_ids.add(bbox['class_id'])
+    num_classes = max(all_class_ids) + 1 if all_class_ids else len(class_names)
     
     data_yaml = {
         'path': output_dir,  # 数据集根目录
@@ -348,9 +465,14 @@ def convert_to_yolo_format_and_split(json_file: str, output_dir: str, class_name
     
     print(f"YOLO格式文件已保存到 {output_dir}")
     print(f"数据集划分完成：")
-    print(f"- 训练集: {len(train_img)} 张图片")
-    print(f"- 验证集: {len(val_img)} 张图片")
-    print(f"- 测试集: {len(test_img)} 张图片")
+    try:
+        print(f"- 训练集: {len(train_img)} 张图片")
+        print(f"- 验证集: {len(val_img)} 张图片")
+        print(f"- 测试集: {len(test_img)} 张图片")
+    except UnicodeEncodeError:
+        print(f"- 训练集: {len(train_img)} 张图片")
+        print(f"- 验证集: {len(val_img)} 张图片")
+        print(f"- 测试集: {len(test_img)} 张图片")
     print(f"配置文件已生成: {yaml_path}")
 
     
@@ -368,6 +490,29 @@ def select_folder_dialog():
     
     return folder_path
 
+def input_class_names():
+    """让用户输入类名"""
+    root = tk.Tk()
+    root.withdraw()  # 隐藏主窗口
+    
+    # 获取类别数量
+    num_classes = simpledialog.askinteger("类别数量", "请输入类别数量:", minvalue=1, maxvalue=100)
+    
+    if num_classes is None:  # 用户取消输入
+        root.destroy()
+        return None
+    
+    class_names = []
+    for i in range(num_classes):
+        class_name = simpledialog.askstring("类名", f"请输入第 {i+1} 个类别的名称 (ID: {i}):")
+        if class_name is None:  # 用户取消输入
+            root.destroy()
+            return None
+        class_names.append(class_name)
+    
+    root.destroy()
+    return class_names
+
 # 使用示例
 if __name__ == "__main__":
     # 弹窗选择图片文件夹
@@ -378,12 +523,20 @@ if __name__ == "__main__":
         print("未选择文件夹，程序退出")
         exit()
     
+    # 让用户输入类名
+    class_names = input_class_names()
+    
+    # 如果用户取消输入类名，则退出
+    if class_names is None:
+        print("未输入类名，程序退出")
+        exit()
+    
     # 设置输出目录
     output_dir = os.path.join(image_folder, "yolo_dataset")
     os.makedirs(output_dir, exist_ok=True)
     
     # 创建数据集标注工具
-    creator = YOLODatasetCreator(image_folder, output_dir)
+    creator = YOLODatasetCreator(image_folder, output_dir, class_names)
     
     # 运行标注工具
     creator.run()
@@ -391,9 +544,6 @@ if __name__ == "__main__":
     # 生成YOLO格式的数据集和配置文件
     json_path = os.path.join(output_dir, "annotations.json")
     if os.path.exists(json_path):
-        # 可以自定义类别名称
-        class_names = ["person", "bicycle", "car", "motorcycle", "airplane", 
-                      "bus", "train", "truck", "boat", "traffic light"]
         convert_to_yolo_format_and_split(json_path, output_dir, class_names)
     else:
         print("未找到标注文件，跳过YOLO格式转换")
