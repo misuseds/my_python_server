@@ -1,0 +1,11 @@
+.venv
+*__pycache__*
+*.pyc
+.env
+micromambavenv
+图片
+pth/*
+output/*
+models/*
+*.bak
+delete_annotion_output/*
