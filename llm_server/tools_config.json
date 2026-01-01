@@ -52,9 +52,7 @@
         "[TOOL:click_mouse,300,400,right,1,0.1]",
         "[TOOL:click_mouse,None,None,left,2,0.2]"
       ]
-    }
-   ,
-
+    },
     {
       "name": "ocr_detect",
       "path": "ocr/ocr.py",
@@ -69,6 +67,15 @@
       "examples": [
         "[TOOL:ocr_detect,赞助模之屋]",
         "[TOOL:ocr_detect,开始游戏]"
+      ]
+    },
+    {
+      "name": "detect_like_favorite",
+      "path": "yolo/detect_like_favorite.py",
+      "description": "检测屏幕上的点赞和收藏按钮，返回它们的位置坐标",
+      "parameters": [],
+      "examples": [
+        "[TOOL:detect_like_favorite]"
       ]
     }
   ]
