@@ -3,7 +3,7 @@
 *.pyc
 .env
 *micromambavenv
-output/*
+*output*
 excel_output/*
 dxf_output/*
 *formatted_data*
@@ -17,7 +17,8 @@ cache
 pdf_output/*
 exe_output/*
 */yolo_dataset/*
-*current_screen.png
+*current_screen*
 *memory.txt
 *runs*
 *yolo_dataset*
+

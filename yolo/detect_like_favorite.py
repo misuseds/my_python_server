@@ -4,15 +4,16 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 from pathlib import Path
+from PIL import ImageGrab
 
-def detect_like_favorite(image_path=None, screenshot=None):
+def detect_like_favorite():
     """
     检测点赞和收藏按钮
-    可以传入图像路径或直接传入截图对象
+    自动截取当前屏幕进行检测
     """
     # 获取项目根目录
-    current_dir = Path(__file__).parent.parent
-    model_path = current_dir / "models" / "like_favorite.pt"
+    current_dir = Path(__file__).parent
+    model_path = current_dir.parent / "models" / "like_favorite.pt"
     
     if not model_path.exists():
         return f"错误: 模型文件不存在 - {model_path}"
@@ -21,20 +22,19 @@ def detect_like_favorite(image_path=None, screenshot=None):
         # 加载模型
         model = YOLO(str(model_path))
         
-        # 如果没有提供图像路径，使用传入的截图对象
-        if image_path:
-            image = cv2.imread(image_path)
-        elif screenshot is not None:
-            # 将PIL图像转换为OpenCV格式
-            image = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-        else:
-            return "错误: 必须提供图像路径或截图对象"
+        # 自动截取当前屏幕
+        print("正在截取当前屏幕...")
+        screenshot = ImageGrab.grab()
+        image = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
         
         if image is None:
             return "错误: 无法读取图像"
         
+        # 保存原始图像的副本用于绘制
+        image_with_boxes = image.copy()
+        
         # 进行预测
-        results = model.predict(source=image, conf=0.5, save=False)
+        results = model.predict(source=image, conf=0.2, save=False)
         
         detections = []
         result = results[0]
@@ -52,6 +52,14 @@ def detect_like_favorite(image_path=None, screenshot=None):
                 cls_id = int(cls_ids[i])
                 class_name = names.get(cls_id, f"Class_{cls_id}")
                 
+                # 绘制边界框
+                cv2.rectangle(image_with_boxes, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                
+                # 添加标签文本
+                label = f"{class_name}: {conf:.2f}"
+                cv2.putText(image_with_boxes, label, (int(x1), int(y1) - 10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                
                 # 计算中心坐标
                 center_x = (x1 + x2) / 2
                 center_y = (y1 + y2) / 2
@@ -62,6 +70,20 @@ def detect_like_favorite(image_path=None, screenshot=None):
                     'bbox': [x1, y1, x2, y2],
                     'confidence': conf
                 })
+        
+        # 创建输出目录
+        output_dir = current_dir / "output"
+        output_dir.mkdir(exist_ok=True)
+        
+        import time
+        timestamp = int(time.time())
+        output_filename = f"result_auto_screenshot_{timestamp}.jpg"
+        
+        result_save_path = output_dir / output_filename
+        
+        # 保存带有边界框的图像
+        cv2.imwrite(str(result_save_path), image_with_boxes)
+        print(f"识别结果已保存到: {result_save_path}")
         
         if not detections:
             return "未检测到点赞或收藏按钮"
@@ -75,12 +97,15 @@ def detect_like_favorite(image_path=None, screenshot=None):
     except Exception as e:
         return f"检测过程中出错: {str(e)}"
 
-if __name__ == "__main__":
-    # 测试函数
+def main():
+    """
+    主执行函数，用于命令行调用
+    """
     import sys
-    if len(sys.argv) > 1:
-        image_path = sys.argv[1]
-        result = detect_like_favorite(image_path=image_path)
-        print(result)
-    else:
-        print("请提供图像路径作为参数")
+    
+    # 忽略可能的工具名参数，直接执行检测
+    result = detect_like_favorite()
+    print(result)
+
+if __name__ == "__main__":
+    main()

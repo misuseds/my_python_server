@@ -468,7 +468,15 @@ class VLMTaskApp:
             text="清除短期记忆",
             command=self.clear_short_term_memory
         )
-        self.clear_memory_button.pack(side=tk.LEFT)
+        self.clear_memory_button.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 添加常用命令按钮
+        self.often_used_orders_button = tk.Button(
+            control_frame,
+            text="常用命令",
+            command=self.show_often_used_orders_menu
+        )
+        self.often_used_orders_button.pack(side=tk.LEFT)
         
         # 聊天历史显示区域
         self.chat_history = scrolledtext.ScrolledText(
@@ -482,6 +490,56 @@ class VLMTaskApp:
         # 任务状态标签
         self.status_label = tk.Label(self.root, text="状态: 等待任务开始", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def load_often_used_orders(self):
+        """从文件中加载常用命令"""
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        orders_file = os.path.join(current_dir, "often_use_order.txt")
+        
+        if os.path.exists(orders_file):
+            try:
+                with open(orders_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    # 按行分割命令，过滤空行
+                    orders = [line.strip() for line in content.split('\n') if line.strip()]
+                    return orders
+            except Exception as e:
+                print(f"加载常用命令文件失败: {str(e)}")
+                return []
+        else:
+            print(f"常用命令文件不存在: {orders_file}")
+            return []
+
+    def show_often_used_orders_menu(self):
+        """显示常用命令菜单"""
+        orders = self.load_often_used_orders()
+        if not orders:
+            messagebox.showinfo("提示", "没有找到常用命令")
+            return
+        
+        # 创建弹出菜单
+        menu = tk.Menu(self.root, tearoff=0)
+        
+        def insert_order(order_text):
+            # 清空当前输入框内容并插入选中的命令
+            self.task_input.delete(1.0, tk.END)
+            self.task_input.insert(tk.END, order_text)
+        
+        # 为每个命令添加菜单项
+        for i, order in enumerate(orders):
+            menu.add_command(
+                label=f"{i+1}. {order}",
+                command=lambda o=order: insert_order(o)
+            )
+        
+        # 显示菜单
+        try:
+            menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
+        except tk.TclError:
+            # 如果无法在鼠标位置显示，就显示在窗口中心
+            menu.post(self.root.winfo_rootx() + 50, self.root.winfo_rooty() + 50)
+        finally:
+            menu.grab_release()
 
     def load_memory_content(self):
         """启动时加载记忆文件内容到显示区域"""
@@ -595,6 +653,7 @@ class VLMTaskApp:
                 messagebox.showerror("错误", f"清除短期记忆失败: {str(e)}")
         else:
             self.display_message("短期记忆文件不存在")
+
 def main():
     root = tk.Tk()
     app = VLMTaskApp(root)
