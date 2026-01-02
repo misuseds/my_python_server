@@ -243,7 +243,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             "content": [text_content, image_content]
         })
         
-        print(f"用户消息: {user_message}")
+      
         try:
             # 调用LLM服务（模拟VLM功能）
             result = vlm_service.create_with_image(messages)  # 不传递图像路径，因为已经在消息中包含

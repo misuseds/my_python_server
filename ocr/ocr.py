@@ -135,21 +135,22 @@ def find_text_coordinates(text_to_find: str, image_path: str = None):
                 "error": f"未找到文字: {text_to_find}",
                 "found_texts": []  # 可以返回所有找到的文字作为参考
             }
+                    # 添加所有找到的文字（可选，用于调试）
+            for (bbox, text, confidence) in results:
+                for keywords  in ["请勿", "禁止"] :
+                    if keywords not in text.lower():  # 不区分大小写匹配
+
+                        result["found_texts"].append(
+                        text
+                        
+                        )
         else: 
             result = {
-              
-                "found_texts": []  # 可以返回所有找到的文字作为参考
+                 "error": f"未找到文字: {text_to_find}",
+                
             }
     
-        # 添加所有找到的文字（可选，用于调试）
-        for (bbox, text, confidence) in results:
-            for keywords  in ["请勿", "禁止"] :
-                if keywords not in text.lower():  # 不区分大小写匹配
 
-                    result["found_texts"].append(
-                    text
-                    
-                    )
         
         return json.dumps(result, ensure_ascii=False, indent=2)
         
