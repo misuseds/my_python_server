@@ -1,4 +1,3 @@
-# e:\code\my_python_server\llm_server\memory_llm.py
 import tkinter as tk
 from tkinter import scrolledtext, messagebox, ttk
 import os
@@ -13,7 +12,12 @@ from PIL import Image
 import base64
 from io import BytesIO
 
-
+# 定义全局变量
+CURRENT_DIR = Path(__file__).parent
+CONFIG_PATH = CURRENT_DIR / "tools_config.json"
+KNOWLEDGE_FILE_PATH = CURRENT_DIR / "knowledge.txt"
+CONFIG_PATH = CURRENT_DIR / "web_tools_config.json"
+KNOWLEDGE_FILE_PATH = CURRENT_DIR / "web_knowledge.txt"
 def execute_python_script(script_path, *args):
     """
     执行指定路径的Python脚本
@@ -59,14 +63,11 @@ def list_available_tools():
     """
     从配置文件中列出所有可用工具
     """
-    current_dir = Path(__file__).parent
-    config_path = current_dir / "tools_config.json"
-    
-    if not config_path.exists():
+    if not CONFIG_PATH.exists():
         return []
     
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
             return config.get('tools', [])
     except Exception as e:
@@ -102,14 +103,11 @@ def get_available_tools_info():
     """
     获取所有可用工具的信息
     """
-    current_dir = Path(__file__).parent
-    config_path = current_dir / "tools_config.json"
-    
-    if not config_path.exists():
+    if not CONFIG_PATH.exists():
         return "错误: 工具配置文件不存在"
     
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
             return config.get('tools', [])
     except Exception as e:
@@ -161,7 +159,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
     """
     current_dir = os.path.dirname(os.path.abspath(__file__))
     if knowledge_file is None:
-        knowledge_file = os.path.join(current_dir, "knowledge.txt")
+        knowledge_file = KNOWLEDGE_FILE_PATH  # 使用全局变量
     if memory_file is None:
         memory_file = os.path.join(current_dir, "memory.txt")
     
@@ -410,7 +408,7 @@ class VLMTaskApp:
         self.root.title("VLM任务执行器")
         # 修改窗口大小为较小尺寸并设置为置顶
         self.root.geometry("400x400")  # 调整为较小的尺寸
-        self.root.attributes('-topmost', True)  # 设置窗口置顶
+        self.root.attributes('-topmost', True)  # 设置窗口置topmost=True  # 设置窗口置顶
         
         # 任务执行标志
         self.is_executing = False 
@@ -420,7 +418,7 @@ class VLMTaskApp:
         
         # 文件路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.knowledge_file = os.path.join(current_dir, "knowledge.txt")
+        self.knowledge_file = KNOWLEDGE_FILE_PATH  # 使用全局变量
         self.memory_file = os.path.join(current_dir, "memory.txt")
         
         # 启动时加载记忆文件内容到显示区域

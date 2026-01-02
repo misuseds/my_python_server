@@ -128,13 +128,18 @@ def find_text_coordinates(text_to_find: str, image_path: str = None):
                 }
                 
                 return json.dumps(result, ensure_ascii=False, indent=2)
-        
+        return_text=False
         # 如果没有找到指定文字
-        result = {
-            "error": f"未找到文字: {text_to_find}",
-            "found_texts": []  # 可以返回所有找到的文字作为参考
-        }
-
+        if return_text: 
+            result = {
+                "error": f"未找到文字: {text_to_find}",
+                "found_texts": []  # 可以返回所有找到的文字作为参考
+            }
+        else: 
+            result = {
+              
+                "found_texts": []  # 可以返回所有找到的文字作为参考
+            }
     
         # 添加所有找到的文字（可选，用于调试）
         for (bbox, text, confidence) in results:
