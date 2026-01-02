@@ -14,10 +14,11 @@ from io import BytesIO
 
 # 定义全局变量
 CURRENT_DIR = Path(__file__).parent
-CONFIG_PATH = CURRENT_DIR / "tools_config.json"
-KNOWLEDGE_FILE_PATH = CURRENT_DIR / "knowledge.txt"
-CONFIG_PATH = CURRENT_DIR / "web_tools_config.json"
-KNOWLEDGE_FILE_PATH = CURRENT_DIR / "web_knowledge.txt"
+ 
+CONFIG_PATH = CURRENT_DIR /"config"/ "web_tools_config.json"
+KNOWLEDGE_FILE_PATH = CURRENT_DIR /"config"/ "web_knowledge.txt"
+OFTEN_USE_ORDER_PATH = CURRENT_DIR /"config"/ "web_often_use_order.txt" 
+ # 添加这行
 def execute_python_script(script_path, *args):
     """
     执行指定路径的Python脚本
@@ -484,8 +485,8 @@ class VLMTaskApp:
 
     def load_often_used_orders(self):
         """从文件中加载常用命令"""
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        orders_file = os.path.join(current_dir, "often_use_order.txt")
+        # 使用全局变量
+        orders_file = OFTEN_USE_ORDER_PATH
         
         if os.path.exists(orders_file):
             try:

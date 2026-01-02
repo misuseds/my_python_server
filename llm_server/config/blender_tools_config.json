@@ -1,0 +1,21 @@
+{
+  "tools": [
+    {
+      "name": "open_browser",
+      "path": "browser_server/open_browser.py",
+      "description": "打开指定的网页浏览器",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "description": "要打开的网页URL"
+        }
+      ],
+      "examples": [
+        "[TOOL:open_browser,https://www.example.com]",
+        "[TOOL:open_browser,https://github.com]"
+      ]
+    }
+   
+  ]
+}
