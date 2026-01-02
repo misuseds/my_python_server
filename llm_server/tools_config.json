@@ -77,6 +77,56 @@
       "examples": [
         "[TOOL:detect_like_favorite]"
       ]
+    },
+    {
+      "name": "scroll_mouse",
+      "path": "keyboard_server/mousecontrol.py",
+      "description": "鼠标滚轮滚动操作，必须指定坐标位置，正数向上滚动，负数向下滚动",
+      "parameters": [
+        {
+          "name": "units",
+          "type": "number",
+          "description": "滚动单位，正数向上滚动，负数向下滚动"
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "description": "x坐标，必须提供"
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "description": "y坐标，必须提供"
+        }
+      ],
+      "examples": [
+        "[TOOL:scroll_mouse,0.3,500,300]",
+        "[TOOL:scroll_mouse,-0.2,100,200]"
+      ]
+    },
+    {
+      "name": "press_key",
+      "path": "keyboard_server/mousecontrol.py",
+      "description": "按下键盘按键，支持单个键或组合键",
+      "parameters": [
+        {
+          "name": "key1",
+          "type": "string",
+          "description": "要按下的第一个键"
+        },
+        {
+          "name": "key2",
+          "type": "string",
+          "description": "要按下的第二个键（用于组合键）"
+        }
+      ],
+      "examples": [
+        "[TOOL:press_key,ctrl,j]",
+        "[TOOL:press_key,ctrl,c]",
+        "[TOOL:press_key,tab]",
+        "[TOOL:press_key,ctrl,shift,esc]"
+      ]
     }
+   
   ]
 }

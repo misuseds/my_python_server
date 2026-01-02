@@ -135,6 +135,7 @@ def get_tools_description():
             tools_desc += f"- {name}: {desc} (无参数)\n"
     
     tools_desc += "\n使用格式: [TOOL:工具名称,参数1,参数2,...]\n"
+    tools_desc += "\n任务完成标记: 任务完成后请输出 [TASK_COMPLETED] 来结束任务循环"
     return tools_desc
 
 
@@ -144,16 +145,15 @@ def image_to_base64(image_path):
         return base64.b64encode(image_file.read()).decode('utf-8')
 
 
-def is_task_completed(ai_response, tool_result):
-    """判断任务是否完成"""
-    completion_indicators = [
-        "任务完成", "完成任务", "任务已结束", "已完成", "任务完成",
-        "task completed", "finished", "done", "success", "成功"
-    ]
+def is_task_completed(ai_response):
+    """判断任务是否完成 - 使用特定结束标记"""
+    # 使用特定的结束标记，而不是通用关键词
+    completion_marker = "[TASK_COMPLETED]"
     
-    combined_text = f"{ai_response} {tool_result}".lower()
-    return any(indicator in combined_text for indicator in completion_indicators)
-
+    if ai_response and completion_marker in ai_response:
+        return True
+    
+    return False
 
 def vision_task_loop(task_description, knowledge_file=None, memory_file=None, reset_first_iteration=True):
     """
@@ -265,19 +265,14 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             # 只在非首次迭代时检查任务完成状态
             if not first_iteration:
                 # 检查任务是否完成
-                if is_task_completed(ai_response, tool_execution_result or ""):
+                if is_task_completed(ai_response or ""):
                     yield "任务已完成，退出循环"
                     break
             
             # 更新标志，表示不再是第一次迭代
             first_iteration = False
  
-            # 如果没有工具执行结果，检查AI响应是否表明任务已完成
-            if any(indicator in ai_response.lower() for indicator in 
-                    ["任务完成", "完成任务", "已完成", "task completed", "finished", "done"]):
-                yield "任务已完成，退出循环"
-                # 取消自动删除短期记忆，改为手动删除
-                break
+       
         except Exception as e:
             error_msg = f"执行任务时出错: {str(e)}"
             yield error_msg
@@ -416,7 +411,7 @@ class VLMTaskApp:
         self.root = root
         self.root.title("VLM任务执行器")
         # 修改窗口大小为较小尺寸并设置为置顶
-        self.root.geometry("400x600")  # 调整为较小的尺寸
+        self.root.geometry("400x400")  # 调整为较小的尺寸
         self.root.attributes('-topmost', True)  # 设置窗口置顶
         
         # 任务执行标志

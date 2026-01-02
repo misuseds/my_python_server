@@ -137,10 +137,10 @@ def find_text_coordinates(text_to_find: str, image_path: str = None):
         
         # 添加所有找到的文字（可选，用于调试）
         for (bbox, text, confidence) in results:
-            result["found_texts"].append({
-                "text": text,
-                "confidence": float(confidence)
-            })
+            result["found_texts"].append(
+             text
+            
+            )
         
         return json.dumps(result, ensure_ascii=False, indent=2)
         
@@ -187,18 +187,14 @@ def get_all_text(image_path: str = None):
 
 def main():
     """主函数，处理命令行参数以适配executor.py."""
-    if len(sys.argv) < 2:
-        # 当没有命令行参数时，直接运行ocr_screen_tool
-        result = ocr_screen_tool()
-        print(result)
-        return
+
     
     tool_name = sys.argv[1]
     
     try:
-        if tool_name == "ocr_screen":
-            result = ocr_screen_tool()
-        elif tool_name == "ocr_detect":
+        
+           
+        if tool_name == "ocr_detect":
             if len(sys.argv) < 3:
                 result = "错误: find_text_coordinates 需要指定要查找的文字"
             else:
