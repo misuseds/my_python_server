@@ -106,7 +106,7 @@ def find_text_coordinates(text_to_find: str, image_path: str = None):
         
         # 保存带识别框的图片
         saved_path = save_ocr_image_with_boxes(image, results, image_path)
-        print(f"带识别框的图片已保存到: {saved_path}")
+      
         
         # 遍历OCR结果查找指定文字
         for (bbox, text, confidence) in results:
@@ -123,8 +123,8 @@ def find_text_coordinates(text_to_find: str, image_path: str = None):
                     "target_text": text_to_find,
                     "center_x": center_x,
                     "center_y": center_y,
-                    "bbox": [[int(point[0]), int(point[1])] for point in bbox],
-                    "confidence": float(confidence)
+                   
+                    
                 }
                 
                 return json.dumps(result, ensure_ascii=False, indent=2)
@@ -134,13 +134,17 @@ def find_text_coordinates(text_to_find: str, image_path: str = None):
             "error": f"未找到文字: {text_to_find}",
             "found_texts": []  # 可以返回所有找到的文字作为参考
         }
-        
+
+    
         # 添加所有找到的文字（可选，用于调试）
         for (bbox, text, confidence) in results:
-            result["found_texts"].append(
-             text
-            
-            )
+            for keywords  in ["请勿", "禁止"] :
+                if keywords not in text.lower():  # 不区分大小写匹配
+
+                    result["found_texts"].append(
+                    text
+                    
+                    )
         
         return json.dumps(result, ensure_ascii=False, indent=2)
         

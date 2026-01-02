@@ -211,19 +211,20 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
                 "content": system_prompt
             })
         
+        # 读取 memory 内容并加入到用户消息中
+        memory_content = ""
+        if os.path.exists(memory_file):
+            with open(memory_file, 'r', encoding='utf-8') as f:
+                memory_content = f.read().strip()
+        
         # 添加任务描述和当前截图信息 - 使用更清晰的格式
-        if first_iteration:
-            # 首次迭代时，AI只需要开始分析任务
-            user_message = f"当前任务: {task_description}\n请分析当前屏幕截图，并开始执行任务。"
-        else:
-            # 非首次迭代时，询问任务完成情况，避免重复之前的操作
-            user_message = (
-                f"当前任务: {task_description}\n"
-                f"上一轮AI分析: {previous_ai_response}\n"
-                f"上一轮工具执行结果: {previous_tool_result}\n"
-                f"请分析当前屏幕截图，判断任务完成情况，避免重复执行相同操作，并按需执行相应操作。"
-                f"如果任务已经完成，请明确说明任务已完成。"
-            )
+        user_message = f"当前任务: {task_description}\n"
+        
+        # 如果有 memory 内容，添加到用户消息中
+        if memory_content:
+            user_message += f"历史记忆:\n{memory_content}\n\n"
+        
+        user_message += "请分析当前屏幕截图，并继续执行任务。"
         
         # 构建包含图像的消息内容
         image_content = {
@@ -244,13 +245,16 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             "content": [text_content, image_content]
         })
         
-        print(f"用户消息: {user_message}, 截图保存在: {screenshot_path}")
+        print(f"用户消息: {user_message}")
         try:
             # 调用LLM服务（模拟VLM功能）
             result = vlm_service.create_with_image(messages)  # 不传递图像路径，因为已经在消息中包含
             ai_response = result['choices'][0]['message']['content']
             
-            print(f"VLM响应: {ai_response}")
+          
+            
+            # 先显示AI分析
+            yield f" {ai_response}"
             
             # 执行AI返回的工具指令
             tool_execution_result = process_tool_calls(ai_response, memory_file)
@@ -259,20 +263,14 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             previous_ai_response = ai_response
             previous_tool_result = tool_execution_result or ""
             
-            # 显示AI响应
-            yield f"AI分析: {ai_response}"
-            
-            # 只在非首次迭代时检查任务完成状态
-            if not first_iteration:
-                # 检查任务是否完成
-                if is_task_completed(ai_response or ""):
+        
+            if is_task_completed(ai_response or ""):
                     yield "任务已完成，退出循环"
                     break
             
             # 更新标志，表示不再是第一次迭代
             first_iteration = False
- 
-       
+
         except Exception as e:
             error_msg = f"执行任务时出错: {str(e)}"
             yield error_msg
@@ -280,6 +278,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
     
     if iteration_count >= max_iterations:
         yield "达到最大迭代次数，停止任务执行"
+
 
 def process_tool_calls(response_text, memory_file_path=None):
     """
@@ -337,10 +336,9 @@ def process_tool_calls(response_text, memory_file_path=None):
             # 添加最后一个参数
             if current_arg:
                 tool_args.append(current_arg.strip())
-        print(f"正在执行工具：{tool_name}")
-        print(f"参数列表：{tool_args}")
+       
         result = execute_tool(tool_name, *tool_args) if tool_args else execute_tool(tool_name)
-        print("结果：",result)
+        
         # 处理执行结果为None的情况
         if result is None:
             result = "工具执行结果为空"

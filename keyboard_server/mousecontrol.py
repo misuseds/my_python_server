@@ -8,6 +8,7 @@ import pyautogui
 from PIL import Image
 import base64
 import io
+import time
 
 # 禁用pyautogui的安全限制（在生产环境中请谨慎使用）
 pyautogui.FAILSAFE = False
@@ -143,6 +144,7 @@ def main():
             interval = float(args[4]) if len(args) > 4 and args[4] not in ['None', 'null', ''] else 0.0
             
             result = click_mouse(x, y, click_type, clicks, interval)
+            time.sleep(2)
             print(result)
             
         elif function_name == 'get_position':
@@ -177,6 +179,7 @@ def main():
                     keys.append(arg)
             
             result = press_key(*keys)
+            
             print(result)
             
         elif function_name == 'key_down':

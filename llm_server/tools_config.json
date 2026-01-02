@@ -99,11 +99,12 @@
           "description": "y坐标，必须提供"
         }
       ],
-      "examples": [
-        "[TOOL:scroll_mouse,0.3,500,300]",
-        "[TOOL:scroll_mouse,-0.2,100,200]"
+    "examples": [
+        "[TOOL:scroll_mouse,-30,1492,466]",  
+        "[TOOL:scroll_mouse,-50,1492,466]",  
+        "[TOOL:scroll_mouse,-100,1492,466]"  
       ]
-    },
+      },
     {
       "name": "press_key",
       "path": "keyboard_server/mousecontrol.py",

@@ -34,7 +34,7 @@ def detect_like_favorite():
         image_with_boxes = image.copy()
         
         # 进行预测
-        results = model.predict(source=image, conf=0.2, save=False)
+        results = model.predict(source=image, conf=0.1, save=False)
         
         detections = []
         result = results[0]
