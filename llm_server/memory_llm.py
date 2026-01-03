@@ -413,7 +413,6 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
                     
                     yield "当前任务已完成，退出循环"
                     break
-            
           
 
         except Exception as e:
@@ -647,15 +646,6 @@ def parse_history_content(content):
         })
     
     return messages
-
-
-import tkinter as tk
-from tkinter import messagebox
-import ttkbootstrap as ttk
-from ttkbootstrap import Style
-from ttkbootstrap.constants import *
-
-# 需要先安装 ttkbootstrap: pip install ttkbootstrap
 
 
 
@@ -1186,10 +1176,10 @@ class VLMTaskApp:
                 completed_flag_found = False
                 
                 # 从vision_task_loop函数获取生成器
-                from .memory_llm import vision_task_loop  # 假设函数在同文件中
+                import memory_llm  # 使用绝对导入
                 
                 # 使用for循环遍历vision_task_loop的输出
-                for output in vision_task_loop(
+                for output in memory_llm.vision_task_loop(
                     task_step, 
                     self.knowledge_file, 
                     self.memory_file, 
@@ -1242,13 +1232,13 @@ class VLMTaskApp:
                 return
             
             # 从vision_task_loop函数获取生成器
-            from .memory_llm import vision_task_loop  # 假设函数在同文件中
+            import memory_llm  # 使用绝对导入
             
             # 执行任务
             task_output = ""
             
             # 使用for循环遍历vision_task_loop的输出
-            for output in vision_task_loop(
+            for output in memory_llm.vision_task_loop(
                 task_step, 
                 self.knowledge_file, 
                 self.memory_file, 

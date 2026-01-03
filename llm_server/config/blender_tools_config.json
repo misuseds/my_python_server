@@ -17,6 +17,22 @@
       "examples": [
         "[TOOL:import_pmx_file]"
       ]
+    },    {
+      "name": "import_psk_file",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "导入PSK文件到Blender场景中",
+      "parameters": {},
+      "examples": [
+        "[TOOL:import_psk_file]"
+      ]
+    }, {
+      "name": "set_blender_scale",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "设置Blender场景的缩放比例",
+      "parameters": {},
+      "examples": [
+        "[TOOL:set_blender_scale]"
+      ]
     },
     {
       "name": "delete_all_objects",
