@@ -26,55 +26,62 @@ def call_blender_api(endpoint, code):
 
 def activate_blender_window():
     """
-    激活Blender窗口
+    激活Blender窗口（精确匹配窗口标题）
     """
     try:
-        system = platform.system()
+        import pygetwindow as gw
+    except ImportError:
+        print("pygetwindow未安装，请运行: pip install pygetwindow")
+        return False
+    
+    try:
+        # 获取所有窗口
+        all_windows = gw.getAllWindows()
+        blender_window = None
         
-        if system == "Windows":
-            # Windows系统使用powershell激活Blender窗口
-            script = '''
-            $blender_process = Get-Process -Name "blender" -ErrorAction SilentlyContinue
-            if ($blender_process) {
-                Add-Type -TypeDefinition @"
-                    using System;
-                    using System.Runtime.InteropServices;
-                    public class WindowActivator {
-                        [DllImport("user32.dll")]
-                        public static extern bool SetForegroundWindow(IntPtr hWnd);
-                        [DllImport("user32.dll")]
-                        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-                    }
-"@
-                foreach ($process in $blender_process) {
-                    [WindowActivator]::ShowWindow($process.MainWindowHandle, 5)
-                    [WindowActivator]::SetForegroundWindow($process.MainWindowHandle)
-                }
-            }
-            '''
-            subprocess.run(["powershell", "-Command", script], check=True)
+        for window in all_windows:
+            window_title = window.title.strip()
             
-        elif system == "Darwin":  # macOS
-            script = '''
-            tell application "Blender"
-                activate
-            end tell
-            '''
-            subprocess.run(["osascript", "-e", script], check=True)
+            # 多种可能的Blender标题格式
+            if (window_title == 'Blender' or  # 基础标题
+                window_title.startswith('Blender') and 
+                not any(exclude in window_title.lower() for exclude in ['vscode', 'visual studio', 'code'])):
+                
+                # 额外检查确保不是VSCode或其他编辑器
+                if ' - ' not in window_title or 'blender.exe' in window_title.lower():
+                    blender_window = window
+                    break
+        
+        if blender_window:
+            print(f"激活窗口: {blender_window.title}")
             
+            try:
+                import win32gui
+                import win32con
+                
+                hwnd = blender_window._hWnd
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                win32gui.SetForegroundWindow(hwnd)
+                
+                print(f"窗口已放到最前端: {blender_window.title}")
+                return True
+            except ImportError:
+                print("pywin32未安装，请运行: pip install pywin32")
+                if blender_window.isMinimized:
+                    blender_window.restore()
+                blender_window.activate()
+                print("Blender窗口已激活（使用pygetwindow方法）")
+                return True
         else:
-            print(f"当前系统 {system} 不支持窗口激活")
+            print("未找到Blender窗口")
+            # 显示所有窗口标题用于调试
+            all_titles = gw.getAllTitles()
+            print("所有窗口标题（前10个）:")
+            for i, title in enumerate(all_titles[:10]):
+                if title.strip():
+                    print(f"  {i+1}. {title}")
             return False
-            
-        print("Blender窗口已激活")
-        return True
-        
-    except subprocess.CalledProcessError:
-        print("激活Blender窗口失败，请确保Blender正在运行")
-        return False
-    except FileNotFoundError:
-        print("未找到必要的工具")
-        return False
+
     except Exception as e:
         print(f"激活Blender窗口时出错: {e}")
         return False
@@ -82,6 +89,7 @@ def activate_blender_window():
 
 def main():
     if len(sys.argv) < 2:
+       
         print("错误: 缺少工具名称参数")
         return
     
