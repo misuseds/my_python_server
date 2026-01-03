@@ -1,0 +1,4 @@
+激活Blender窗口，将Blender应用带到前台
+获取Blender当前场景中的所有物体
+删除Blender当前场景中的所有物体
+在Blender场景中创建一个立方体

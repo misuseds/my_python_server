@@ -1,21 +1,40 @@
 {
   "tools": [
     {
-      "name": "open_browser",
-      "path": "browser_server/open_browser.py",
-      "description": "打开指定的网页浏览器",
-      "parameters": [
-        {
-          "name": "url",
-          "type": "string",
-          "description": "要打开的网页URL"
-        }
-      ],
+      "name": "get_all_objects",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "获取Blender当前场景中的所有物体",
+      "parameters": [],
       "examples": [
-        "[TOOL:open_browser,https://www.example.com]",
-        "[TOOL:open_browser,https://github.com]"
+        "[TOOL:get_all_objects]"
+      ]
+    },
+    {
+      "name": "delete_all_objects",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "删除Blender当前场景中的所有物体",
+      "parameters": [],
+      "examples": [
+        "[TOOL:delete_all_objects]"
+      ]
+    },
+    {
+      "name": "create_cube",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "在Blender场景中创建一个立方体",
+      "parameters": [],
+      "examples": [
+        "[TOOL:create_cube]"
+      ]
+    },
+    {
+      "name": "activate_blender",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "激活Blender窗口，将Blender应用带到前台",
+      "parameters": [],
+      "examples": [
+        "[TOOL:activate_blender]"
       ]
     }
-   
   ]
 }

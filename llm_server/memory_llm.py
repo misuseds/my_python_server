@@ -15,11 +15,12 @@ from io import BytesIO
 # 定义全局变量
 CURRENT_DIR = Path(__file__).parent
 
-CONFIG_PATH = CURRENT_DIR /"config"/ "web_tools_config.json"
-KNOWLEDGE_FILE_PATH = CURRENT_DIR /"config"/ "web_knowledge.txt"
-OFTEN_USE_ORDER_PATH = CURRENT_DIR /"config"/ "web_often_use_order.txt" 
-WORKFLOW_PATH = CURRENT_DIR /"config"/ "web_workflow.txt"  # 新增：工作流程文件路径
+workenv="web"
+workenv="blender"
+CONFIG_PATH = CURRENT_DIR / "config" / (workenv + "_tools_config.json")
+KNOWLEDGE_FILE_PATH = CURRENT_DIR / "config" / (workenv + "_knowledge.txt")
 
+WORKFLOW_PATH = CURRENT_DIR / "config" / (workenv + "_workflow.txt")  # 新增：工作流程文件路径
 def execute_python_script(script_path, *args):
     """
     执行指定路径的Python脚本
@@ -159,12 +160,8 @@ def is_task_completed(ai_response, should_check=True):
     return False
 
 def is_workflow_completed(ai_response):
-    """判断工作流程是否完成 - 使用特殊标记"""
-    completion_marker = "[TOTAL_TASK_COMPLETED]"
-    
-    if ai_response and completion_marker in ai_response:
-        return True
-    
+    """判断工作流程是否完成 - 现在总是返回False，因为我们不再使用此标记"""
+    # 移除 TOTAL_TASK_COMPLETED 检测
     return False
 
 def send_task_confirmation_to_ai(vlm_service, task_description, system_prompt, memory_file):
@@ -207,8 +204,8 @@ def send_task_confirmation_to_ai(vlm_service, task_description, system_prompt, m
         if filtered_lines:
             memory_content = "历史执行记录:\n" + "\n".join(filtered_lines) + "\n"
     
-    # 构建确认消息
-    user_message = f"{memory_content}任务 '{task_description}' 已确认完成，请继续下一个任务或输出 [TOTAL_TASK_COMPLETED] 表示整个流程完成\n"
+    # 构建确认消息 - 移除 TOTAL_TASK_COMPLETED 提示
+    user_message = f"{memory_content}任务 '{task_description}' 已确认完成，请继续下一个任务\n"
     
     # 构建包含图像的消息内容
     image_content = {
@@ -374,10 +371,10 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
             # 执行AI返回的工具指令 - 在执行阶段不识别完成标记
             tool_execution_result = process_tool_calls(ai_response, memory_file, workflow_state, is_inquiry_phase=False)
             
-            # 检查是否包含完成标记 - 重要修改：只在完成整个工作流程时退出
-            if is_workflow_completed(ai_response or "") and is_inquiry_phase:
-                yield "工作流程已完成，退出循环"
-                break  # 只有在完成整个工作流程时才退出循环
+            # 检查是否包含完成标记 - 现在只检查任务完成，不再检查工作流程完成
+            # if is_workflow_completed(ai_response or "") and is_inquiry_phase:
+            #     yield "工作流程已完成，退出循环"
+            #     break  # 只有在完成整个工作流程时才退出循环
             
             # 检查是否任务完成 - 只在询问环节识别完成标记
             if is_inquiry_phase and is_task_completed(ai_response) and not has_tool_calls(ai_response):
@@ -484,22 +481,22 @@ def process_tool_calls(response_text, memory_file_path=None, workflow_state_ref=
     """
     # 只在质询阶段检测任务完成标记，执行阶段不检测
     task_completed = is_task_completed(response_text) if is_inquiry_phase else False
-    workflow_completed = is_workflow_completed(response_text) if is_inquiry_phase else False
+    # 移除工作流程完成检测
+    workflow_completed = False  # 总是设置为False
     
     if task_completed and memory_file_path and is_inquiry_phase:
         with open(memory_file_path, 'a', encoding='utf-8') as f:
             f.write(f"[TASK_COMPLETED]\n")
     
-    # 检测工作流程完成标记
-    if workflow_completed and memory_file_path and is_inquiry_phase:
-        with open(memory_file_path, 'a', encoding='utf-8') as f:
-            f.write(f"[TOTAL_TASK_COMPLETED]\n")
+    # 检测工作流程完成标记 - 已移除
+    # if workflow_completed and memory_file_path and is_inquiry_phase:
+    #     with open(memory_file_path, 'a', encoding='utf-8') as f:
+    #         f.write(f"[TOTAL_TASK_COMPLETED]\n")
     
     # 显示完成标记检测
     if task_completed and is_inquiry_phase:
         print("检测到任务完成标记: [TASK_COMPLETED]")
-    if workflow_completed and is_inquiry_phase:
-        print("检测到工作流程完成标记: [TOTAL_TASK_COMPLETED]")
+    # 不再显示工作流程完成标记
     
     # 修复正则表达式以正确捕获工具名称和所有参数
     tool_pattern = r'\[TOOL:([^\],\]]+)(?:,([^\]]*))?\]'
@@ -589,7 +586,7 @@ def process_tool_calls(response_text, memory_file_path=None, workflow_state_ref=
     return {
         "results": "\n".join(all_results) if all_results else None,
         "task_completed": task_completed,
-        "workflow_completed": workflow_completed
+        "workflow_completed": workflow_completed  # 总是返回False
     }
 
 def parse_history_content(content):
@@ -944,17 +941,15 @@ class VLMTaskApp:
                         print("系统: 任务已手动停止")
                         return
                     
-                    # 检查是否是工作流程完成标记 - 只在输出中直接检查，且确保不是工具执行结果中的标记
-                    if "[TOTAL_TASK_COMPLETED]" in output and "[TOOL:" not in output:
-                        print("工作流程已全部完成")
-                        # 标记整个工作流程为完成
-                        self.root.after(0, lambda idx=task_index: self.mark_step_as_completed_and_finish_workflow(idx))
-                        completed_flag_found = True
-                        break
-                    elif "[TASK_COMPLETED]" in output and "[TOOL:" not in output:  # 确保不是工具执行结果中的标记
+                    # 移除 TOTAL_TASK_COMPLETED 检测
+                    # if "[TOTAL_TASK_COMPLETED]" in output and "[TOOL:" not in output:
+                    #     print("工作流程已全部完成")
+                    #     # 标记整个工作流程为完成
+                    #     self.root.after(0, lambda idx=task_index: self.mark_step_as_completed_and_finish_workflow(idx))
+                    #     completed_flag_found = True
+                    #     break
+                    if "[TASK_COMPLETED]" in output and "[TOOL:" not in output:  # 确保不是工具执行结果中的标记
                         # 如果是子任务完成标记，直接标记为已完成
-           
-                        # 直接标记为已完成，而不是待确定
                         self.root.after(0, lambda idx=task_index: self.mark_step_as_completed(idx))
                         completed_flag_found = True
                         # 跳出当前任务的内部循环，准备执行下一个任务
@@ -968,9 +963,11 @@ class VLMTaskApp:
                         
                         task_output += output + "\n"
                 
-                # 如果遇到整个工作流程完成标记，直接退出
-                if "[TOTAL_TASK_COMPLETED]" in task_output:
-                    print("工作流程已全部完成")
+                # 检查是否所有任务都已完成
+                all_completed = all(completed == True for _, completed in self.workflow_state)
+                if all_completed:
+                    print("所有任务已完成")
+                    self.root.after(0, lambda: self.update_status("状态: 所有任务已完成"))
                     break
 
         except Exception as e:
@@ -1007,14 +1004,14 @@ class VLMTaskApp:
                     print("系统: 任务已手动停止")
                     return
                 
-                # 检查是否是工作流程完成标记 - 只在输出中直接检查，且确保不是工具执行结果中的标记
-                if "[TOTAL_TASK_COMPLETED]" in output and "[TOOL:" not in output:
-                    print("工作流程已全部完成")
-                    # 标记整个工作流程为完成
-                    self.root.after(0, lambda idx=task_index: self.mark_step_as_completed_and_finish_workflow(idx))
-                    completed_flag_found = True
-                    break
-                elif "[TASK_COMPLETED]" in output and "[TOOL:" not in output:  # 确保不是工具执行结果中的标记
+                # 移除 TOTAL_TASK_COMPLETED 检测
+                # if "[TOTAL_TASK_COMPLETED]" in output and "[TOOL:" not in output:
+                #     print("工作流程已全部完成")
+                #     # 标记整个工作流程为完成
+                #     self.root.after(0, lambda idx=task_index: self.mark_step_as_completed_and_finish_workflow(idx))
+                #     completed_flag_found = True
+                #     break
+                if "[TASK_COMPLETED]" in output and "[TOOL:" not in output:  # 确保不是工具执行结果中的标记
                     # 如果是子任务完成标记，直接标记为已完成
                     print(f"任务{task_index + 1}执行结果: {output}")
                     # 直接标记为已完成，而不是待确定
@@ -1029,10 +1026,6 @@ class VLMTaskApp:
                     
                     task_output += output + "\n"
             
-            # 检查是否完成整个工作流程
-            if "[TOTAL_TASK_COMPLETED]" in task_output:
-                print("工作流程已全部完成")
-                
         except Exception as e:
             print(f"系统: 执行任务时出错: {str(e)}")
         finally:
