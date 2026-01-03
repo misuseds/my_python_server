@@ -1,32 +1,47 @@
 {
   "tools": [
-   
     {
       "name": "activate_blender",
       "path": "blender_cline/blender_api_tool.py",
       "description": "激活Blender窗口，将Blender应用带到前台",
-      "parameters": [],
+      "parameters": {},
       "examples": [
         "[TOOL:activate_blender]"
       ]
-    },{
+    },
+    {
       "name": "import_pmx_file",
       "path": "blender_cline/blender_api_tool.py",
       "description": "导入PMX文件到Blender场景中",
-      "parameters": [],
+      "parameters": {},
       "examples": [
         "[TOOL:import_pmx_file]"
       ]
     },
-     {
+    {
       "name": "delete_all_objects",
       "path": "blender_cline/blender_api_tool.py",
       "description": "删除Blender当前场景中的所有物体",
-      "parameters": [],
+      "parameters": {},
       "examples": [
         "[TOOL:delete_all_objects]"
       ]
+    },
+   {
+      "name": "open_folder",
+      "path": "file_server/open_folder.py",
+      "description": "打开指定的文件夹，支持各种路径格式。格式[TOOL:open_folder,E:/blender],名称和参数用逗号隔开，不要任何括号和等于号",
+      "parameters": 
+        {
+         
+         
+        }
+      ,
+      "examples": [
+        "[TOOL:open_folder,E:/blender]",
+        "[TOOL:open_folder,C:/Users]",
+        "[TOOL:open_folder,D:/Projects/MyProject]"
+      ]
     }
-
   ]
 }

@@ -125,19 +125,39 @@ def get_tools_description():
     for tool in tools:
         name = tool.get('name', '未知工具')
         desc = tool.get('description', '无描述')
-        params = tool.get('parameters', [])
         
-        if params:
-            param_desc = ", ".join([f"{p['name']}({p['type']})" for p in params])
-            tools_desc += f"- {name}: {desc} (参数: {param_desc})\n"
+        # 检查parameters是否是OpenAI格式的字典
+        params = tool.get('parameters', {})
+        if isinstance(params, dict) and 'properties' in params:
+            # OpenAI工具格式
+            properties = params.get('properties', {})
+            required = params.get('required', [])
+            
+            if properties:
+                param_list = []
+                for param_name, param_info in properties.items():
+                    param_type = param_info.get('type', 'unknown')
+                    param_desc = param_info.get('description', '')
+                    is_required = " (必填)" if param_name in required else ""
+                    param_list.append(f"{param_name}({param_type}){is_required}")
+                
+                if param_list:
+                    param_desc = ", ".join(param_list)
+                    tools_desc += f"- {name}: {desc} (参数: {param_desc})\n"
+                else:
+                    tools_desc += f"- {name}: {desc} (无参数)\n"
+            else:
+                tools_desc += f"- {name}: {desc} (无参数)\n"
         else:
-            tools_desc += f"- {name}: {desc} (无参数)\n"
+            # 传统格式
+            if params:
+                param_desc = ", ".join([f"{p.get('name', 'unknown')}({p.get('type', 'unknown')})" for p in params])
+                tools_desc += f"- {name}: {desc} (参数: {param_desc})\n"
+            else:
+                tools_desc += f"- {name}: {desc} (无参数)\n"
     
-    tools_desc += "\n使用格式: [TOOL:工具名称,参数1,参数2,...]\n"
-
-
+    tools_desc += "\n使用格式: [TOOL:工具名称,arg1,arg2,...] 或 [TOOL:工具名称(param_name=value)]\n"
     return tools_desc
-
 
 def image_to_base64(image_path):
     """将图像文件转换为base64编码"""
@@ -394,12 +414,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
                     yield "当前任务已完成，退出循环"
                     break
             
-            # 更新历史记录
-            previous_ai_response = ai_response
-            previous_tool_result = tool_execution_result or ""
-            
-            # 更新标志，表示不再是第一次迭代
-            first_iteration = False
+          
 
         except Exception as e:
             error_msg = f"执行任务时出错: {str(e)}"
@@ -981,11 +996,11 @@ class VLMTaskApp:
             
             if completed == True:
                 print(f"任务 {task_index + 1} 已完成")
+                self.root.after(0, lambda: self.update_status(f"状态: 任务 {task_index + 1} 已完成"))
                 return
             
             # 执行任务
             task_output = ""
-            completed_flag_found = False
             
             # 使用for循环遍历vision_task_loop的输出
             for output in vision_task_loop(
@@ -999,19 +1014,14 @@ class VLMTaskApp:
                     print("系统: 任务已手动停止")
                     return
                 
-                # 移除 TOTAL_TASK_COMPLETED 检测
-                # if "[TOTAL_TASK_COMPLETED]" in output and "[TOOL:" not in output:
-                #     print("工作流程已全部完成")
-                #     # 标记整个工作流程为完成
-                #     self.root.after(0, lambda idx=task_index: self.mark_step_as_completed_and_finish_workflow(idx))
-                #     completed_flag_found = True
-                #     break
                 if "[TASK_COMPLETED]" in output and "[TOOL:" not in output:  # 确保不是工具执行结果中的标记
-                    # 如果是子任务完成标记，直接标记为已完成
                     print(f"任务{task_index + 1}执行结果: {output}")
-                    # 直接标记为已完成，而不是待确定
+                    # 标记为已完成
                     self.root.after(0, lambda idx=task_index: self.mark_step_as_completed(idx))
-                    completed_flag_found = True
+                    
+                    # 单个任务执行完成后立即退出（关键修改）
+                    print(f"任务 {task_index + 1} 已完成，退出执行")
+                    break
                 else:
                     print(f"任务{task_index + 1}执行结果: {output}")
                     
@@ -1021,15 +1031,17 @@ class VLMTaskApp:
                     
                     task_output += output + "\n"
             
+            # 单个任务执行完成后的状态更新
+            self.root.after(0, lambda: self.update_status(f"状态: 任务 {task_index + 1} 执行完成"))
+
         except Exception as e:
             print(f"系统: 执行任务时出错: {str(e)}")
+            self.root.after(0, lambda: self.update_status(f"状态: 执行任务 {task_index + 1} 时出错: {str(e)}"))
         finally:
             self.is_executing = False
             self.root.after(0, lambda: self.run_current_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.run_all_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
-            self.root.after(0, lambda: self.update_status("状态: 任务执行完成"))
-
     def set_current_page(self, page_index):
         """设置当前页面索引并更新显示"""
         self.current_page_index = page_index
