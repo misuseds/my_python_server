@@ -649,22 +649,47 @@ def parse_history_content(content):
     return messages
 
 
+import tkinter as tk
+from tkinter import messagebox
+import ttkbootstrap as ttk
+from ttkbootstrap import Style
+from ttkbootstrap.constants import *
+
+# 需要先安装 ttkbootstrap: pip install ttkbootstrap
+
+
+
+import tkinter as tk
+from tkinter import messagebox, ttk
+import tkinter.font as tkFont
+
 class VLMTaskApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("我的VLM牛马")
-        # 修改窗口大小 - 调整为更窄的尺寸
-        self.root.geometry("400x200")
-        self.root.attributes('-topmost', True)  # 设置窗口置顶
+        self.root.title("智能视觉任务助手")
+        self.root.geometry("350x280")  # 更小的窗口尺寸
+        self.root.resizable(False, False)
+        
+        # 定义现代化颜色主题
+        self.colors = {
+            'primary': '#0078D4',  # Windows 11蓝色
+            'secondary': '#5FB2F2',
+            'success': '#107C10',
+            'warning': '#FF8C00',
+            'danger': '#E81123',
+            'light': '#FFFFFF',
+            'dark': '#202020',
+            'gray': '#F3F3F3',
+            'border': '#CCCCCC'
+        }
         
         # 任务执行标志
         self.is_executing = False 
         self.workflow_state = []  # 工作流程状态
-        self.current_executing_step = -1  # 当前正在执行的步骤索引
         self.current_page_index = 0  # 当前显示的页面索引
         
         # 创建界面
-        self.setup_ui()
+        self.setup_modern_ui()
         
         # 文件路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -674,148 +699,280 @@ class VLMTaskApp:
         # 首先加载工作流程（从工作流文件和记忆文件获取状态）
         self.load_workflow_content()
         
-    def setup_ui(self):
-        # 主容器
-        main_frame = tk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
+    def setup_modern_ui(self):
+        # 主容器 - 减少内边距
+        self.main_frame = tk.Frame(
+            self.root,
+            bg=self.colors['gray'],
+            padx=8,
+            pady=8
+        )
+        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 任务信息框架 - 更紧凑
+        task_frame = tk.LabelFrame(
+            self.main_frame,
+            text="当前任务",
+            font=('Segoe UI', 9, 'bold'),
+            fg=self.colors['primary'],
+            bg=self.colors['light'],
+            padx=6,
+            pady=4,
+            relief=tk.FLAT,
+            bd=0
+        )
+        task_frame.pack(fill=tk.X, pady=(0, 8))
+        
         # 任务标题
-        self.title_label = tk.Label(
-            main_frame,
+        self.task_title_label = tk.Label(
+            task_frame,
             text="",
-            font=("Arial", 14, "bold"),
-            anchor="w"
+            font=('Segoe UI', 10, 'bold'),
+            fg=self.colors['dark'],
+            bg=self.colors['light'],
+            anchor="center"
         )
-        self.title_label.pack(fill=tk.X, pady=(0, 5))
-
+        self.task_title_label.pack(fill=tk.X, pady=(6, 3))
+        
         # 任务描述
-        self.desc_label = tk.Label(
-            main_frame,
+        self.task_desc_label = tk.Label(
+            task_frame,
             text="",
-            font=("Arial", 11),
-            wraplength=350,
-            justify=tk.LEFT,
-            anchor="nw"
+            font=('Segoe UI', 8),
+            fg=self.colors['dark'],
+            bg=self.colors['light'],
+            wraplength=320,
+            justify=tk.CENTER
         )
-        self.desc_label.pack(fill=tk.X, pady=(0, 10))
-
-        # 控制按钮区域 - 第一行：选择页面按钮
-        control_frame1 = tk.Frame(self.root)
-        control_frame1.pack(fill=tk.X, padx=10, pady=5)
-
+        self.task_desc_label.pack(fill=tk.X, pady=(0, 6))
+        
+        # 进度条
+        progress_frame = tk.Frame(self.main_frame, bg=self.colors['gray'])
+        progress_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        progress_label = tk.Label(
+            progress_frame,
+            text="进度:",
+            font=('Segoe UI', 8),
+            fg=self.colors['dark'],
+            bg=self.colors['gray']
+        )
+        progress_label.pack(side=tk.LEFT)
+        
+        # 创建自定义进度条 - 更薄
+        self.progress_frame_outer = tk.Frame(
+            progress_frame,
+            bg='#DDDDDD',
+            height=6,
+            relief=tk.FLAT,
+            bd=0
+        )
+        self.progress_frame_outer.pack(side=tk.LEFT, padx=(6, 0), fill=tk.X, expand=True)
+        
+        self.progress_frame_inner = tk.Frame(
+            self.progress_frame_outer,
+            bg=self.colors['success'],
+            relief=tk.FLAT,
+            bd=0
+        )
+        self.progress_frame_inner.pack(fill=tk.BOTH, expand=True)
+        
+        # 控制按钮区域 - 垂直排列
+        button_frame = tk.Frame(self.main_frame, bg=self.colors['gray'])
+        button_frame.pack(fill=tk.X, pady=(8, 8))
+        
+        # 按钮样式
+        button_style = {
+            'font': ('Segoe UI', 8, 'bold'),
+            'width': 12,
+            'height': 1,
+            'relief': tk.FLAT,
+            'border': 0,
+            'cursor': 'hand2'
+        }
+        
+        # 水平排列所有按钮
         self.select_page_button = tk.Button(
-            control_frame1,
-            text="选择页面",
-            command=self.open_page_selection_dialog
+            button_frame,
+            text="选择任务页面",
+            command=self.open_page_selection_dialog,
+            bg=self.colors['primary'],
+            fg='white',
+            activebackground='#005A9E',
+            activeforeground='white',
+            **button_style
         )
-        self.select_page_button.pack(side=tk.LEFT)
-
-        # 控制按钮区域 - 第二行：执行所有任务、执行当前任务、停止、清除记忆
-        control_frame2 = tk.Frame(self.root)
-        control_frame2.pack(fill=tk.X, padx=10, pady=5)
-
-        self.run_all_button = tk.Button(
-            control_frame2,
-            text="执行所有任务",
-            command=self.run_all_tasks
-        )
-        self.run_all_button.pack(side=tk.LEFT, padx=(0, 5))
-
+        self.select_page_button.pack(side=tk.LEFT, padx=(0, 5))
+        
         self.run_current_button = tk.Button(
-            control_frame2,
+            button_frame,
             text="执行当前任务",
-            command=self.run_current_task
+            command=self.run_current_task,
+            bg=self.colors['warning'],
+            fg='white',
+            activebackground='#CC7000',
+            activeforeground='white',
+            **button_style
         )
         self.run_current_button.pack(side=tk.LEFT, padx=(0, 5))
-
+        
+        self.run_all_button = tk.Button(
+            button_frame,
+            text="执行所有任务",
+            command=self.run_all_tasks,
+            bg=self.colors['success'],
+            fg='white',
+            activebackground='#0C5A0C',
+            activeforeground='white',
+            **button_style
+        )
+        self.run_all_button.pack(side=tk.LEFT, padx=(0, 5))
+        
         self.stop_button = tk.Button(
-            control_frame2,
-            text="停止",
+            button_frame,
+            text="停止执行",
             command=self.stop_all_tasks,
-            state=tk.DISABLED
+            state=tk.DISABLED,
+            bg=self.colors['danger'],
+            fg='white',
+            activebackground='#A60B18',
+            activeforeground='white',
+            **button_style
         )
         self.stop_button.pack(side=tk.LEFT, padx=(0, 5))
-
+        
         self.clear_memory_button = tk.Button(
-            control_frame2,
+            button_frame,
             text="清除记忆",
-            command=self.clear_short_term_memory
+            command=self.clear_short_term_memory,
+            bg='#808080',
+            fg='white',
+            activebackground='#606060',
+            activeforeground='white',
+            **button_style
         )
-        self.clear_memory_button.pack(side=tk.LEFT, padx=(0, 5))
-
-        # 任务状态标签
-        self.status_label = tk.Label(self.root, text="状态: 等待任务开始", bd=1, relief=tk.SUNKEN, anchor=tk.W)
-        self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+        self.clear_memory_button.pack(side=tk.LEFT, padx=(0, 0))
+        
+        # 状态栏 - 更薄
+        self.status_frame = tk.Frame(
+            self.main_frame,
+            bg=self.colors['dark'],
+            height=20
+        )
+        self.status_frame.pack(fill=tk.X, side=tk.BOTTOM, pady=(10, 0))
+        self.status_frame.pack_propagate(False)  # 固定高度
+        
+        self.status_label = tk.Label(
+            self.status_frame,
+            text="状态: 等待任务开始",
+            font=('Segoe UI', 7),
+            fg='white',
+            bg=self.colors['dark'],
+            anchor=tk.W
+        )
+        self.status_label.pack(fill=tk.BOTH, expand=True, padx=6)
 
     def open_page_selection_dialog(self):
-        """打开页面选择弹窗"""
+        """打开页面选择弹窗 - 更紧凑"""
         if not self.workflow_state:
             messagebox.showinfo("提示", "没有可选择的页面")
             return
 
         # 创建顶层弹窗
         dialog = tk.Toplevel(self.root)
-        dialog.title("选择页面")
-        dialog.geometry("300x400")
-        dialog.transient(self.root)  # 设置为临时窗口，父窗口最小化时一起最小化
-        dialog.grab_set()  # 模态窗口，阻止与父窗口交互
+        dialog.title("选择任务页面")
+        dialog.geometry("320x320")  # 更小的弹窗
+        dialog.configure(bg=self.colors['gray'])
+        dialog.transient(self.root)
+        dialog.grab_set()
 
-        # 添加标签
-        tk.Label(dialog, text="请选择要跳转的页面:", font=("Arial", 12)).pack(pady=10)
+        # 标题
+        title_label = tk.Label(
+            dialog,
+            text="请选择要跳转的任务页面:",
+            font=('Segoe UI', 10, 'bold'),
+            fg=self.colors['dark'],
+            bg=self.colors['gray']
+        )
+        title_label.pack(pady=(10, 10))
 
-        # 创建列表框显示所有页面
-        listbox_frame = tk.Frame(dialog)
-        listbox_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # 列表框架
+        list_frame = tk.Frame(dialog, bg=self.colors['gray'])
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
 
-        # 创建滚动列表框
-        scrollbar = tk.Scrollbar(listbox_frame)
+        # 滚动条
+        scrollbar = tk.Scrollbar(list_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
+        # 列表框
         self.page_listbox = tk.Listbox(
-            listbox_frame,
+            list_frame,
             yscrollcommand=scrollbar.set,
             selectmode=tk.SINGLE,
-            font=("Arial", 10)
+            font=('Segoe UI', 8),
+            bg='white',
+            fg=self.colors['dark'],
+            selectbackground=self.colors['primary'],
+            selectforeground='white',
+            borderwidth=1,
+            relief=tk.FLAT,
+            highlightthickness=0,
+            height=8
         )
         
         # 添加所有页面到列表框
         for i, (step, completed) in enumerate(self.workflow_state):
             status_text = "已完成" if completed == True else "待确定" if completed == "pending_verification" else "待完成"
             status_symbol = "✓" if completed == True else "?" if completed == "pending_verification" else "○"
-            display_text = f"{i+1}. {status_symbol} {step}"
+            display_text = f"{i+1}. {status_symbol} {step} ({status_text})"
             self.page_listbox.insert(tk.END, display_text)
         
-        # 设置当前选中项为当前页面
         if 0 <= self.current_page_index < len(self.workflow_state):
             self.page_listbox.selection_set(self.current_page_index)
-            self.page_listbox.see(self.current_page_index)  # 确保当前页面可见
+            self.page_listbox.see(self.current_page_index)
 
-        self.page_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.page_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         scrollbar.config(command=self.page_listbox.yview)
 
         # 按钮框架
-        button_frame = tk.Frame(dialog)
-        button_frame.pack(fill=tk.X, padx=10, pady=10)
+        button_frame = tk.Frame(dialog, bg=self.colors['gray'])
+        button_frame.pack(fill=tk.X, padx=8, pady=10)
 
-        # 确定按钮
+        # 按钮样式
+        dialog_button_style = {
+            'font': ('Segoe UI', 8, 'bold'),
+            'width': 8,
+            'height': 1,
+            'relief': tk.FLAT,
+            'border': 0,
+            'cursor': 'hand2'
+        }
+        
         ok_button = tk.Button(
             button_frame,
             text="确定",
             command=lambda: self.select_page_from_dialog(dialog),
-            width=10
+            bg=self.colors['success'],
+            fg='white',
+            activebackground='#0C5A0C',
+            activeforeground='white',
+            **dialog_button_style
         )
-        ok_button.pack(side=tk.LEFT, padx=(0, 5))
+        ok_button.pack(side=tk.LEFT, padx=(0, 10))
 
-        # 取消按钮
         cancel_button = tk.Button(
             button_frame,
             text="取消",
             command=dialog.destroy,
-            width=10
+            bg='#808080',
+            fg='white',
+            activebackground='#606060',
+            activeforeground='white',
+            **dialog_button_style
         )
         cancel_button.pack(side=tk.LEFT)
 
-        # 绑定双击事件到列表框
+        # 双击事件
         self.page_listbox.bind("<Double-1>", lambda event: self.select_page_from_dialog(dialog))
 
     def select_page_from_dialog(self, dialog):
@@ -832,6 +989,7 @@ class VLMTaskApp:
             self.update_task_display()
         
         dialog.destroy()
+        
     def load_workflow_content(self):
         """加载并显示工作流程内容"""
         # 首先尝试从记忆文件中获取步骤完成状态
@@ -874,21 +1032,34 @@ class VLMTaskApp:
         # 更新标题
         if completed == True:
             status_text = "已完成"
-            status_color = "green"
+            status_color = self.colors['success']
         elif completed == "pending_verification":
             status_text = "待确定"
-            status_color = "orange"
+            status_color = self.colors['warning']
         else:
             status_text = "待完成"
-            status_color = "red"
+            status_color = self.colors['danger']
             
-        self.title_label.config(
+        self.task_title_label.config(
             text=f"任务 {self.current_page_index + 1}/{len(self.workflow_state)} - {status_text}",
             fg=status_color
         )
         
         # 更新描述
-        self.desc_label.config(text=step)
+        self.task_desc_label.config(text=step)
+        
+        # 更新进度条
+        completed_count = sum(1 for _, completed in self.workflow_state if completed == True)
+        total_count = len(self.workflow_state)
+        progress = (completed_count / total_count) * 100 if total_count > 0 else 0
+        self.update_progress_bar(progress)
+
+    def update_progress_bar(self, value):
+        """更新自定义进度条"""
+        # 计算进度条宽度
+        width = int((value / 100) * self.progress_frame_outer.winfo_width())
+        self.progress_frame_inner.config(width=width)
+        self.progress_frame_inner.update()
 
     def set_current_page(self, page_index):
         """设置当前页面索引并更新显示"""
@@ -992,13 +1163,6 @@ class VLMTaskApp:
                         print("系统: 任务已手动停止")
                         return
                     
-                    # 移除 TOTAL_TASK_COMPLETED 检测
-                    # if "[TOTAL_TASK_COMPLETED]" in output and "[TOOL:" not in output:
-                    #     print("工作流程已全部完成")
-                    #     # 标记整个工作流程为完成
-                    #     self.root.after(0, lambda idx=task_index: self.mark_step_as_completed_and_finish_workflow(idx))
-                    #     completed_flag_found = True
-                    #     break
                     if "[TASK_COMPLETED]" in output and "[TOOL:" not in output:  # 确保不是工具执行结果中的标记
                         # 如果是子任务完成标记，直接标记为已完成
                         self.root.after(0, lambda idx=task_index: self.mark_step_as_completed(idx))
@@ -1083,6 +1247,7 @@ class VLMTaskApp:
             self.root.after(0, lambda: self.run_current_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.run_all_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
+            
     def mark_step_as_completed_and_finish_workflow(self, index):
         """标记步骤为已完成并完成整个工作流程"""
         if 0 <= index < len(self.workflow_state):
@@ -1112,6 +1277,12 @@ class VLMTaskApp:
             # 在记忆文件中记录步骤执行完成
             with open(self.memory_file, 'a', encoding='utf-8') as f:
                 f.write(f"任务{index+1}执行完成\n")
+            
+            # 更新进度条
+            completed_count = sum(1 for _, completed in self.workflow_state if completed == True)
+            total_count = len(self.workflow_state)
+            progress = (completed_count / total_count) * 100 if total_count > 0 else 0
+            self.update_progress_bar(progress)
 
     def mark_step_as_pending_verification(self, index):
         """标记步骤为待确定状态并自动翻页"""
@@ -1293,6 +1464,10 @@ class VLMTaskApp:
             print(f"保存工作流程状态失败: {str(e)}")
 def main():
     root = tk.Tk()
+    try:
+        root.iconbitmap('favicon.ico')  # 如果有图标文件
+    except:
+        pass
     app = VLMTaskApp(root)
     root.mainloop()
 
