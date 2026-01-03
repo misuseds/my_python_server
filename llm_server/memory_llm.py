@@ -699,32 +699,16 @@ class VLMTaskApp:
         )
         self.desc_label.pack(fill=tk.X, pady=(0, 10))
 
-        # 控制按钮区域 - 第一行：上一页、页码、下一页
+        # 控制按钮区域 - 第一行：选择页面按钮
         control_frame1 = tk.Frame(self.root)
         control_frame1.pack(fill=tk.X, padx=10, pady=5)
 
-        self.prev_button = tk.Button(
+        self.select_page_button = tk.Button(
             control_frame1,
-            text="上一页",
-            command=self.prev_page,
-            state=tk.DISABLED
+            text="选择页面",
+            command=self.open_page_selection_dialog
         )
-        self.prev_button.pack(side=tk.LEFT, padx=(0, 5))
-
-        self.page_label = tk.Label(
-            control_frame1,
-            text="第 0/0 页",
-            width=15
-        )
-        self.page_label.pack(side=tk.LEFT, padx=(0, 5))
-
-        self.next_button = tk.Button(
-            control_frame1,
-            text="下一页",
-            command=self.next_page,
-            state=tk.DISABLED
-        )
-        self.next_button.pack(side=tk.LEFT, padx=(0, 5))
+        self.select_page_button.pack(side=tk.LEFT)
 
         # 控制按钮区域 - 第二行：执行所有任务、执行当前任务、停止、清除记忆
         control_frame2 = tk.Frame(self.root)
@@ -733,7 +717,7 @@ class VLMTaskApp:
         self.run_all_button = tk.Button(
             control_frame2,
             text="执行所有任务",
-            command=self.run_all_tasks  # 新增按钮：执行所有任务
+            command=self.run_all_tasks
         )
         self.run_all_button.pack(side=tk.LEFT, padx=(0, 5))
 
@@ -762,7 +746,92 @@ class VLMTaskApp:
         # 任务状态标签
         self.status_label = tk.Label(self.root, text="状态: 等待任务开始", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def open_page_selection_dialog(self):
+        """打开页面选择弹窗"""
+        if not self.workflow_state:
+            messagebox.showinfo("提示", "没有可选择的页面")
+            return
+
+        # 创建顶层弹窗
+        dialog = tk.Toplevel(self.root)
+        dialog.title("选择页面")
+        dialog.geometry("300x400")
+        dialog.transient(self.root)  # 设置为临时窗口，父窗口最小化时一起最小化
+        dialog.grab_set()  # 模态窗口，阻止与父窗口交互
+
+        # 添加标签
+        tk.Label(dialog, text="请选择要跳转的页面:", font=("Arial", 12)).pack(pady=10)
+
+        # 创建列表框显示所有页面
+        listbox_frame = tk.Frame(dialog)
+        listbox_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # 创建滚动列表框
+        scrollbar = tk.Scrollbar(listbox_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.page_listbox = tk.Listbox(
+            listbox_frame,
+            yscrollcommand=scrollbar.set,
+            selectmode=tk.SINGLE,
+            font=("Arial", 10)
+        )
         
+        # 添加所有页面到列表框
+        for i, (step, completed) in enumerate(self.workflow_state):
+            status_text = "已完成" if completed == True else "待确定" if completed == "pending_verification" else "待完成"
+            status_symbol = "✓" if completed == True else "?" if completed == "pending_verification" else "○"
+            display_text = f"{i+1}. {status_symbol} {step}"
+            self.page_listbox.insert(tk.END, display_text)
+        
+        # 设置当前选中项为当前页面
+        if 0 <= self.current_page_index < len(self.workflow_state):
+            self.page_listbox.selection_set(self.current_page_index)
+            self.page_listbox.see(self.current_page_index)  # 确保当前页面可见
+
+        self.page_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.page_listbox.yview)
+
+        # 按钮框架
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        # 确定按钮
+        ok_button = tk.Button(
+            button_frame,
+            text="确定",
+            command=lambda: self.select_page_from_dialog(dialog),
+            width=10
+        )
+        ok_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        # 取消按钮
+        cancel_button = tk.Button(
+            button_frame,
+            text="取消",
+            command=dialog.destroy,
+            width=10
+        )
+        cancel_button.pack(side=tk.LEFT)
+
+        # 绑定双击事件到列表框
+        self.page_listbox.bind("<Double-1>", lambda event: self.select_page_from_dialog(dialog))
+
+    def select_page_from_dialog(self, dialog):
+        """从弹窗中选择页面"""
+        selection = self.page_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("警告", "请选择一个页面")
+            return
+
+        selected_index = selection[0]
+        if 0 <= selected_index < len(self.workflow_state):
+            # 跳转到选中的页面
+            self.current_page_index = selected_index
+            self.update_task_display()
+        
+        dialog.destroy()
     def load_workflow_content(self):
         """加载并显示工作流程内容"""
         # 首先尝试从记忆文件中获取步骤完成状态
@@ -785,9 +854,6 @@ class VLMTaskApp:
                         _, saved_completed = saved_state[i]
                         completed = saved_completed
                     self.workflow_state.append((step, completed))
-                
-                # 更新页面导航
-                self.update_page_navigation()
                 
                 # 显示第一页
                 if self.workflow_state:
@@ -824,35 +890,10 @@ class VLMTaskApp:
         # 更新描述
         self.desc_label.config(text=step)
 
-    def update_page_navigation(self):
-        """更新页面导航按钮状态"""
-        total_pages = len(self.workflow_state)
-        
-        # 更新按钮状态
-        self.prev_button.config(state=tk.NORMAL if self.current_page_index > 0 else tk.DISABLED)
-        self.next_button.config(state=tk.NORMAL if self.current_page_index < total_pages - 1 else tk.DISABLED)
-        
-        # 更新页面标签
-        self.page_label.config(text=f"第 {self.current_page_index + 1}/{total_pages} 页")
-
-    def update_page_label(self):
-        """更新页面标签"""
-        total_pages = len(self.workflow_state)
-        self.page_label.config(text=f"第 {self.current_page_index + 1}/{total_pages} 页")
-
-    def prev_page(self):
-        """上一页"""
-        if self.current_page_index > 0:
-            self.current_page_index -= 1
-            self.update_task_display()
-            self.update_page_navigation()
-
-    def next_page(self):
-        """下一页"""
-        if self.current_page_index < len(self.workflow_state) - 1:
-            self.current_page_index += 1
-            self.update_task_display()
-            self.update_page_navigation()
+    def set_current_page(self, page_index):
+        """设置当前页面索引并更新显示"""
+        self.current_page_index = page_index
+        self.update_task_display()
 
     def run_current_task(self):
         """执行当前任务"""
@@ -1042,12 +1083,6 @@ class VLMTaskApp:
             self.root.after(0, lambda: self.run_current_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.run_all_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
-    def set_current_page(self, page_index):
-        """设置当前页面索引并更新显示"""
-        self.current_page_index = page_index
-        self.update_task_display()
-        self.update_page_navigation()
-
     def mark_step_as_completed_and_finish_workflow(self, index):
         """标记步骤为已完成并完成整个工作流程"""
         if 0 <= index < len(self.workflow_state):
@@ -1200,7 +1235,6 @@ class VLMTaskApp:
                 # 重置到第一页并更新显示
                 self.current_page_index = 0
                 self.update_task_display()
-                self.update_page_navigation()
                 
                 print("短期记忆已手动清除，所有任务重置为未完成")
             except Exception as e:
@@ -1257,7 +1291,6 @@ class VLMTaskApp:
                 f.write('\n'.join(history_lines))
         except Exception as e:
             print(f"保存工作流程状态失败: {str(e)}")
-
 def main():
     root = tk.Tk()
     app = VLMTaskApp(root)
