@@ -88,65 +88,38 @@ def activate_blender_window():
 
 
 def main():
-    if len(sys.argv) < 2:
-       
-        print("错误: 缺少工具名称参数")
-        return
+
     
-    tool_name = sys.argv[1]
-    
-    if tool_name == "get_all_objects":
+    tool_name = sys.argv[1] if len(sys.argv) > 1 else "import_pmx_file"
+   
+    if tool_name == "import_pmx_file" :
         code = '''
 import bpy
 
-# 获取当前场景中的所有物体
-all_objects = bpy.context.scene.objects
+def open_pmx_file_selector():  
+    """打开PMX文件选择器"""  
+    # 直接调用CATS的通用导入器，它会自动过滤PMX文件  
+    bpy.ops.cats_importer.import_any_model('INVOKE_DEFAULT')  
 
-# 打印每个物体的名称
-result = []
-for obj in all_objects:
-    obj_info = f"obj: {obj.name}"
-    result.append(obj_info)
-    print(obj_info)
-
-result
-'''
+# 在Blender中运行  
+open_pmx_file_selector()
+    '''
         response = call_blender_api('/api/exec', code)
-        
+    elif tool_name == "activate_blender":
+        activate_blender_window()
+        return
+    
     elif tool_name == "delete_all_objects":
         code = '''
 import bpy
-
 # 选择所有对象
 bpy.ops.object.select_all(action='SELECT')
-
 # 删除选中的对象
 bpy.ops.object.delete()
 "所有物体已删除"
 '''
         response = call_blender_api('/api/exec', code)
-        
-    elif tool_name == "create_cube":
-        code = '''
-import bpy
 
-# 添加一个立方体
-bpy.ops.mesh.primitive_cube_add(
-    location=(0, 0, 0)  # 设置立方体的位置
-)
-
-# 获取新创建的立方体对象
-cube = bpy.context.active_object
-cube.name = "MyCube"  # 重命名立方体
-
-f"立方体已创建，名称: {cube.name}"
-'''
-        response = call_blender_api('/api/exec', code)
-    
-    elif tool_name == "activate_blender":
-        activate_blender_window()
-        return
-    
     else:
         print(f"错误: 未知的Blender工具 '{tool_name}'")
         return

@@ -1,32 +1,6 @@
 {
   "tools": [
-    {
-      "name": "get_all_objects",
-      "path": "blender_cline/blender_api_tool.py",
-      "description": "获取Blender当前场景中的所有物体",
-      "parameters": [],
-      "examples": [
-        "[TOOL:get_all_objects]"
-      ]
-    },
-    {
-      "name": "delete_all_objects",
-      "path": "blender_cline/blender_api_tool.py",
-      "description": "删除Blender当前场景中的所有物体",
-      "parameters": [],
-      "examples": [
-        "[TOOL:delete_all_objects]"
-      ]
-    },
-    {
-      "name": "create_cube",
-      "path": "blender_cline/blender_api_tool.py",
-      "description": "在Blender场景中创建一个立方体",
-      "parameters": [],
-      "examples": [
-        "[TOOL:create_cube]"
-      ]
-    },
+   
     {
       "name": "activate_blender",
       "path": "blender_cline/blender_api_tool.py",
@@ -35,6 +9,24 @@
       "examples": [
         "[TOOL:activate_blender]"
       ]
+    },{
+      "name": "import_pmx_file",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "导入PMX文件到Blender场景中",
+      "parameters": [],
+      "examples": [
+        "[TOOL:import_pmx_file]"
+      ]
+    },
+     {
+      "name": "delete_all_objects",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "删除Blender当前场景中的所有物体",
+      "parameters": [],
+      "examples": [
+        "[TOOL:delete_all_objects]"
+      ]
     }
+
   ]
 }

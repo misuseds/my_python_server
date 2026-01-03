@@ -8,9 +8,8 @@ import sys
 from pathlib import Path
 from llm_class import VLMService  # 假设VLMService基于LLMService
 import pyautogui
-from PIL import Image
 import base64
-from io import BytesIO
+
 
 # 定义全局变量
 CURRENT_DIR = Path(__file__).parent
@@ -271,12 +270,8 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
                 system_prompt_parts.append(f"重要知识:\n{knowledge_content}")
     
     iteration_count = 0
-    max_iterations = 50  # 设置最大迭代次数，防止无限循环
-    first_iteration = reset_first_iteration  # 使用参数来决定是否重置首次迭代标志
-    
-    # 记录之前的AI响应，用于检测重复行为
-    previous_ai_response = ""
-    previous_tool_result = ""
+    max_iterations = 5  # 设置最大迭代次数，防止无限循环
+
     
     while iteration_count < max_iterations:
         iteration_count += 1
