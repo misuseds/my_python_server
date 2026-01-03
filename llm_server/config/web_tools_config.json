@@ -81,7 +81,7 @@
     {
       "name": "scroll_mouse",
       "path": "keyboard_server/mousecontrol.py",
-      "description": "鼠标滚轮滚动操作，必须指定坐标位置，正数向上滚动，负数向下滚动",
+      "description": "鼠标滚轮滚动操作，必须指定坐标位置，正数向上滚动，负数向下滚动，鼠标滚动请不要移动到ai窗口上，要移动到网页窗口上x坐标应该大于1000",
       "parameters": [
         {
           "name": "units",
@@ -100,9 +100,9 @@
         }
       ],
     "examples": [
-        "[TOOL:scroll_mouse,-30,1492,466]",  
-        "[TOOL:scroll_mouse,-50,1492,466]",  
-        "[TOOL:scroll_mouse,-100,1492,466]"  
+        "[TOOL:scroll_mouse,-30,1500,466]",  
+        "[TOOL:scroll_mouse,-50,1500,466]",  
+        "[TOOL:scroll_mouse,-100,1500,466]"  
       ]
       },
     {

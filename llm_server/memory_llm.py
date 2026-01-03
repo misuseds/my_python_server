@@ -14,11 +14,12 @@ from io import BytesIO
 
 # 定义全局变量
 CURRENT_DIR = Path(__file__).parent
- 
+
 CONFIG_PATH = CURRENT_DIR /"config"/ "web_tools_config.json"
 KNOWLEDGE_FILE_PATH = CURRENT_DIR /"config"/ "web_knowledge.txt"
 OFTEN_USE_ORDER_PATH = CURRENT_DIR /"config"/ "web_often_use_order.txt" 
- # 添加这行
+WORKFLOW_PATH = CURRENT_DIR /"config"/ "web_workflow.txt"  # 新增：工作流程文件路径
+
 def execute_python_script(script_path, *args):
     """
     执行指定路径的Python脚本
@@ -37,7 +38,6 @@ def execute_python_script(script_path, *args):
         # 构建命令：工具名称作为脚本的第一个参数
         cmd = [sys.executable, str(script_full_path)] + list(args)
        
-        
         # 执行Python脚本，指定编码为UTF-8
         result = subprocess.run(
             cmd,
@@ -134,7 +134,8 @@ def get_tools_description():
             tools_desc += f"- {name}: {desc} (无参数)\n"
     
     tools_desc += "\n使用格式: [TOOL:工具名称,参数1,参数2,...]\n"
-    tools_desc += "\n任务完成标记: 任务完成后请输出 [TASK_COMPLETED] 来结束任务循环"
+    tools_desc += "\n任务完成标记: 每完成一个步骤后，必须在响应末尾输出 [TASK_COMPLETED] 来标记步骤完成，否则系统将不会继续下一个步骤"
+    tools_desc += "\n工作流程完成标记: 当所有工作流程完成时，请输出 [TOTAL_TASK_COMPLETED]"
     return tools_desc
 
 
@@ -154,7 +155,16 @@ def is_task_completed(ai_response):
     
     return False
 
-def vision_task_loop(task_description, knowledge_file=None, memory_file=None, reset_first_iteration=True):
+def is_workflow_completed(ai_response):
+    """判断工作流程是否完成 - 使用特殊标记"""
+    completion_marker = "[TOTAL_TASK_COMPLETED]"
+    
+    if ai_response and completion_marker in ai_response:
+        return True
+    
+    return False
+
+def vision_task_loop(task_description, knowledge_file=None, memory_file=None, workflow_state=None, reset_first_iteration=True, gui_callback=None):
     """
     基于视觉的循环任务执行器
     """
@@ -181,6 +191,14 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             if knowledge_content.strip():
                 system_prompt_parts.append(f"重要知识:\n{knowledge_content}")
     
+    # 添加工作流程状态信息
+    if workflow_state:
+        workflow_status = "当前工作流程状态:\n"
+        for i, (step, completed) in enumerate(workflow_state):
+            status = "已完成" if completed else "待完成"
+            workflow_status += f"步骤{i+1}: {step} - {status}\n"
+        system_prompt_parts.append(workflow_status)
+    
     # 组合系统提示
     system_prompt = "\n".join(system_prompt_parts)
     
@@ -203,7 +221,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
         # 准备消息列表
         messages = []
         
-        # 添加系统提示（包含工具信息）
+        # 添加系统提示（包含工具信息和工作流程状态）
         if system_prompt:
             messages.append({
                 "role": "system",
@@ -223,7 +241,13 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
         if memory_content:
             user_message += f"历史记忆:\n{memory_content}\n\n"
         
-        user_message += "请分析当前屏幕截图，并继续执行任务。"
+        # 检查之前的响应是否包含完成标记
+        if previous_ai_response and not (is_task_completed(previous_ai_response) or is_workflow_completed(previous_ai_response)):
+            user_message += "请注意：上一轮AI响应中没有检测到任务完成标记 [TASK_COMPLETED]，任务尚未完成，请继续执行任务。\n"
+        elif previous_ai_response and (is_task_completed(previous_ai_response) or is_workflow_completed(previous_ai_response)):
+            user_message += "任务已完成，请输出 [TOTAL_TASK_COMPLETED] 标记整个工作流程完成，或者继续执行剩余任务。\n"
+        else:
+            user_message += "请分析当前屏幕截图，并继续执行任务。注意：每完成一个步骤后，必须在响应末尾输出 [TASK_COMPLETED] 来标记步骤完成，否则系统将不会继续下一个步骤。"
         
         # 构建包含图像的消息内容
         image_content = {
@@ -244,28 +268,29 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
             "content": [text_content, image_content]
         })
         
-      
         try:
             # 调用LLM服务（模拟VLM功能）
             result = vlm_service.create_with_image(messages)  # 不传递图像路径，因为已经在消息中包含
             ai_response = result['choices'][0]['message']['content']
             
-          
+            # 通过回调函数在GUI中显示LLM服务返回结果
+            if gui_callback:
+                gui_callback(f"LLM服务返回: 【{ai_response}】")
             
             # 先显示AI分析
             yield f" {ai_response}"
             
-            # 执行AI返回的工具指令
-            tool_execution_result = process_tool_calls(ai_response, memory_file)
+            # 执行AI返回的工具指令 - 传递GUI回调
+            tool_execution_result = process_tool_calls(ai_response, memory_file, gui_callback)
+            
+            # 检查是否包含完成标记
+            if is_task_completed(ai_response or "") or is_workflow_completed(ai_response or ""):
+                yield "任务已完成，退出循环"
+                break  # 立即退出循环，不再继续
             
             # 更新历史记录
             previous_ai_response = ai_response
             previous_tool_result = tool_execution_result or ""
-            
-        
-            if is_task_completed(ai_response or ""):
-                    yield "任务已完成，退出循环"
-                    break
             
             # 更新标志，表示不再是第一次迭代
             first_iteration = False
@@ -279,17 +304,41 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, re
         yield "达到最大迭代次数，停止任务执行"
 
 
-def process_tool_calls(response_text, memory_file_path=None):
+def process_tool_calls(response_text, memory_file_path=None, gui_callback=None):
     """
     解析AI响应中的工具调用指令
     支持格式: [TOOL:工具名称,arg1,arg2,arg3...] 
+    添加gui_callback参数用于GUI显示
     """
+    # 检测任务完成标记
+    task_completed = is_task_completed(response_text)
+    workflow_completed = is_workflow_completed(response_text)
+    
+    if task_completed and memory_file_path:
+        with open(memory_file_path, 'a', encoding='utf-8') as f:
+            f.write(f"\n检测到任务完成标记: [TASK_COMPLETED]\n")
+    
+    # 检测工作流程完成标记
+    if workflow_completed and memory_file_path:
+        with open(memory_file_path, 'a', encoding='utf-8') as f:
+            f.write(f"\n检测到工作流程完成标记: [TOTAL_TASK_COMPLETED]\n")
+    
+    # 在GUI中显示完成标记检测
+    if gui_callback:
+        if task_completed:
+            gui_callback("检测到任务完成标记: [TASK_COMPLETED]")
+        if workflow_completed:
+            gui_callback("检测到工作流程完成标记: [TOTAL_TASK_COMPLETED]")
+    
     # 修复正则表达式以正确捕获工具名称和所有参数
     tool_pattern = r'\[TOOL:([^\],\]]+)(?:,([^\]]*))?\]'
     matches = re.findall(tool_pattern, response_text)
     
     all_results = []
-    if not matches: print ("未找到工具调用指令")
+    if not matches: 
+        # 只在响应中包含工具调用格式但未找到匹配时才输出，而不是所有情况
+        if '[TOOL:' in response_text:
+            print("未找到工具调用指令")
     for match in matches:
         tool_name = match[0]
         tool_args_str = match[1]  # 包含所有参数的字符串，可能为空
@@ -350,9 +399,20 @@ def process_tool_calls(response_text, memory_file_path=None):
             except Exception as e:
                 print(f"写入记忆文件失败: {e}")
         
+        # 通过回调函数在GUI中显示工具执行结果
+        if gui_callback:
+            gui_callback(f"工具 '{tool_name}' 执行结果: {result}")
+        
         all_results.append(f"工具 '{tool_name}' 执行结果: {result}")
     
-    return "\n".join(all_results) if all_results else None
+    # 返回工具执行结果和完成状态
+    return {
+        "results": "\n".join(all_results) if all_results else None,
+        "task_completed": task_completed,
+        "workflow_completed": workflow_completed
+    }
+
+
 def parse_history_content(content):
     """
     解析历史对话内容，转换为messages格式
@@ -407,12 +467,15 @@ class VLMTaskApp:
     def __init__(self, root):
         self.root = root
         self.root.title("VLM任务执行器")
-        # 修改窗口大小为较小尺寸并设置为置顶
-        self.root.geometry("400x400")  # 调整为较小的尺寸
-        self.root.attributes('-topmost', True)  # 设置窗口置topmost=True  # 设置窗口置顶
+        # 修改窗口大小 - 调整为更窄的尺寸
+        self.root.geometry("400x300")
+        self.root.attributes('-topmost', True)  # 设置窗口置顶
         
         # 任务执行标志
         self.is_executing = False 
+        self.workflow_state = []  # 工作流程状态
+        self.current_executing_step = -1  # 当前正在执行的步骤索引
+        self.current_page_index = 0  # 当前显示的页面索引
         
         # 创建界面
         self.setup_ui()
@@ -422,210 +485,412 @@ class VLMTaskApp:
         self.knowledge_file = KNOWLEDGE_FILE_PATH  # 使用全局变量
         self.memory_file = os.path.join(current_dir, "memory.txt")
         
-        # 启动时加载记忆文件内容到显示区域
+        # 首先加载工作流程（从工作流文件和记忆文件获取状态）
+        self.load_workflow_content()
+        # 然后加载记忆文件内容到显示区域
         self.load_memory_content()
-
+        
     def setup_ui(self):
-        # 任务描述输入区域
-        task_frame = tk.Frame(self.root)
-        task_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        tk.Label(task_frame, text="任务描述:").pack(anchor=tk.W)
-        
-        self.task_input = tk.Text(task_frame, height=3)
-        self.task_input.pack(fill=tk.X, pady=5)
-        
-        # 控制按钮区域
-        control_frame = tk.Frame(self.root)
-        control_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        self.start_button = tk.Button(
-            control_frame,
-            text="开始执行任务",
-            command=self.start_task
+        # 主容器
+        main_frame = tk.Frame(self.root)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # 任务标题
+        self.title_label = tk.Label(
+            main_frame,
+            text="",
+            font=("Arial", 14, "bold"),
+            anchor="w"
         )
-        self.start_button.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.stop_button = tk.Button(
-            control_frame,
-            text="停止任务",
-            command=self.stop_task,
+        self.title_label.pack(fill=tk.X, pady=(0, 5))
+
+        # 任务描述
+        self.desc_label = tk.Label(
+            main_frame,
+            text="",
+            font=("Arial", 11),
+            wraplength=350,
+            justify=tk.LEFT,
+            anchor="nw"
+        )
+        self.desc_label.pack(fill=tk.X, pady=(0, 10))
+
+        # 执行结果区域 - 减小高度
+        result_frame = tk.Frame(main_frame)
+        result_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        tk.Label(result_frame, text="执行结果:", font=("Arial", 10, "bold")).pack(anchor="w")
+
+        # 创建滚动文本框显示执行结果 - 减小高度
+        text_frame = tk.Frame(result_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.result_text = tk.Text(
+            text_frame,
+            wrap=tk.WORD,
+            state=tk.DISABLED,
+            height=3  # 减小高度
+        )
+        scrollbar = tk.Scrollbar(text_frame, orient=tk.VERTICAL, command=self.result_text.yview)
+        self.result_text.configure(yscrollcommand=scrollbar.set)
+
+        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 控制按钮区域 - 第一行：上一页、页码、下一页
+        control_frame1 = tk.Frame(self.root)
+        control_frame1.pack(fill=tk.X, padx=10, pady=5)
+
+        self.prev_button = tk.Button(
+            control_frame1,
+            text="上一页",
+            command=self.prev_page,
             state=tk.DISABLED
         )
-        self.stop_button.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # 添加清除短期记忆按钮
+        self.prev_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.page_label = tk.Label(
+            control_frame1,
+            text="第 0/0 页",
+            width=15
+        )
+        self.page_label.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.next_button = tk.Button(
+            control_frame1,
+            text="下一页",
+            command=self.next_page,
+            state=tk.DISABLED
+        )
+        self.next_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        # 控制按钮区域 - 第二行：执行当前任务、停止、清除记忆
+        control_frame2 = tk.Frame(self.root)
+        control_frame2.pack(fill=tk.X, padx=10, pady=5)
+
+        self.run_all_button = tk.Button(
+            control_frame2,
+            text="执行当前任务",
+            command=self.run_current_task
+        )
+        self.run_all_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.stop_button = tk.Button(
+            control_frame2,
+            text="停止",
+            command=self.stop_all_tasks,
+            state=tk.DISABLED
+        )
+        self.stop_button.pack(side=tk.LEFT, padx=(0, 5))
+
         self.clear_memory_button = tk.Button(
-            control_frame,
-            text="清除短期记忆",
+            control_frame2,
+            text="清除记忆",
             command=self.clear_short_term_memory
         )
-        self.clear_memory_button.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # 添加常用命令按钮
-        self.often_used_orders_button = tk.Button(
-            control_frame,
-            text="常用命令",
-            command=self.show_often_used_orders_menu
-        )
-        self.often_used_orders_button.pack(side=tk.LEFT)
-        
-        # 聊天历史显示区域
-        self.chat_history = scrolledtext.ScrolledText(
-            self.root,
-            wrap=tk.WORD,
-            state='disabled',
-            height=30
-        )
-        self.chat_history.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
-        
+        self.clear_memory_button.pack(side=tk.LEFT, padx=(0, 5))
+
         # 任务状态标签
         self.status_label = tk.Label(self.root, text="状态: 等待任务开始", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.pack(side=tk.BOTTOM, fill=tk.X)
-
-    def load_often_used_orders(self):
-        """从文件中加载常用命令"""
-        # 使用全局变量
-        orders_file = OFTEN_USE_ORDER_PATH
+    def load_workflow_content(self):
+        """加载并显示工作流程内容"""
+        # 首先尝试从记忆文件中获取步骤完成状态
+        saved_state = self.get_workflow_state_from_memory()
         
-        if os.path.exists(orders_file):
+        if WORKFLOW_PATH.exists():
             try:
-                with open(orders_file, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
-                    # 按行分割命令，过滤空行
-                    orders = [line.strip() for line in content.split('\n') if line.strip()]
-                    return orders
+                with open(WORKFLOW_PATH, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # 分割工作流程为独立步骤
+                steps = [step.strip() for step in content.split('\n') if step.strip()]
+                
+                # 初始化工作流程状态，优先使用记忆文件中的状态
+                self.workflow_state = []
+                for i, step in enumerate(steps):
+                    completed = False
+                    # 检查记忆文件中是否有该步骤的完成状态
+                    if i < len(saved_state):
+                        _, saved_completed = saved_state[i]
+                        completed = saved_completed
+                    self.workflow_state.append((step, completed))
+                
+                # 更新页面导航
+                self.update_page_navigation()
+                
+                # 显示第一页
+                if self.workflow_state:
+                    self.update_task_display()
+                
             except Exception as e:
-                print(f"加载常用命令文件失败: {str(e)}")
-                return []
+                print(f"加载工作流程失败: {str(e)}")
         else:
-            print(f"常用命令文件不存在: {orders_file}")
-            return []
+            print(f"工作流程文件不存在: {WORKFLOW_PATH}")
 
-    def show_often_used_orders_menu(self):
-        """显示常用命令菜单"""
-        orders = self.load_often_used_orders()
-        if not orders:
-            messagebox.showinfo("提示", "没有找到常用命令")
+    def update_task_display(self):
+        """更新当前任务显示"""
+        if not self.workflow_state or self.current_page_index >= len(self.workflow_state):
+            return
+            
+        step, completed = self.workflow_state[self.current_page_index]
+        
+        # 更新标题
+        status_text = "已完成" if completed else "待完成"
+        status_color = "green" if completed else "red"
+        self.title_label.config(
+            text=f"任务 {self.current_page_index + 1}/{len(self.workflow_state)} - {status_text}",
+            fg=status_color
+        )
+        
+        # 更新描述
+        self.desc_label.config(text=step)
+
+    def update_page_navigation(self):
+        """更新页面导航按钮状态"""
+        total_pages = len(self.workflow_state)
+        
+        # 更新按钮状态
+        self.prev_button.config(state=tk.NORMAL if self.current_page_index > 0 else tk.DISABLED)
+        self.next_button.config(state=tk.NORMAL if self.current_page_index < total_pages - 1 else tk.DISABLED)
+        
+        # 更新页面标签
+        self.page_label.config(text=f"第 {self.current_page_index + 1}/{total_pages} 页")
+
+    def update_page_label(self):
+        """更新页面标签"""
+        total_pages = len(self.workflow_state)
+        self.page_label.config(text=f"第 {self.current_page_index + 1}/{total_pages} 页")
+
+    def prev_page(self):
+        """上一页"""
+        if self.current_page_index > 0:
+            self.current_page_index -= 1
+            self.update_task_display()
+            self.update_page_navigation()
+            
+            # 清空执行结果区域
+            self.clear_result_display()
+
+    def next_page(self):
+        """下一页"""
+        if self.current_page_index < len(self.workflow_state) - 1:
+            self.current_page_index += 1
+            self.update_task_display()
+            self.update_page_navigation()
+            
+            # 清空执行结果区域
+            self.clear_result_display()
+
+    def clear_result_display(self):
+        """清空执行结果区域"""
+        self.result_text.config(state=tk.NORMAL)
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.config(state=tk.DISABLED)
+
+    def run_current_task(self):
+        """执行当前任务"""
+        if self.is_executing:
+            messagebox.showwarning("警告", "任务正在执行中，请等待完成")
             return
         
-        # 创建弹出菜单
-        menu = tk.Menu(self.root, tearoff=0)
+        if not self.workflow_state:
+            messagebox.showwarning("警告", "没有可执行的任务")
+            return
         
-        def insert_order(order_text):
-            # 清空当前输入框内容并插入选中的命令
-            self.task_input.delete(1.0, tk.END)
-            self.task_input.insert(tk.END, order_text)
+        current_task_index = self.current_page_index
+        if current_task_index >= len(self.workflow_state):
+            messagebox.showwarning("警告", "当前页码超出任务范围")
+            return
+            
+        task_step, completed = self.workflow_state[current_task_index]
         
-        # 为每个命令添加菜单项
-        for i, order in enumerate(orders):
-            menu.add_command(
-                label=f"{i+1}. {order}",
-                command=lambda o=order: insert_order(o)
-            )
-        
-        # 显示菜单
-        try:
-            menu.post(self.root.winfo_pointerx(), self.root.winfo_pointery())
-        except tk.TclError:
-            # 如果无法在鼠标位置显示，就显示在窗口中心
-            menu.post(self.root.winfo_rootx() + 50, self.root.winfo_rooty() + 50)
-        finally:
-            menu.grab_release()
-
-    def load_memory_content(self):
-        """启动时加载记忆文件内容到显示区域"""
-        if os.path.exists(self.memory_file):
-            try:
-                with open(self.memory_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    if content.strip():
-                        # 启用文本框编辑
-                        self.chat_history.config(state='normal')
-                        # 清空当前内容
-                        self.chat_history.delete(1.0, tk.END)
-                        # 插入记忆文件内容
-                        self.chat_history.insert(tk.END, content)
-                        # 禁用编辑并滚动到底部
-                        self.chat_history.config(state='disabled')
-                        self.chat_history.see(tk.END)
-            except Exception as e:
-                print(f"加载记忆文件失败: {str(e)}")
-        else:
-            # 如果记忆文件不存在，清空显示区域
-            self.chat_history.config(state='normal')
-            self.chat_history.delete(1.0, tk.END)
-            self.chat_history.config(state='disabled')
-
-    def start_task(self):
-        """开始执行任务"""
-        task_description = self.task_input.get("1.0", tk.END).strip()
-        if not task_description:
-            messagebox.showwarning("警告", "请输入任务描述")
+        if completed:
+            messagebox.showinfo("提示", f"任务 {current_task_index + 1} 已完成，无需再次执行")
             return
         
         self.is_executing = True
-        self.start_button.config(state=tk.DISABLED)
+        self.run_all_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
-        self.update_status("状态: 任务执行中...")
+        self.update_status(f"状态: 正在执行任务 {current_task_index + 1}: {task_step}")
         
         # 在新线程中执行任务以避免界面冻结
         import threading
         task_thread = threading.Thread(
-            target=self.run_task,
-            args=(task_description,)
+            target=self.execute_single_task,
+            args=(current_task_index,)
         )
         task_thread.daemon = True
         task_thread.start()
 
-    def stop_task(self):
-        """停止任务执行"""
-        self.is_executing = False
-        self.start_button.config(state=tk.NORMAL)
-        self.stop_button.config(state=tk.DISABLED)
-        self.update_status("状态: 任务已停止")
-
-    def run_task(self, task_description):
-        """执行任务的主循环"""
+    def execute_single_task(self, task_index):
+        """执行单个任务"""
         try:
-            # 显示用户输入的任务
-            self.display_message(f"用户: {task_description}")
+            task_step, completed = self.workflow_state[task_index]
             
-            # 追加到记忆文件而不是覆盖
-            with open(self.memory_file, 'a', encoding='utf-8') as f:
-                f.write(f"用户: {task_description}\n\n")
+            if completed:
+                self.display_message(f"任务 {task_index + 1} 已完成")
+                return
             
-            # 执行任务循环，确保重置首次迭代标志
-            for output in vision_task_loop(task_description, self.knowledge_file, self.memory_file, reset_first_iteration=True):
+            # 定义GUI回调函数
+            def gui_callback(msg):
+                self.display_message(msg)
+            
+            # 执行任务 - 传递GUI回调函数
+            task_output = ""
+            completed_flag_found = False
+            for output in vision_task_loop(
+                task_step, 
+                self.knowledge_file, 
+                self.memory_file, 
+                self.workflow_state, 
+                reset_first_iteration=True,
+                gui_callback=gui_callback
+            ):
                 if not self.is_executing:
                     self.display_message("系统: 任务已手动停止")
+                    return
+                
+                # 检查输出是否表示任务完成
+                if "任务已完成，退出循环" in output:
+                    completed_flag_found = True
+                    # 自动勾选完成状态
+                    self.root.after(0, lambda idx=task_index: self.mark_step_completed_and_next_page(idx))
                     break
+                else:
+                    # 检查是否包含完成标记
+                    if is_task_completed(output) or is_workflow_completed(output):
+                        self.display_message(f"任务{task_index + 1}执行结果: {output}")
+                        # 自动标记完成
+                        self.root.after(0, lambda idx=task_index: self.mark_step_completed_and_next_page(idx))
+                        break
+                    else:
+                        self.display_message(f"任务{task_index + 1}执行结果: {output}")
+                        
+                        # 将输出追加到记忆文件
+                        with open(self.memory_file, 'a', encoding='utf-8') as f:
+                            f.write(f"任务{task_index + 1}执行结果: {output}\n")
+                        
+                        task_output += output + "\n"
+            
+            # 如果循环结束但没有找到完成标记，说明达到了最大迭代次数
+            if not completed_flag_found:
+                self.display_message(f"任务{task_index + 1}未能在最大迭代次数内完成，未找到[TASK_COMPLETED]标记")
+                return
+            
+            # 检查是否完成整个工作流程
+            if "[TOTAL_TASK_COMPLETED]" in task_output:
+                self.display_message("工作流程已全部完成")
                 
-                self.display_message(f"AI: {output}")
-                
-                # 将输出追加到记忆文件
-                with open(self.memory_file, 'a', encoding='utf-8') as f:
-                    f.write(f"AI: {output}\n\n")
-
         except Exception as e:
             self.display_message(f"系统: 执行任务时出错: {str(e)}")
         finally:
             self.is_executing = False
-            self.root.after(0, lambda: self.start_button.config(state=tk.NORMAL))
+            self.root.after(0, lambda: self.run_all_button.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_button.config(state=tk.DISABLED))
             self.root.after(0, lambda: self.update_status("状态: 任务执行完成"))
 
+    def mark_step_completed_and_next_page(self, index):
+        """标记步骤为已完成并自动翻页"""
+        if 0 <= index < len(self.workflow_state):
+            self.workflow_state[index] = (self.workflow_state[index][0], True)
+            
+            # 保存状态
+            self.save_workflow_state()
+            
+            # 更新当前显示（如果当前页是完成的页）
+            if index == self.current_page_index:
+                self.update_task_display()
+            
+            # 在记忆文件中记录步骤完成
+            with open(self.memory_file, 'a', encoding='utf-8') as f:
+                f.write(f"任务{index+1} 已完成: {self.workflow_state[index][0]}\n")
+            
+            # 自动翻页到下一页（如果存在）
+            if index == self.current_page_index and index < len(self.workflow_state) - 1:
+                self.current_page_index += 1
+                self.update_task_display()
+                self.update_page_navigation()
+
+    def stop_all_tasks(self):
+        """停止所有任务执行"""
+        self.is_executing = False
+        self.run_all_button.config(state=tk.NORMAL)
+        self.stop_button.config(state=tk.DISABLED)
+        self.update_status("状态: 任务已停止")
+
+    def get_workflow_state_from_memory(self):
+        """从记忆文件中提取工作流程状态"""
+        saved_state = []
+        if os.path.exists(self.memory_file):
+            try:
+                with open(self.memory_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                lines = content.split('\n')
+                in_workflow_section = False
+                
+                for line in lines:
+                    line = line.strip()
+                    
+                    if line == "工作流程定义:":
+                        in_workflow_section = True
+                        continue
+                    elif line == "执行历史:":
+                        in_workflow_section = False
+                        continue
+                    elif in_workflow_section and line.startswith("步骤") and " - " in line:
+                        # 解析格式如 "步骤1: 打开模之屋 - 已完成"
+                        try:
+                            parts = line.split(" - ")
+                            if len(parts) >= 2:
+                                step_info = parts[0]  # "步骤1: 打开模之屋"
+                                status = parts[1]     # "已完成" 或 "待完成"
+                                
+                                # 提取步骤号
+                                step_match = re.search(r'步骤(\d+):', step_info)
+                                if step_match:
+                                    step_num = int(step_match.group(1))
+                                    completed = (status == "已完成")
+                                    
+                                    # 确保列表长度足够
+                                    while len(saved_state) < step_num:
+                                        saved_state.append((None, False))
+                                    
+                                    # 更新对应位置的完成状态
+                                    step_desc = step_info.split(":", 1)[1].strip()
+                                    saved_state[step_num - 1] = (step_desc, completed)
+                        except Exception as e:
+                            print(f"解析记忆中的步骤行出错: {line}, 错误: {str(e)}")
+                            continue
+            except Exception as e:
+                print(f"从记忆文件读取工作流程状态失败: {str(e)}")
+        
+        return saved_state
+
+    def load_memory_content(self):
+        """启动时加载记忆文件内容到显示区域"""
+        if os.path.exists(self.memory_file):
+            try:                 
+                with open(self.memory_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    
+                if content.strip():
+                    completed_count = len([s for s, c in self.workflow_state if c])
+                    self.display_message(f"加载历史记忆: {completed_count}个任务已完成")
+                    
+            except Exception as e:
+                print(f"加载记忆文件失败: {str(e)}")
+
     def display_message(self, message):
-        """显示消息"""
-        self.root.after(0, self._display_message, message)
-
-    def _display_message(self, message):
-        """在主线程中更新UI"""
-        self.chat_history.config(state='normal')
-        self.chat_history.insert(tk.END, f"{message}\n\n")
-        self.chat_history.config(state='disabled')
-        self.chat_history.see(tk.END)
-
+        """显示消息到状态栏"""
+        self.status_label.config(text=f"状态: {message[:50]}...")  # 限制显示长度
+        
+        # 同时在结果区域显示
+        self.result_text.config(state=tk.NORMAL)
+        self.result_text.insert(tk.END, message + "\n")
+        self.result_text.see(tk.END)
+        self.result_text.config(state=tk.DISABLED)
 
     def update_status(self, status_text):
         """更新状态栏"""
@@ -635,16 +900,77 @@ class VLMTaskApp:
         """手动清除短期记忆"""
         if os.path.exists(self.memory_file):
             try:
-                os.remove(self.memory_file)
-                # 同时清空显示区域
-                self.chat_history.config(state='normal')
-                self.chat_history.delete(1.0, tk.END)
-                self.chat_history.config(state='disabled')
-                self.display_message( "短期记忆已手动清除")
+                # 保留工作流程定义，只清除执行历史
+                with open(WORKFLOW_PATH, 'r', encoding='utf-8') as f:
+                    workflow_content = f.read()
+                
+                # 重写memory文件，只保留工作流程定义
+                with open(self.memory_file, 'w', encoding='utf-8') as f:
+                    f.write("工作流程定义:\n")
+                    steps = [step.strip() for step in workflow_content.split('\n') if step.strip()]
+                    for i, step in enumerate(steps):
+                        f.write(f"任务{i+1}: {step} - 待完成\n")
+                    f.write("\n执行历史:\n")
+                
+                # 重置所有步骤为未完成
+                for i in range(len(self.workflow_state)):
+                    self.workflow_state[i] = (self.workflow_state[i][0], False)
+                
+                # 重置到第一页并更新显示
+                self.current_page_index = 0
+                self.update_task_display()
+                self.update_page_navigation()
+                
+                self.display_message("短期记忆已手动清除，所有任务重置为未完成")
             except Exception as e:
                 messagebox.showerror("错误", f"清除短期记忆失败: {str(e)}")
         else:
             self.display_message("短期记忆文件不存在")
+
+    def save_workflow_state(self):
+        """保存工作流程状态到记忆文件"""
+        try:
+            # 读取当前memory文件内容
+            current_content = ""
+            if os.path.exists(self.memory_file):
+                with open(self.memory_file, 'r', encoding='utf-8') as f:
+                    current_content = f.read()
+            
+            # 分离工作流程定义和执行历史
+            lines = current_content.split('\n')
+            workflow_lines = []
+            history_lines = []
+            in_history = False
+            
+            for line in lines:
+                if line == "执行历史:":
+                    in_history = True
+                    history_lines.append(line)
+                    continue
+                elif line.startswith("工作流程定义:"):
+                    workflow_lines.append(line)
+                    continue
+                elif line.startswith("任务") and " - " in line and not in_history:
+                    workflow_lines.append(line)
+                    continue
+                elif in_history:
+                    history_lines.append(line)
+                else:
+                    workflow_lines.append(line)
+            
+            # 更新工作流程状态
+            updated_workflow_lines = ["工作流程定义:"]
+            for i, (step, completed) in enumerate(self.workflow_state):
+                status = "已完成" if completed else "待完成"
+                updated_workflow_lines.append(f"任务{i+1}: {step} - {status}")
+            
+            # 合并内容并写回文件
+            with open(self.memory_file, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(updated_workflow_lines))
+                f.write('\n\n')
+                f.write('\n'.join(history_lines))
+        except Exception as e:
+            print(f"保存工作流程状态失败: {str(e)}")
 
 def main():
     root = tk.Tk()
