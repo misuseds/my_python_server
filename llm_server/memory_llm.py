@@ -27,7 +27,7 @@ def update_global_paths():
     exe_dir = get_exe_dir()
     
     # 从exe目录加载环境变量
-    dotenv_path = exe_dir / ".env"
+    dotenv_path = exe_dir /"my_python_server_private "/".env"
     load_dotenv(dotenv_path)
     
     workenv = os.getenv('workenv')
