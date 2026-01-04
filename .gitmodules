@@ -1,0 +1,3 @@
+[submodule "my_python_server_private"]
+	path = my_python_server_private
+	url = https://gitee.com/feudal_1/my_python_server_private.git

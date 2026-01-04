@@ -1,0 +1,133 @@
+{
+  "tools": [
+    {
+      "name": "open_browser",
+      "path": "browser_server/open_browser.py",
+      "description": "打开指定的网页浏览器",
+      "parameters": [
+        {
+          "name": "url",
+          "type": "string",
+          "description": "要打开的网页URL"
+        }
+      ],
+      "examples": [
+        "[TOOL:open_browser,https://www.example.com]",
+        "[TOOL:open_browser,https://github.com]"
+      ]
+    },
+    {
+      "name": "click_mouse",
+      "path": "keyboard_server/mousecontrol.py",
+      "description": "鼠标点击操作，可指定坐标位置",
+      "parameters": [
+        {
+          "name": "x",
+          "type": "number",
+          "description": "x坐标，如果为None则点击当前位置"
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "description": "y坐标，如果为None则点击当前位置"
+        },
+        {
+          "name": "click_type",
+          "type": "string",
+          "description": "点击类型，可选值：'left', 'right', 'middle'，默认为'left'"
+        },
+        {
+          "name": "clicks",
+          "type": "number",
+          "description": "点击次数，默认为1"
+        },
+        {
+          "name": "interval",
+          "type": "number",
+          "description": "点击间隔时间，默认为0.0"
+        }
+      ],
+      "examples": [
+        "[TOOL:click_mouse,100,200,left,1,0.0]",
+        "[TOOL:click_mouse,300,400,right,1,0.1]",
+        "[TOOL:click_mouse,None,None,left,2,0.2]"
+      ]
+    },
+    {
+      "name": "ocr_detect",
+      "path": "ocr/ocr.py",
+      "description": "查找指定文字的中心点坐标",
+      "parameters": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "要查找的文字内容"
+        }
+      ],
+      "examples": [
+        "[TOOL:ocr_detect,赞助模之屋]",
+        "[TOOL:ocr_detect,开始游戏]"
+      ]
+    },
+    {
+      "name": "detect_like_favorite",
+      "path": "yolo/detect_like_favorite.py",
+      "description": "检测屏幕上的点赞和收藏按钮，返回它们的位置坐标",
+      "parameters": [],
+      "examples": [
+        "[TOOL:detect_like_favorite]"
+      ]
+    },
+    {
+      "name": "scroll_mouse",
+      "path": "keyboard_server/mousecontrol.py",
+      "description": "鼠标滚轮滚动操作，必须指定坐标位置，正数向上滚动，负数向下滚动，鼠标滚动请不要移动到ai窗口上，要移动到网页窗口上x坐标应该大于1000",
+      "parameters": [
+        {
+          "name": "units",
+          "type": "number",
+          "description": "滚动单位，正数向上滚动，负数向下滚动"
+        },
+        {
+          "name": "x",
+          "type": "number",
+          "description": "x坐标，必须提供"
+        },
+        {
+          "name": "y",
+          "type": "number",
+          "description": "y坐标，必须提供"
+        }
+      ],
+    "examples": [
+        "[TOOL:scroll_mouse,-30,1500,466]",  
+        "[TOOL:scroll_mouse,-50,1500,466]",  
+        "[TOOL:scroll_mouse,-100,1500,466]"  
+      ]
+      },
+    {
+      "name": "press_key",
+      "path": "keyboard_server/mousecontrol.py",
+      "description": "按下键盘按键，支持单个键或组合键",
+      "parameters": [
+        {
+          "name": "key1",
+          "type": "string",
+          "description": "要按下的第一个键"
+        },
+        {
+          "name": "key2",
+          "type": "string",
+          "description": "要按下的第二个键（用于组合键）"
+        }
+      ],
+      "examples": [
+        "[TOOL:press_key,ctrl,j]",
+        "[TOOL:press_key,ctrl,c]",
+        "[TOOL:press_key,tab]",
+        "[TOOL:press_key,ctrl,shift,esc]"
+      ]
+    }
+   
+  ]
+}
