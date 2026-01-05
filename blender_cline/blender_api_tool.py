@@ -82,10 +82,18 @@ def activate_blender_window():
         print(f"激活Blender窗口时出错: {e}")
         return False
 
+def fix_model():
+    """执行 Fix Model 操作"""
+    code = '''
+import bpy
 
+# 执行 Fix Model 操作
+bpy.ops.cats_armature.fix()
+'''
+    return call_blender_api('/api/exec', code)
 def start_blender():
     """
-    启动Blender应用程序
+    在命令提示符中启动Blender
     """
     blender_path = r"D:\blender\blender.exe"
     
@@ -94,11 +102,10 @@ def start_blender():
         return False
     
     try:
-        # 在新进程中启动Blender
-        subprocess.Popen([blender_path])
-        print(f"Blender已启动: {blender_path}")
+        # 在新的命令提示符窗口中启动Blender
+        subprocess.Popen(['start', 'cmd', '/k', blender_path], shell=True)
+        print(f"Blender已在新终端中启动: {blender_path}")
         
-        # 等待一段时间让Blender加载
         import time
         time.sleep(5)
         return True
@@ -133,7 +140,22 @@ bpy.ops.object.delete()
 "所有物体已删除"
 '''
     return call_blender_api('/api/exec', code)
+def parent_object_to_armature():
+    """
+    将选中的对象设置为骨骼绑定父级
+    """
+    code = '''
+import bpy
 
+# 确保至少有一个对象被选中
+if bpy.context.selected_objects:
+    # 执行骨骼绑定父级操作
+    bpy.ops.object.parent_set(type='ARMATURE_NAME')
+    print("对象已设置为骨骼绑定父级")
+else:
+    print("错误: 请先选择要绑定的对象")
+'''
+    return call_blender_api('/api/exec', code)
 
 def set_blender_scale_settings():
     """
@@ -190,10 +212,11 @@ def scale_objects_to_match_height():
     """
     code = '''
 import bpy
-import mathutils
+
 
 
 def get_object_height_z(obj):
+    import mathutils
     """
     获取单个物体在Z轴方向的尺寸
     对于网格物体，使用边界框计算；对于其他类型物体，使用尺寸属性
@@ -219,6 +242,7 @@ def get_object_height_z(obj):
 
 
 def get_object_max_dimension(obj):
+    import mathutils
     """
     获取物体的最大尺寸（X、Y、Z轴中的最大值）
     """
@@ -353,6 +377,8 @@ def execute_tool(tool_name, *args):
         "activate_blender": activate_blender_window,
         "set_blender_scale": set_blender_scale_settings,
         "delete_objects_by_name": delete_objects_by_name,
+        "fix_model": fix_model,
+        "parent_object_to_armature": parent_object_to_armature,  # 新增这一行
     }
     
     if tool_name in tool_functions:
@@ -369,6 +395,7 @@ def execute_tool(tool_name, *args):
     else:
         print(f"错误: 未知的Blender工具 '{tool_name}'")
         return None
+
 def print_response_result(tool_name, response):
     """
     打印API响应结果

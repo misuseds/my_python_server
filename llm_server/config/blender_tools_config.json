@@ -80,6 +80,15 @@
       "examples": [
         "[TOOL:scale_objects_to_match_height]"
       ]
+    },
+    {
+      "name": "fix_model",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "执行 Fix Model 操作，修复模型的骨骼和网格问题",
+      "parameters": {},
+      "examples": [
+        "[TOOL:fix_model]"
+      ]
     }
   ]
 }
