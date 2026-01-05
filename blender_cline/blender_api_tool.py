@@ -205,7 +205,44 @@ print(f"已删除 {{deleted_count}} 个包含 '{name_pattern}' 的物体")
 '''
     return call_blender_api('/api/exec', code)
 
+def apply_armature_pose():
+    """
+    切换到姿态模式并应用选中的骨架
+    """
+    code = '''
+import bpy
 
+# 首先选择名称包含"ObjectName"的物体
+found_object = None
+for obj in bpy.context.scene.objects:
+    if "ObjectName" in obj.name:
+        found_object = obj
+        break
+
+if found_object is None:
+    print("错误: 没有找到名称包含'ObjectName'的物体")
+else:
+    # 确保没有其他物体被选中
+    bpy.ops.object.select_all(action='DESELECT')
+    
+    # 选择目标物体
+    bpy.context.view_layer.objects.active = found_object
+    found_object.select_set(True)
+    
+    print(f"已选择物体: {found_object.name}")
+    
+    # 切换到姿态模式
+    bpy.ops.object.posemode_toggle()
+    
+    # 应用选中的骨架
+    bpy.ops.pose.armature_apply(selected=True)
+    
+    print(f"已对物体 '{found_object.name}' 应用骨架姿态")
+    
+    # 切换回对象模式
+    bpy.ops.object.posemode_toggle()
+'''
+    return call_blender_api('/api/exec', code)
 def scale_objects_to_match_height():
     """
     将所有不包含"ObjectName"的物体缩放到与ObjectName物体相同的高度（三轴等比例缩放）
@@ -357,7 +394,32 @@ result = import_psk(psk, bpy.context, options)
         print("未选择有效的PSK文件")
         return {"status": "error", "message": "未选择有效的PSK文件"}
 
+def add_data_transfer_modifier():
+    """
+    添加数据传输修改器并配置顶点组权重传输
+    """
+    code = '''
+import bpy
+bpy.ops.object.shape_key_remove(all=True)
+# 添加数据传输修改器
+bpy.ops.object.modifier_add(type='DATA_TRANSFER')
 
+# 获取当前对象
+obj = bpy.context.object
+
+if obj and "DataTransfer" in obj.modifiers:
+    modifier = obj.modifiers["DataTransfer"]
+    
+    # 配置修改器属性
+    modifier.use_vert_data = True
+    modifier.vert_mapping = 'POLYINTERP_NEAREST'
+    modifier.data_types_verts = {'VGROUP_WEIGHTS'}
+    
+    print(f"数据传输修改器已添加并配置: {modifier.name}")
+else:
+    print("错误: 无法找到数据传输修改器")
+'''
+    return call_blender_api('/api/exec', code)
 def execute_tool(tool_name, *args):
     """
     根据工具名称执行对应的Blender操作
@@ -378,7 +440,8 @@ def execute_tool(tool_name, *args):
         "set_blender_scale": set_blender_scale_settings,
         "delete_objects_by_name": delete_objects_by_name,
         "fix_model": fix_model,
-        "parent_object_to_armature": parent_object_to_armature,  # 新增这一行
+        "parent_object_to_armature": parent_object_to_armature,
+        "apply_armature_pose": apply_armature_pose,  # 新增这一行
     }
     
     if tool_name in tool_functions:
@@ -386,7 +449,7 @@ def execute_tool(tool_name, *args):
             # 特殊处理：激活Blender窗口不需要API调用
             result = tool_functions[tool_name]()
             return {"status": "success", "result": result} if result else {"status": "error", "message": "Failed to activate Blender"}
-        elif tool_name == "delete_objects_by_name" and args:
+        elif tool_name in ["delete_objects_by_name"] and args:
             # 处理带参数的删除功能
             return tool_functions[tool_name](args[0])
         else:

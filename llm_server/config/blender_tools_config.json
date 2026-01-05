@@ -89,6 +89,48 @@
       "examples": [
         "[TOOL:fix_model]"
       ]
+    },
+    {
+      "name": "parent_object_to_armature",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "将选中的对象设置为骨骼绑定父级",
+      "parameters": {},
+      "examples": [
+        "[TOOL:parent_object_to_armature]"
+      ]
+    },
+    {
+  "name": "add_data_transfer_modifier",
+  "path": "blender_cline/blender_api_tool.py",
+  "description": "添加数据传输修改器并配置顶点组权重传输",
+  "parameters": {},
+  "examples": [
+    "[TOOL:add_data_transfer_modifier]"
+  ]
+},
+    {
+      "name": "apply_armature_modifier",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "为当前选中对象添加骨架修改器并应用，需要指定目标骨架对象名称",
+      "parameters": {
+        "target_armature_name": {
+          "type": "string",
+          "description": "目标骨架对象的名称，默认为ObjectName"
+        }
+      },
+      "examples": [
+        "[TOOL:apply_armature_modifier,ObjectName]",
+        "[TOOL:apply_armature_modifier,Armature]"
+      ]
+    },
+    {
+      "name": "apply_armature_pose",
+      "path": "blender_cline/blender_api_tool.py",
+      "description": "切换到姿态模式并应用选中的骨架，自动查找名称包含ObjectName的物体",
+      "parameters": {},
+      "examples": [
+        "[TOOL:apply_armature_pose]"
+      ]
     }
   ]
 }

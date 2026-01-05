@@ -5,6 +5,8 @@
 设置Blender场景的缩放比例
 导入PSK文件到Blender场景中
 将所有不包含'ObjectName'的物体缩放到与ObjectName物体相同的高度
+将选中的对象设置为骨骼绑定父级
+切换到姿态模式并应用选中的骨架，自动查找名称包含ObjectName的物体
+添加数据传输修改器并配置顶点组权重传输
 删除ObjectName物体
-
 打开E:\blender文件夹
