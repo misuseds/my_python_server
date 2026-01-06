@@ -1,196 +1,238 @@
 import unreal
-import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import socket
+import select
 import threading
+from queue import Queue
 import os
+import json
 
-class ExecHandler(BaseHTTPRequestHandler):
+def execute_unreal_command(code_string):
     """
-    HTTP请求处理器，用于处理exec方法的调用
+    执行传入的Python代码字符串
     """
-    
-    def _set_response(self, status_code=200, content_type='application/json'):
-        """设置响应头"""
-        self.send_response(status_code)
-        self.send_header('Content-type', content_type)
-        self.end_headers()
-
-    def do_POST(self):
-        """处理POST请求"""
-        if self.path == '/exec':
-            # 获取请求内容长度
-            content_length = int(self.headers['Content-Length'])
-            # 读取请求内容
-            post_data = self.rfile.read(content_length)
-            
-            try:
-                # 解析JSON数据
-                request_data = json.loads(post_data.decode('utf-8'))
-                
-                # 获取要执行的命令
-                command = request_data.get('command', '')
-                
-                if command:
-                    # 执行命令并捕获结果
-                    try:
-                        # 检查是否是需要在主线程执行的特定命令
-                        if self._needs_main_thread(command):
-                            # 使用unreal.run_on_ui_thread执行主线程操作
-                            result = self._execute_on_main_thread(command)
-                        else:
-                            # 使用普通exec执行命令
-                            exec_globals = {"unreal": unreal}
-                            exec(command, exec_globals)
-                            result = {"status": "success", "message": f"Command executed: {command}"}
-                    except Exception as e:
-                        result = {"status": "error", "message": f"Execution failed: {str(e)}"}
-                else:
-                    result = {"status": "error", "message": "No command provided"}
-                
-                # 发送响应
-                self._set_response(200)
-                self.wfile.write(json.dumps(result).encode('utf-8'))
-                
-            except json.JSONDecodeError:
-                self._set_response(400)
-                error_response = {"status": "error", "message": "Invalid JSON format"}
-                self.wfile.write(json.dumps(error_response).encode('utf-8'))
-        else:
-            self._set_response(404)
-            error_response = {"status": "error", "message": "Endpoint not found"}
-            self.wfile.write(json.dumps(error_response).encode('utf-8'))
-
-    def _needs_main_thread(self, command):
-        """检查命令是否需要在主线程执行"""
-        # 检查是否包含资源加载相关的API调用
-        main_thread_operations = [
-            'AssetImportTask',
-            'unreal.load_asset',
-            'unreal.find_asset',
-            'unreal.EditorAssetLibrary',
-            'unreal.EditorLevelLibrary',
-            'unreal.SystemLibrary',
-            'unreal.EditorUtilityLibrary',
-            'unreal.AssetRegistryHelpers'
-        ]
+    try:
+        # 添加调试输出，完整记录执行的代码
+       
+        unreal.log(f"执行的代码:\n{code_string}")
+        # 使用globals()和locals()提供当前环境的上下文
+        # exec执行代码并捕获输出
+        local_vars = {'unreal': unreal}
+        # 使用compile来预编译代码，可以更好地处理多行代码
+        compiled_code = compile(code_string, '<string>', 'exec')
         
-        return any(op in command for op in main_thread_operations)
+        exec(compiled_code, globals(), local_vars)
+        return "代码执行成功"
+    except SyntaxError as e:
+        error_msg = f"语法错误: {str(e)} (文件: {e.filename}, 行号: {e.lineno}, 文本: {e.text})"
+        unreal.log_error(error_msg)
+        return error_msg
+    except Exception as e:
+        error_msg = f"执行错误: {str(e)}"
+        unreal.log_error(error_msg)
+        return error_msg
 
-    def _execute_on_main_thread(self, command):
-        """在主线程上执行命令"""
-        try:
-            # 使用AssetTools进行导入，这是正确的API
-            exec_globals = {"unreal": unreal}
-            
-            # 对于资源导入任务，使用AssetTools
-            if 'AssetImportTask' in command:
-                return self._handle_asset_import_with_asset_tools(command)
-            else:
-                # 对于其他命令，尝试执行
-                exec(command, exec_globals)
-                return {"status": "success", "message": f"Command executed on main thread: {command}"}
-        except Exception as e:
-            return {"status": "error", "message": f"Main thread execution failed: {str(e)}"}
-
-    def _handle_asset_import_with_asset_tools(self, command):
-        """使用AssetTools处理资源导入"""
-        try:
-            exec_globals = {"unreal": unreal}
-            exec(command, exec_globals)
-            return {"status": "success", "message": f"Asset import command executed: {command}"}
-        except Exception as e:
-            return {"status": "error", "message": f"Asset import failed: {str(e)}"}
-
-    def do_GET(self):
-        """处理GET请求"""
-        if self.path == '/':
-            self._set_response(200, 'text/html')
-            response_html = """
-            <html>
-            <head><title>Unreal Engine Exec API</title></head>
-            <body>
-                <h1>Unreal Engine Exec API</h1>
-                <p>This service allows executing Python commands in Unreal Engine.</p>
-                <h2>API Endpoints:</h2>
-                <ul>
-                    <li>POST /exec - Execute Python commands</li>
-                    <li>Example: {"command": "unreal.EditorLevelLibrary.add_actor(unreal.StaticMeshActor, unreal.Vector(0, 0, 0))"}</li>
-                </ul>
-            </body>
-            </html>
-            """
-            self.wfile.write(response_html.encode('utf-8'))
-        else:
-            self._set_response(404)
-            error_response = {"status": "error", "message": "Endpoint not found"}
-            self.wfile.write(json.dumps(error_response).encode('utf-8'))
-
-class UnrealExecServer:
-    """
-    Unreal Engine Exec服务器类
-    """
-    
-    def __init__(self, host='localhost', port=8070):
-        self.host = host
-        self.port = port
-        self.server = None
-        self.server_thread = None
+class SimpleJsonServer:
+    def __init__(self):
+        self.socket = None
+        self.clients = []
+        self.should_stop = False
+        self.tick_handle = None
         
-    def start_server(self):
-        """启动服务器"""
+    def start_server(self, port=8070):
+        """启动基于Tick的简单JSON服务器"""
         try:
-            self.server = HTTPServer((self.host, self.port), ExecHandler)
-            self.server_thread = threading.Thread(target=self.server.serve_forever)
-            self.server_thread.daemon = True
-            self.server_thread.start()
-            unreal.log(f"Exec server started at http://{self.host}:{self.port}")
+            # 创建非阻塞socket
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.bind(('', port))
+            self.socket.listen(5)
+            self.socket.setblocking(False)  # 设置为非阻塞模式
+            
+            # 注册tick函数
+            self.tick_handle = unreal.register_slate_post_tick_callback(
+                self.process_requests
+            )
+            
+            unreal.log(f"基于Tick的简单JSON服务器启动在端口 {port}")
             return True
-        except Exception as e:
-            unreal.log_error(f"Failed to start server: {str(e)}")
-            return False
             
+        except Exception as e:
+            unreal.log_error(f"服务器启动失败: {str(e)}")
+            return False
+    
+    def process_requests(self, delta_time):
+        """在UE的tick中处理请求"""
+        if self.should_stop:
+            self.stop_server()
+            return
+            
+        try:
+            # 检查是否有新的连接或数据
+            ready, _, error = select.select([self.socket] + self.clients, [], self.clients, 0)
+            
+            # 处理错误的连接
+            for err_sock in error:
+                if err_sock in self.clients:
+                    self.clients.remove(err_sock)
+                    err_sock.close()
+            
+            for sock in ready:
+                if sock == self.socket:
+                    # 新连接
+                    try:
+                        client, addr = self.socket.accept()
+                        client.setblocking(False)  # 客户端也设为非阻塞
+                        self.clients.append(client)
+                        unreal.log(f"新连接来自: {addr}")
+                    except:
+                        pass  # 非阻塞accept可能失败
+                else:
+                    # 处理客户端数据
+                    try:
+                        # 尝试接收完整的JSON数据
+                        full_data = b""
+                        while True:
+                            try:
+                                chunk = sock.recv(4096)  # 增加接收缓冲区大小
+                                if not chunk:
+                                    break
+                                full_data += chunk
+                                # 如果数据块小于缓冲区大小，可能数据接收完毕
+                                if len(chunk) < 4096:
+                                    break
+                            except BlockingIOError:
+                                # 非阻塞socket没有数据可读，跳出循环
+                                break
+                            except ConnectionResetError:
+                                # 连接被重置
+                                if sock in self.clients:
+                                    self.clients.remove(sock)
+                                sock.close()
+                                raise
+                            except Exception as e:
+                                # 其他错误
+                                unreal.log_error(f"接收数据时出错: {str(e)}")
+                                if sock in self.clients:
+                                    self.clients.remove(sock)
+                                sock.close()
+                                raise
+                        
+                        # 如果接收到数据
+                        if full_data:
+                            data_str = full_data.decode('utf-8')
+                            self.handle_request(sock, data_str)
+                        else:
+                            # 客户端断开连接
+                            if sock in self.clients:
+                                self.clients.remove(sock)
+                            sock.close()
+                    except BlockingIOError:
+                        # 非阻塞socket没有数据可读
+                        pass
+                    except ConnectionResetError:
+                        # 连接被重置
+                        if sock in self.clients:
+                            self.clients.remove(sock)
+                        sock.close()
+                    except Exception as e:
+                        # 其他错误
+                        unreal.log_error(f"处理客户端数据时出错: {str(e)}")
+                        if sock in self.clients:
+                            self.clients.remove(sock)
+                        sock.close()
+                        
+        except Exception as e:
+            unreal.log_warning(f"处理请求时出错: {str(e)}")
+    
+    def handle_request(self, client_socket, data):
+        """处理请求并发送响应 - 纯JSON格式"""
+        try:
+            # 直接解析JSON数据，不处理HTTP头部
+            request_data = json.loads(data)
+            code_to_execute = request_data.get('code', '')
+            
+            if code_to_execute:
+                # 执行传入的代码
+                result = execute_unreal_command(code_to_execute)
+                # 直接返回结果，不使用HTTP响应格式
+                client_socket.send(result.encode('utf-8'))
+            else:
+                error_msg = "错误: 未提供要执行的代码"
+                client_socket.send(error_msg.encode('utf-8'))
+            
+        except json.JSONDecodeError as e:
+            error_msg = f"错误: 无效的JSON格式 - {str(e)}"
+            unreal.log_error(error_msg)
+            try:
+                client_socket.send(error_msg.encode('utf-8'))
+            except:
+                pass
+        except Exception as e:
+            error_msg = f"处理请求时发生未知错误: {str(e)}"
+            unreal.log_error(error_msg)
+            try:
+                client_socket.send(error_msg.encode('utf-8'))
+            except:
+                pass
+        finally:
+            # 关闭连接
+            if client_socket in self.clients:
+                self.clients.remove(client_socket)
+            try:
+                client_socket.close()
+            except:
+                pass
+    
     def stop_server(self):
         """停止服务器"""
-        if self.server:
-            self.server.shutdown()
-            self.server.server_close()
-            if self.server_thread:
-                self.server_thread.join()
-            unreal.log("Exec server stopped")
+        self.should_stop = True
+        
+        # 移除tick回调
+        if self.tick_handle:
+            unreal.unregister_slate_tick_callback(self.tick_handle)
+            self.tick_handle = None
+        
+        # 关闭所有连接
+        for client in self.clients:
+            try:
+                client.close()
+            except:
+                pass
+        self.clients.clear()
+        
+        # 关闭服务器socket
+        if self.socket:
+            try:
+                self.socket.close()
+            except:
+                pass
+            self.socket = None
+        
+        unreal.log("简单JSON服务器已停止")
 
-# 全局服务器实例
-exec_server = None
+def start_simple_json_server():
+    """启动简单JSON服务器"""
+    server = SimpleJsonServer()
+    if server.start_server(8070):
+        # 保存服务器实例以便后续控制
+        if not hasattr(start_simple_json_server, 'server_instance'):
+            start_simple_json_server.server_instance = server
+        return server
+    return None
 
-def start_exec_server():
-    """启动exec服务器的函数"""
-    global exec_server
-    if exec_server is None:
-        exec_server = UnrealExecServer(host='localhost', port=8070)
-        success = exec_server.start_server()
-        if success:
-            unreal.log("Unreal Exec API server initialized successfully")
-        else:
-            unreal.log_error("Failed to initialize Unreal Exec API server")
-    else:
-        unreal.log("Exec server is already running")
+def stop_simple_json_server():
+    """停止简单JSON服务器"""
+    if hasattr(start_simple_json_server, 'server_instance'):
+        start_simple_json_server.server_instance.stop_server()
+        start_simple_json_server.server_instance = None
+        return True
+    return False
 
-def stop_exec_server():
-    """停止exec服务器的函数"""
-    global exec_server
-    if exec_server:
-        exec_server.stop_server()
-        exec_server = None
-
-# 启动服务器
+# 使用示例
 if __name__ == "__main__":
-    unreal.log("Starting Unreal Engine Exec API server...")
-    start_exec_server()
-else:
-    # 当脚本在Unreal中执行时
-    unreal.log("Hello UE5 - Exec API Server")
-    start_exec_server()
-
-# 注册关闭回调以确保服务器被正确关闭
-def on_shutdown():
-    """关闭时清理资源"""
-    stop_exec_server()
+    # 启动简单JSON服务器
+    server = start_simple_json_server()
+    if server:
+        unreal.log("简单JSON服务器已启动")
+    else:
+        unreal.log_error("服务器启动失败")
