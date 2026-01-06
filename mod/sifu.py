@@ -4,14 +4,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-def main():
+def build_sifu_mod():
+    """
+    执行Sifu MOD构建流程
+    """
     print("=" * 32)
     print("    开始执行 MOD 构建流程")
     print("=" * 32)
     print()
 
     # ================ 第一步：删除 Characters 中的 _Shared 和 Skeleton ================
-    char_dir = Path(r"E:\blender\ue4\new\Saved\Cooked\WindowsNoEditor\new\Content\Characters")
+    char_dir = Path(r"E:\blender\ue4\character\Saved\Cooked\WindowsNoEditor\new\Content\Characters")
 
     if (char_dir / "_Shared").exists():
         shutil.rmtree(char_dir / "_Shared")
@@ -114,12 +117,16 @@ def main():
         print("请检查路径是否正确。")
         input("按任意键退出...")
         sys.exit(1)
+        
 
     print()
     print("=" * 32)
     print("✅ 所有操作已完成！游戏已启动。")
     print("=" * 32)
     print()
+    
+    return {"status": "success", "result": "MOD build completed and game launched"}
+
 
 if __name__ == "__main__":
-    main()
+    build_sifu_mod()

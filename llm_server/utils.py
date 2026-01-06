@@ -85,7 +85,7 @@ def execute_python_script(script_path, *args):
     
     print ("脚本路径:",script_full_path)
     if not script_full_path.exists():
-        return f"错误: 脚本 '{script_path}' 不存在"
+        return f"错误: 脚本 '{script_full_path}' 不存在，current_dir：{current_dir}"
     
     if script_full_path.suffix != '.py':
         return f"错误: 文件必须是Python脚本 (.py文件)"
