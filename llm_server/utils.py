@@ -689,7 +689,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
                 system_prompt_parts.append(f"重要知识:\n{knowledge_content}")
 
     iteration_count = 0
-    max_iterations = 5
+    max_iterations = 50
     screenshot_history = []  # 新增：保存截图历史
     
     while iteration_count < max_iterations:

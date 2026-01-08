@@ -1,3 +1,4 @@
+
 # e:\code\my_python_server\sifu_control\control_api_tool.py
 # e:\code\my_python_server\movement_controller.py
 import time
@@ -11,8 +12,7 @@ class MovementController:
     """
     
     def __init__(self):
-        self.position = [0, 0]  # 当前位置 (x, y)
-        self.direction = 0      # 当前方向 (角度，0度为正右方向)
+        pass  # 不再跟踪位置和方向
         
     def move_forward(self, distance=1):
         """
@@ -24,8 +24,8 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('w')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"向前移动 {distance} 单位，位置: {self.position}"
+        print("移动完成")
+        return f"向前移动 {distance} 单位"
         
     def move_backward(self, distance=1):
         """
@@ -37,8 +37,8 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('s')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"向后移动 {distance} 单位，位置: {self.position}"
+        print("移动完成")
+        return f"向后移动 {distance} 单位"
         
     def turn_left(self, angle=90):
         """
@@ -48,9 +48,8 @@ class MovementController:
         print(f"左转 {angle} 度")
         # 通过鼠标移动来实现视角转动
         self._move_mouse_relative(-angle, 0)
-        self.direction = (self.direction + angle) % 360
-        print(f"当前方向: {self.direction}°")
-        return f"左转 {angle} 度，当前方向: {self.direction}°"
+        print("转动完成")
+        return f"左转 {angle} 度"
         
     def turn_right(self, angle=90):
         """
@@ -60,9 +59,8 @@ class MovementController:
         print(f"右转 {angle} 度")
         # 通过鼠标移动来实现视角转动
         self._move_mouse_relative(angle, 0)
-        self.direction = (self.direction - angle) % 360
-        print(f"当前方向: {self.direction}°")
-        return f"右转 {angle} 度，当前方向: {self.direction}°"
+        print("转动完成")
+        return f"右转 {angle} 度"
         
     def strafe_left(self, distance=1):
         """
@@ -74,8 +72,8 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('a')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"左平移 {distance} 单位，位置: {self.position}"
+        print("平移完成")
+        return f"左平移 {distance} 单位"
         
     def strafe_right(self, distance=1):
         """
@@ -87,8 +85,8 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('d')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"右平移 {distance} 单位，位置: {self.position}"
+        print("平移完成")
+        return f"右平移 {distance} 单位"
         
     def move_sequence(self, commands):
         """
@@ -111,21 +109,21 @@ class MovementController:
             elif action.lower() == "turn_right":
                 self.turn_right(value)
             time.sleep(0.5)  # 短暂延迟，模拟移动时间
-        return f"移动序列执行完成，最终位置: {self.position}，最终方向: {self.direction}°"
+        return f"移动序列执行完成"
             
     def get_position(self):
         """
         获取当前位置
         :return: 当前位置 [x, y]
         """
-        return self.position
+        return "位置追踪已禁用"
         
     def get_direction(self):
         """
         获取当前方向
         :return: 当前方向 (角度)
         """
-        return self.direction
+        return "方向追踪已禁用"
 
     def _press_key(self, key):
         """
@@ -275,42 +273,53 @@ def send_key_event(key, duration=0.1):
             return f"使用Windows API发送按键事件时出错: {str(e)}"
 
 
-def send_mouse_move_relative(x_offset, y_offset):
+def send_mouse_move_relative(x_offset, y_offset, use_raw_input=False):
     """
     使用更底层的API相对移动鼠标，适用于游戏视角控制
     """
+    # 首先尝试使用pydirectinput，这是最适合游戏的
+    try:
+        import pydirectinput
+        pydirectinput.moveRel(int(x_offset), int(y_offset), relative=True)
+        print(f"使用pydirectinput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
+        return f"使用pydirectinput相对移动鼠标: ({x_offset}, {y_offset}) 成功"
+    except ImportError:
+        print("pydirectinput库未安装，尝试其他方法。请运行: pip install pydirectinput")
+        pass  # 继续尝试其他方法
+
     try:
         # 尝试使用pynput库
         from pynput.mouse import Controller
         import time
 
         mouse = Controller()
-        current_pos = mouse.position
-        mouse.move(x_offset, y_offset)
+        mouse.move(int(x_offset), int(y_offset))
         print(f"使用pynput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
         return f"使用pynput相对移动鼠标: ({x_offset}, {y_offset}) 成功"
     except ImportError:
         print("pynput库未安装，尝试安装: pip install pynput")
-        try:
-            # 使用ctypes直接调用Windows API
-            import ctypes
+        pass  # 继续尝试其他方法
 
-            user32 = ctypes.WinDLL('user32', use_last_error=True)
+    try:
+        # 如果pynput不可用，使用ctypes直接调用Windows API
+        import ctypes
+        from ctypes import wintypes
 
-            # 使用MOUSEEVENTF_MOVE标志进行相对移动
-            MOUSEEVENTF_MOVE = 0x0001
-            MOUSEEVENTF_ABSOLUTE = 0x8000
+        user32 = ctypes.WinDLL('user32', use_last_error=True)
 
-            success = user32.mouse_event(MOUSEEVENTF_MOVE, x_offset, y_offset, 0, 0)
-            if success:
-                print(f"使用Windows API相对移动鼠标: ({x_offset}, {y_offset}) 成功")
-                return f"使用Windows API相对移动鼠标: ({x_offset}, {y_offset}) 成功"
-            else:
-                print(f"使用Windows API移动鼠标失败: {ctypes.FormatError(ctypes.get_last_error())}")
-                return f"使用Windows API移动鼠标失败: {ctypes.FormatError(ctypes.get_last_error())}"
-        except Exception as e:
-            print(f"使用Windows API移动鼠标时出错: {str(e)}")
-            return f"使用Windows API移动鼠标时出错: {str(e)}"
+        # 使用MOUSEEVENTF_MOVE标志进行相对移动
+        MOUSEEVENTF_MOVE = 0x0001
+
+        success = user32.mouse_event(MOUSEEVENTF_MOVE, int(x_offset), int(y_offset), 0, 0)
+        if success:
+            print(f"使用Windows API相对移动鼠标: ({x_offset}, {y_offset}) 成功")
+            return f"使用Windows API相对移动鼠标: ({x_offset}, {y_offset}) 成功"
+        else:
+            print(f"使用Windows API移动鼠标失败: {ctypes.FormatError(ctypes.get_last_error())}")
+            return f"使用Windows API移动鼠标失败: {ctypes.FormatError(ctypes.get_last_error())}"
+    except Exception as e:
+        print(f"使用Windows API移动鼠标时出错: {str(e)}")
+        return f"使用Windows API移动鼠标时出错: {str(e)}"
 
 
 class ImprovedMovementController:
@@ -319,8 +328,7 @@ class ImprovedMovementController:
     """
     
     def __init__(self):
-        self.position = [0, 0]  # 当前位置 (x, y)
-        self.direction = 0      # 当前方向 (角度，0度为正右方向)
+        pass  # 不再跟踪位置和方向
         
     def move_forward(self, distance=1):
         """
@@ -335,8 +343,8 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('w')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"向前移动 {distance} 单位，位置: {self.position}"
+        print("移动完成")
+        return f"向前移动 {distance} 单位"
         
     def move_backward(self, distance=1):
         """
@@ -351,8 +359,8 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('s')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"向后移动 {distance} 单位，位置: {self.position}"
+        print("移动完成")
+        return f"向后移动 {distance} 单位"
         
     def turn_left(self, angle=90):
         """
@@ -361,13 +369,12 @@ class ImprovedMovementController:
         """
         print(f"左转 {angle} 度")
         # 通过相对鼠标移动来实现视角转动
-        success = send_mouse_move_relative(-angle, 0)
+        success = send_mouse_move_relative(-int(angle), 0)
         if not success.startswith("使用"):
             print("鼠标移动失败，使用原始方法")
             result = self._move_mouse_relative(-angle, 0)
-        self.direction = (self.direction + angle) % 360
-        print(f"当前方向: {self.direction}°")
-        return f"左转 {angle} 度，当前方向: {self.direction}°"
+        print("转动完成")
+        return f"左转 {angle} 度"
         
     def turn_right(self, angle=90):
         """
@@ -376,13 +383,12 @@ class ImprovedMovementController:
         """
         print(f"右转 {angle} 度")
         # 通过相对鼠标移动来实现视角转动
-        success = send_mouse_move_relative(angle, 0)
+        success = send_mouse_move_relative(int(angle), 0)
         if not success.startswith("使用"):
             print("鼠标移动失败，使用原始方法")
             result = self._move_mouse_relative(angle, 0)
-        self.direction = (self.direction - angle) % 360
-        print(f"当前方向: {self.direction}°")
-        return f"右转 {angle} 度，当前方向: {self.direction}°"
+        print("转动完成")
+        return f"右转 {angle} 度"
         
     def strafe_left(self, distance=1):
         """
@@ -397,8 +403,8 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('a')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"左平移 {distance} 单位，位置: {self.position}"
+        print("平移完成")
+        return f"左平移 {distance} 单位"
         
     def strafe_right(self, distance=1):
         """
@@ -413,8 +419,8 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('d')
             time.sleep(0.1)
-        print(f"当前位置: {self.position}, 方向: {self.direction}°")
-        return f"右平移 {distance} 单位，位置: {self.position}"
+        print("平移完成")
+        return f"右平移 {distance} 单位"
         
     def move_sequence(self, commands):
         """
@@ -437,21 +443,21 @@ class ImprovedMovementController:
             elif action.lower() == "turn_right":
                 self.turn_right(value)
             time.sleep(0.5)  # 短暂延迟，模拟移动时间
-        return f"移动序列执行完成，最终位置: {self.position}，最终方向: {self.direction}°"
+        return f"移动序列执行完成"
             
     def get_position(self):
         """
         获取当前位置
         :return: 当前位置 [x, y]
         """
-        return self.position
+        return "位置追踪已禁用"
         
     def get_direction(self):
         """
         获取当前方向
         :return: 当前方向 (角度)
         """
-        return self.direction
+        return "方向追踪已禁用"
 
     def _press_key(self, key):
         """
