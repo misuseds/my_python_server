@@ -15,7 +15,7 @@ def main():
     python_executable = r"e:\code\my_python_server\micromambavenv\python.exe"
     
     # 脚本路径
-    script_path = r"E:\code\my_python_server\llm_server\memory_llm.py"
+    script_path = r"E:\code\my_python_server\llm_server\vlmwindow.py"
     
     try:
         # 执行Python脚本

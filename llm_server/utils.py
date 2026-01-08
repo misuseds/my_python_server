@@ -75,6 +75,26 @@ def load_default_environment():
     return "web"
 
 
+def load_workenvs():
+    """从配置文件加载工作环境列表"""
+    config_file = CURRENT_DIR / "config" / "default_env.json"
+    
+    try:
+        if config_file.exists():
+            with open(config_file, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                envs = config_data.get("workenvs", ["web", "blender", "ue"])
+                print(f"从配置文件加载工作环境列表: {envs}")
+                return envs
+    except Exception as e:
+        print(f"加载工作环境列表配置失败: {e}")
+    
+    print("使用默认工作环境列表: ['web', 'blender', 'ue']")
+    return ["web", "blender", "ue"]
+
+
+
+
 def execute_python_script(script_path, *args):
     """
     执行指定路径的Python脚本
@@ -806,7 +826,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
 
 # 定义全局变量
 CURRENT_DIR = Path(__file__).parent
-workenvs = ["web", "blender","ue"]
+workenvs =load_workenvs()
 workenv = load_default_environment()  # 从配置文件加载默认环境
 
 # 初始化路径

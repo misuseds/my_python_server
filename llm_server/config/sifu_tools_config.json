@@ -1,0 +1,127 @@
+{
+  "tools": [
+    {
+      "name": "move_forward",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "向前移动指定距离",
+      "parameters": {
+        "distance": {
+          "type": "number",
+          "description": "移动距离，默认为1"
+        }
+      },
+      "examples": [
+        "[TOOL:move_forward,1]",
+        "[TOOL:move_forward,2.5]"
+      ]
+    },
+    {
+      "name": "move_backward",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "向后移动指定距离",
+      "parameters": {
+        "distance": {
+          "type": "number",
+          "description": "移动距离，默认为1"
+        }
+      },
+      "examples": [
+        "[TOOL:move_backward,1]",
+        "[TOOL:move_backward,2.5]"
+      ]
+    },
+    {
+      "name": "turn_left",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "向左转指定角度",
+      "parameters": {
+        "angle": {
+          "type": "number",
+          "description": "转动角度，默认为90度"
+        }
+      },
+      "examples": [
+        "[TOOL:turn_left,90]",
+        "[TOOL:turn_left,45]"
+      ]
+    },
+    {
+      "name": "turn_right",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "向右转指定角度",
+      "parameters": {
+        "angle": {
+          "type": "number",
+          "description": "转动角度，默认为90度"
+        }
+      },
+      "examples": [
+        "[TOOL:turn_right,90]",
+        "[TOOL:turn_right,45]"
+      ]
+    },
+    {
+      "name": "strafe_left",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "向左平移指定距离",
+      "parameters": {
+        "distance": {
+          "type": "number",
+          "description": "平移距离，默认为1"
+        }
+      },
+      "examples": [
+        "[TOOL:strafe_left,1]",
+        "[TOOL:strafe_left,2.5]"
+      ]
+    },
+    {
+      "name": "strafe_right",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "向右平移指定距离",
+      "parameters": {
+        "distance": {
+          "type": "number",
+          "description": "平移距离，默认为1"
+        }
+      },
+      "examples": [
+        "[TOOL:strafe_right,1]",
+        "[TOOL:strafe_right,2.5]"
+      ]
+    },
+    {
+      "name": "move_sequence",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "执行一系列移动命令",
+      "parameters": {
+        "commands": {
+          "type": "string",
+          "description": "移动命令序列，格式为'forward,2;right,90;forward,1'"
+        }
+      },
+      "examples": [
+        "[TOOL:move_sequence,forward,2;right,90;forward,1]",
+        "[TOOL:move_sequence,left,45;forward,3]"
+      ]
+    },
+    {
+      "name": "get_position",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "获取当前位置",
+      "parameters": {},
+      "examples": [
+        "[TOOL:get_position]"
+      ]
+    },
+    {
+      "name": "get_direction",
+      "path": "sifu_control/control_api_tool.py",
+      "description": "获取当前方向",
+      "parameters": {},
+      "examples": [
+        "[TOOL:get_direction]"
+      ]
+    }
+  ]
+}
