@@ -452,6 +452,24 @@ else:
     print("错误: 无法找到数据传输修改器")
 '''
     return call_blender_api('/api/exec', code)
+
+def print_response_result(tool_name, response):
+    """
+    打印API响应结果
+    
+    Args:
+        tool_name (str): 工具名称
+        response (dict): API响应
+    """
+    if response:
+        if response['status'] == 'success':
+            print(f"{tool_name} 执行成功!")
+            print(f"返回结果: {response['result']}")
+        else:
+            print(f"{tool_name} 执行失败: {response['message']}")
+    else:
+        print("无法连接到Blender服务器")
+
 def execute_tool(tool_name, *args):
     """
     根据工具名称执行对应的Blender操作
@@ -494,22 +512,6 @@ def execute_tool(tool_name, *args):
         print(f"错误: 未知的Blender工具 '{tool_name}'")
         return None
 
-def print_response_result(tool_name, response):
-    """
-    打印API响应结果
-    
-    Args:
-        tool_name (str): 工具名称
-        response (dict): API响应
-    """
-    if response:
-        if response['status'] == 'success':
-            print(f"{tool_name} 执行成功!")
-            print(f"返回结果: {response['result']}")
-        else:
-            print(f"{tool_name} 执行失败: {response['message']}")
-    else:
-        print("无法连接到Blender服务器")
 
 
 def main():

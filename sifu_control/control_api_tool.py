@@ -1,6 +1,4 @@
 
-# e:\code\my_python_server\sifu_control\control_api_tool.py
-# e:\code\my_python_server\movement_controller.py
 import time
 import math
 import subprocess
@@ -531,80 +529,3 @@ class ImprovedMovementController:
             return f"执行鼠标移动操作时出错: {str(e)}"
 
 
-def execute_tool(tool_name, *args):
-    """
-    根据工具名称执行对应的Sifu控制操作
-
-    Args:
-        tool_name (str): 工具名称
-        *args: 工具参数
-
-    Returns:
-        dict: API响应结果
-    """
-    # 创建控制器实例
-    controller = ImprovedMovementController()
-    
-    # 工具函数映射
-    tool_functions = {
-        "move_forward": controller.move_forward,
-        "move_backward": controller.move_backward,
-        "turn_left": controller.turn_left,
-        "turn_right": controller.turn_right,
-        "strafe_left": controller.strafe_left,
-        "strafe_right": controller.strafe_right,
-        "get_position": controller.get_position,
-        "get_direction": controller.get_direction,
-    }
-
-    if tool_name in tool_functions:
-        # 根据参数数量调用对应函数
-        func = tool_functions[tool_name]
-        try:
-            # 如果是获取位置或方向的函数，不需要参数
-            if tool_name in ["get_position", "get_direction"]:
-                result = func()
-            else:
-                # 尝试将参数转换为适当类型
-                converted_args = []
-                for arg in args:
-                    try:
-                        # 尝试转换为数字
-                        if '.' in str(arg):
-                            converted_args.append(float(arg))
-                        else:
-                            converted_args.append(int(arg))
-                    except ValueError:
-                        # 如果转换失败，使用原值
-                        converted_args.append(arg)
-                
-                result = func(*converted_args)
-            return str(result)
-        except Exception as e:
-            error_msg = f"执行工具 {tool_name} 时出错: {str(e)}"
-            print(error_msg)
-            return error_msg
-    else:
-        error_msg = f"未知的Sifu工具: {tool_name}"
-        print(error_msg)
-        return error_msg
-
-
-def main():
-    """
-    主函数，用于测试目的
-    """
-    if len(sys.argv) < 2:
-        print("使用方法: python control_api_tool.py <tool_name> [args...]")
-        print("例如: python control_api_tool.py move_forward 2")
-        return
-
-    tool_name = sys.argv[1]
-    args = sys.argv[2:]
-    
-    result = execute_tool(tool_name, *args)
-    print(result)
-
-
-if __name__ == "__main__":
-    main()
