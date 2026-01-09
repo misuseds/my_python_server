@@ -60,7 +60,7 @@ class TargetSearchEnvironment:
         self.controller = ImprovedMovementController()
         self.target_description = target_description
         self.step_count = 0
-        self.max_steps = 50
+        self.max_steps = 20
         self.last_detection_result = None
         self.last_center_distance = float('inf')
         self.logger = logging.getLogger(__name__)
@@ -434,6 +434,7 @@ def train_gate_search_agent(episodes=200, model_path="gate_search_dqn_model.pth"
             
             if done:
                 logger.info(f"Episode: {episode}, Score: {step_count}, Total Reward: {total_reward:.2f}, Epsilon: {agent.epsilon:.2f}")
+                print(f"Episode: {episode+1}/{episodes}, Score: {step_count}, Total Reward: {total_reward:.2f}, Epsilon: {agent.epsilon:.2f}")
                 scores.append(step_count)
                 total_rewards.append(total_reward)
                 break
@@ -458,7 +459,6 @@ def train_gate_search_agent(episodes=200, model_path="gate_search_dqn_model.pth"
     logger.info(f"模型已保存为 {model_path}")
     
     return agent
-
 
 def evaluate_trained_agent(episodes=10, model_path="gate_search_dqn_model.pth", target_description="gate"):
     """

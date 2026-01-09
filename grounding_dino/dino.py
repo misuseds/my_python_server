@@ -4,12 +4,33 @@ import requests
 import torch
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+import os
 from modelscope import AutoProcessor, AutoModelForZeroShotObjectDetection 
 
 # 全局变量用于缓存模型和处理器
 _cached_model = None
 _cached_processor = None
 _model_id = "IDEA-Research/grounding-dino-tiny"
+
+def get_local_model_path():
+    """
+    获取本地模型缓存路径
+    """
+    # 检查默认的模型缓存位置
+    cache_dirs = [
+        os.path.expanduser("~/.cache/modelscope/hub/models/IDEA-Research/grounding-dino-tiny"),
+        os.path.join(os.environ.get("USERPROFILE", ""), ".cache", "modelscope", "hub", "models", "IDEA-Research", "grounding-dino-tiny"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "modelscope", "hub", "models", "IDEA-Research", "grounding-dino-tiny"),
+        # 用户特定的缓存路径，根据您提到的位置添加
+        "C:\\Users\\njsgcs\\.cache\\modelscope\\hub\\models\\IDEA-Research\\grounding-dino-tiny"
+    ]
+    
+    for cache_dir in cache_dirs:
+        if cache_dir and os.path.exists(cache_dir):
+            return cache_dir
+    
+    # 如果以上路径都不存在，返回None
+    return None
 
 def get_model_and_processor():
     """
@@ -18,11 +39,21 @@ def get_model_and_processor():
     global _cached_model, _cached_processor, _model_id
     
     if _cached_model is None or _cached_processor is None:
-        print(f"正在加载模型 {_model_id}...")
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        _cached_processor = AutoProcessor.from_pretrained(_model_id)
-        _cached_model = AutoModelForZeroShotObjectDetection.from_pretrained(_model_id).to(device)
-        print("模型加载完成！")
+        # 检查模型是否已在本地缓存
+        local_cache_path = get_local_model_path()
+        if local_cache_path and os.path.exists(local_cache_path):
+            print(f"正在从本地缓存加载模型: {local_cache_path}")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            _cached_processor = AutoProcessor.from_pretrained(local_cache_path)
+            _cached_model = AutoModelForZeroShotObjectDetection.from_pretrained(local_cache_path).to(device)
+            print("模型加载完成！")
+        else:
+            print(f"正在加载模型 {_model_id}...")
+            print(f"Downloading Model from https://www.modelscope.cn to directory: {os.path.expanduser('~/.cache/modelscope/hub/models/IDEA-Research/grounding-dino-tiny')}")
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            _cached_processor = AutoProcessor.from_pretrained(_model_id)
+            _cached_model = AutoModelForZeroShotObjectDetection.from_pretrained(_model_id).to(device)
+            print("模型加载完成！")
     else:
         print("使用已缓存的模型")
     
