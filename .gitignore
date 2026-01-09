@@ -11,7 +11,7 @@ dxf_output/*
 *calculated_result.json
 *cad_parsed_result
 工作日志/*
-logs/**
+*logs*
 cache
 *pdf_output/*
 pdf_output/*
@@ -27,3 +27,4 @@ exe_output/*
 *build*
 *dist*
 my_python_server_private*
+*map_export*

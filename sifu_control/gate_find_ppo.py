@@ -18,15 +18,18 @@ from PIL import Image
 import base64
 from collections import deque
 import logging
+import matplotlib.pyplot as plt
+from datetime import datetime
 
 # 添加当前目录到Python路径，确保能正确导入同目录下的模块
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # 导入现有的移动控制器
-from sifu_control.control_api_tool import ImprovedMovementController
+from control_api_tool import ImprovedMovementController
 
 # 添加项目根目录到路径，以便导入其他模块
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 
 # 导入现有的目标检测功能
 from grounding_dino.dino import detect_objects_with_text_transformers
@@ -53,6 +56,117 @@ def setup_logging():
     return logging.getLogger(__name__)
 
 
+class OccupancyMap:
+    """
+    占用地图类，用于记录已探索区域
+    """
+    def __init__(self, map_size=100, resolution=1.0):
+        """
+        初始化占用地图
+        :param map_size: 地图大小 (单位: 格子)
+        :param resolution: 每个格子代表的实际距离
+        """
+        self.map_size = map_size
+        self.resolution = resolution
+        # 地图初始化: -1-未知, 0-自由, 1-占用
+        self.occupancy_map = np.full((map_size, map_size), -1, dtype=np.int8)
+        # 探索地图: 0-未探索, 1-已探索
+        self.explored_map = np.zeros((map_size, map_size), dtype=np.int8)
+        # 当前位置在地图中的坐标
+        self.current_pos = np.array([map_size // 2, map_size // 2], dtype=np.int32)  # 初始在地图中心
+        self.logger = logging.getLogger(__name__)
+        
+    def update_position(self, new_pos):
+        """
+        更新当前位置
+        :param new_pos: 新位置 [x, y]
+        """
+        self.current_pos = new_pos
+        
+    def mark_explored_around(self, radius=5):
+        """
+        标记当前位置周围区域为已探索
+        :param radius: 探索半径
+        """
+        x, y = self.current_pos
+        x_min = max(0, x - radius)
+        x_max = min(self.map_size, x + radius + 1)
+        y_min = max(0, y - radius)
+        y_max = min(self.map_size, y + radius + 1)
+        
+        self.explored_map[x_min:x_max, y_min:y_max] = 1
+        
+    def get_newly_explored_ratio(self, prev_explored_cells, radius=5):
+        """
+        计算新探索区域的比例
+        :param prev_explored_cells: 之前已探索的格子数量
+        :param radius: 探索半径
+        :return: 新探索区域的比例
+        """
+        x, y = self.current_pos
+        x_min = max(0, x - radius)
+        x_max = min(self.map_size, x + radius + 1)
+        y_min = max(0, y - radius)
+        y_max = min(self.map_size, y + radius + 1)
+        
+        current_explored_cells = np.sum(self.explored_map[x_min:x_max, y_min:y_max])
+        new_explored_cells = current_explored_cells - prev_explored_cells
+        
+        return new_explored_cells / ((x_max - x_min) * (y_max - y_min)) if (x_max - x_min) * (y_max - y_min) > 0 else 0.0
+    
+    def export_map_image(self, filepath=None):
+        """
+        导出占用地图为图片
+        :param filepath: 保存路径，如果不提供则自动生成
+        """
+        if filepath is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = f"./map_export/map_{timestamp}.png"
+        
+        # 确保目录存在
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # 创建地图的可视化表示
+        # -1 (未知) -> 白色 (255, 255, 255)
+        # 0 (自由) -> 浅灰色 (200, 200, 200)
+        # 1 (占用) -> 黑色 (0, 0, 0)
+        # 已探索但未知 -> 深灰色 (150, 150, 150)
+        vis_map = np.zeros((self.map_size, self.map_size, 3), dtype=np.uint8)
+        
+        # 根据占用情况设置颜色
+        vis_map[self.occupancy_map == -1] = [255, 255, 255]  # 未知区域白色
+        vis_map[self.occupancy_map == 0] = [200, 200, 200]   # 自由区域浅灰
+        vis_map[self.occupancy_map == 1] = [0, 0, 0]         # 占用区域黑色
+        
+        # 已探索但未知的区域设置为深灰色
+        unexplored_known = (self.occupancy_map == -1) & (self.explored_map == 1)
+        vis_map[unexplored_known] = [150, 150, 150]
+        
+        # 标记当前位置
+        pos_x, pos_y = self.current_pos
+        if 0 <= pos_x < self.map_size and 0 <= pos_y < self.map_size:
+            # 用红色标记当前位置
+            vis_map[pos_x, pos_y] = [255, 0, 0]
+            # 增加标记范围使更明显
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    nx, ny = pos_x + dx, pos_y + dy
+                    if 0 <= nx < self.map_size and 0 <= ny < self.map_size:
+                        if abs(dx) + abs(dy) <= 1:  # 只标记邻近点，不包括对角
+                            vis_map[nx, ny] = [255, 0, 0]
+        
+        # 保存图片
+        plt.figure(figsize=(10, 10))
+        plt.imshow(vis_map)
+        plt.title("Occupancy Map - Red: Current Position, Black: Obstacles, Gray: Free Space, White: Unknown")
+        plt.axis('off')
+        plt.savefig(filepath, bbox_inches='tight', dpi=150)
+        plt.close()
+        
+        self.logger.info(f"地图已导出到: {filepath}")
+        return filepath
+
+
 class TargetSearchEnvironment:
     """
     目标搜索环境
@@ -61,7 +175,7 @@ class TargetSearchEnvironment:
         self.controller = ImprovedMovementController()
         self.target_description = target_description
         self.step_count = 0
-        self.max_steps = 50  # 增加最大步数，给更多探索机会
+        self.max_steps = 20  # 增加最大步数，给更多探索机会
         self.last_detection_result = None
         self.last_center_distance = float('inf')
         self.logger = logging.getLogger(__name__)
@@ -69,6 +183,10 @@ class TargetSearchEnvironment:
         # 记录探索历史，帮助判断是否在原地打转
         self.position_history = []
         self.max_history_length = 10
+        
+        # 初始化占用地图
+        self.occupancy_map = OccupancyMap(map_size=100, resolution=1.0)
+        self.prev_explored_cells = 0  # 用于计算信息增益
         
         # 预先初始化检测模型，确保在执行任何动作前模型已加载
         self._warm_up_detection_model()
@@ -112,6 +230,7 @@ class TargetSearchEnvironment:
             else:
                 self.logger.warning("未找到包含 'sifu' 的窗口，使用全屏截图")
                 import pyautogui
+                import numpy as np
                 screenshot = pyautogui.screenshot()
                 screenshot = np.array(screenshot)
                 screenshot = cv2.cvtColor(screenshot, cv2.COLOR_RGB2BGR)
@@ -119,7 +238,7 @@ class TargetSearchEnvironment:
         except ImportError:
             # 如果没有截图功能，模拟返回一张图片
             self.logger.warning("截图功能不可用，使用模拟图片")
-            return np.zeros((480, 640, 3), dtype=np.uint8_)
+            return np.zeros((480, 640, 3), dtype=np.uint8)
     
     def detect_target(self, image):
         """
@@ -165,65 +284,91 @@ class TargetSearchEnvironment:
         """
         reward = 0.0
         
-        if not detection_results:
-            # 没有检测到目标，给予基于探索的奖励
-            exploration_bonus = self.calculate_exploration_bonus()
-            reward = -0.5 + exploration_bonus  # 减少负奖励，鼓励探索
-            self.logger.debug(f"未检测到目标，探索奖励: {reward:.2f}")
-            return reward
-        
-        # 获取图像中心点，如果未提供image_shape，则使用默认值
-        if image_shape is not None:
-            img_height, img_width = image_shape[0], image_shape[1]
-            img_center_x = img_width / 2
-            img_center_y = img_height / 2
-        else:
-            # 默认值，仅用于向后兼容
-            img_center_x = 320  # 假设图像宽度为640
-            img_center_y = 240  # 假设图像高度为480
-        
-        # 找到最近的检测框
-        min_distance = float('inf')
-        for detection in detection_results:
-            bbox = detection['bbox']
-            center_x = (bbox[0] + bbox[2]) / 2
-            center_y = (bbox[1] + bbox[3]) / 2
-            # 计算到图像中心的距离
-            distance = np.sqrt((center_x - img_center_x)**2 + (center_y - img_center_y)**2)
+        # 1. 检测到目标的奖励（平滑奖励设计）
+        if detection_results:
+            # 找到最近的检测框
+            min_distance = float('inf')
+            for detection in detection_results:
+                bbox = detection['bbox']
+                center_x = (bbox[0] + bbox[2]) / 2
+                center_y = (bbox[1] + bbox[3]) / 2  # 修复：应该是bbox[3]而不是bbox[2]
+                
+                # 获取图像中心点，如果未提供image_shape，则使用默认值
+                if image_shape is not None:
+                    img_height, img_width = image_shape[0], image_shape[1]
+                    img_center_x = img_width / 2
+                    img_center_y = img_height / 2
+                else:
+                    # 默认值，仅用于向后兼容
+                    img_center_x = 320  # 假设图像宽度为640
+                    img_center_y = 240  # 假设图像高度为480
+                
+                # 计算到图像中心的距离
+                distance = np.sqrt((center_x - img_center_x)**2 + (center_y - img_center_y)**2)
+                
+                if distance < min_distance:
+                    min_distance = distance
             
-            if distance < min_distance:
-                min_distance = distance
-        
-        # 基于目标中心与图像中心的距离给予奖励，距离越近奖励越高
-        # 最大奖励在中心位置，最小奖励在边缘
-        max_distance = np.sqrt((img_center_x)**2 + (img_center_y)**2)  # 图像对角线长度，即最大可能距离
-        centering_reward = 5.0 * (1 - min_distance / max_distance)  # 距离中心越近，奖励越高
-        
-        # 如果距离比之前更近，给予额外的正奖励
-        if prev_distance != float('inf'):  # 只有在之前有有效距离的情况下才比较
-            if min_distance < prev_distance:
-                # 避免除零错误，当prev_distance接近0时给予固定奖励
-                improvement_factor = (prev_distance - min_distance) / max(prev_distance, 1)
-                movement_reward = 3.0 * improvement_factor
-                self.logger.debug(f"距离变近，移动奖励: {movement_reward:.2f}")
+            # 基于目标中心与图像中心的距离给予奖励，距离越近奖励越高（平滑奖励）
+            max_distance = np.sqrt((img_center_x)**2 + (img_center_y)**2)  # 图像对角线长度，即最大可能距离
+            centering_reward = 1.0 * (1 - min_distance / max_distance)  # 距离中心越近，奖励越高，降低幅度
+            
+            # 基于距离改善的奖励（平滑过渡）
+            distance_improvement = 0.0
+            if prev_distance != float('inf'):  # 只有在之前有有效距离的情况下才比较
+                distance_change = prev_distance - min_distance  # 正值表示距离变近
+                # 标准化距离改善，使其在合理范围内
+                normalized_improvement = distance_change / max_distance
+                distance_improvement = 1.0 * normalized_improvement  # 奖励接近目标的行为
             else:
-                movement_reward = -1.0  # 距离变远，给予负奖励
-                self.logger.debug(f"距离变远，移动奖励: {movement_reward:.2f}")
+                # 第一次检测到目标时给予一定奖励
+                distance_improvement = 0.5
+                self.logger.debug(f"首次检测到目标，距离奖励: {distance_improvement:.2f}")
+            
+            # 组合奖励
+            reward = centering_reward + distance_improvement
+            
+            # 额外奖励：目标在图像中心区域
+            if min_distance < 30:  # 非常接近中心
+                reward += 2.0
+                self.logger.info(f"目标非常接近中心，额外奖励，总奖励: {reward:.2f}")
+            elif min_distance < 60:  # 中等距离中心
+                reward += 1.0
+                self.logger.debug(f"目标接近中心，额外奖励，总奖励: {reward:.2f}")
+            elif min_distance < 100:  # 较远但仍在中心区域
+                reward += 0.5
+                self.logger.debug(f"目标在中心区域，轻微奖励，总奖励: {reward:.2f}")
+                
         else:
-            # 第一次检测到目标时的奖励
-            movement_reward = 1.0
-            self.logger.debug(f"首次检测到目标，奖励: {movement_reward:.2f}")
+            # 2. 未检测到目标时的奖励（修改为负奖励鼓励真正找到目标）
+            # 基于探索的奖励
+            exploration_bonus = self.calculate_exploration_bonus()
+            
+            # 信息增益奖励 - 鼓励进入新区域
+            newly_explored_ratio = self.occupancy_map.get_newly_explored_ratio(self.prev_explored_cells, radius=5)
+            info_gain_bonus = newly_explored_ratio * 2.0  # 信息增益奖励
+            
+            # 鼓励持续探索的小奖励
+            exploration_motivation = 0.1  # 鼓励继续探索
+            
+            # 基于行动的奖励 - 根据执行的动作类型给予小奖励
+            action_reward = 0.05  # 每次行动给予小奖励，鼓励探索
+            
+            # 组合探索奖励 - 但整体为负值，鼓励真正找到目标
+            exploration_reward = exploration_bonus + info_gain_bonus + exploration_motivation + action_reward
+            
+            # 修改：未找到目标时给予负奖励，以更明确地鼓励找到目标
+            reward =  0.5*exploration_reward  # 未找到目标时的基础惩罚
+            self.logger.debug(f"未检测到目标，探索奖励: {exploration_reward:.2f}, 基础惩罚后: {reward:.2f}, 信息增益: {info_gain_bonus:.2f}")
+        # 额外的稳定性奖励/惩罚
+        # 避免长时间在原地打转
+        if len(self.position_history) > 1:
+            recent_positions = self.position_history[-5:] if len(self.position_history) >= 5 else self.position_history
+            if len(set(recent_positions)) <= 2:  # 最近位置变化很少
+                reward -= 0.2  # 小惩罚，避免原地打转
         
-        # 组合奖励
-        reward = centering_reward + movement_reward
-        
-        # 如果目标非常接近中心，给予额外的大奖励
-        if min_distance < 30:  # 调整阈值以更精确地奖励居中
-            reward += 15.0  # 接近中心的大奖励
-            self.logger.info(f"目标非常接近中心，额外奖励，总奖励: {reward:.2f}")
-        elif min_distance < 60:  # 中等距离中心也给予奖励
-            reward += 8.0
-            self.logger.debug(f"目标接近中心，额外奖励，总奖励: {reward:.2f}")
+        # 限制奖励范围，防止奖励值过大导致训练不稳定
+        reward = max(-2.0, min(reward, 10.0))  # 限制奖励在[-2, 10]范围内
         
         return reward
     
@@ -234,6 +379,9 @@ class TargetSearchEnvironment:
         """
         action_names = ["forward", "backward", "turn_left", "turn_right", "strafe_left", "strafe_right"]
         self.logger.debug(f"执行动作: {action_names[action]}")
+        
+        # 记录执行动作前的探索格子数
+        self.prev_explored_cells = np.sum(self.occupancy_map.explored_map)
         
         # 执行动作 - 增加移动距离和旋转角度
         if action == 0:  # forward - 增加移动距离
@@ -253,6 +401,9 @@ class TargetSearchEnvironment:
         
         # 获取新状态（截图）
         new_state = self.capture_screen()
+        
+        # 更新占用地图中的探索区域
+        self.occupancy_map.mark_explored_around(radius=5)
         
         # 检测目标
         detection_results = self.detect_target(new_state)
@@ -276,6 +427,11 @@ class TargetSearchEnvironment:
         
         # 传递图像形状给奖励计算函数
         reward = self.calculate_reward(detection_results, self.last_center_distance, action, new_state.shape)
+        
+        # 打印动作和奖励
+        action_names = ["forward", "backward", "turn_left", "turn_right", "strafe_left", "strafe_right"]
+        print(f"动作: {action_names[action]}, 奖励: {reward:.2f}")
+        
         self.last_center_distance = current_distance
         self.last_detection_result = detection_results
         
@@ -308,6 +464,8 @@ class TargetSearchEnvironment:
         self.last_center_distance = float('inf')
         self.last_detection_result = None
         self.position_history = []  # 重置位置历史
+        self.occupancy_map = OccupancyMap(map_size=100, resolution=1.0)  # 重置占用地图
+        self.prev_explored_cells = 0
         initial_state = self.capture_screen()
         return initial_state
 
@@ -355,7 +513,14 @@ class ActorCritic(nn.Module):
         x = x.view(x.size(0), -1)  # 展平
         
         # 分别计算动作概率和状态价值
-        action_probs = F.softmax(self.actor(x), dim=-1)
+        action_logits = self.actor(x)  # 先计算未归一化的logits
+        action_probs = F.softmax(action_logits, dim=-1)
+        
+        # 添加数值稳定性：确保概率分布不会变得过于尖锐或平坦
+        action_probs = torch.clamp(action_probs, min=1e-8, max=1.0 - 1e-8)
+        # 重新归一化以确保和为1
+        action_probs = action_probs / action_probs.sum(dim=-1, keepdim=True)
+        
         state_value = self.critic(x)
         
         return action_probs, state_value
@@ -411,7 +576,13 @@ class PPOAgent:
         
         # 归一化奖励
         rewards = torch.tensor(rewards, dtype=torch.float32)
-        rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
+        
+        # 修复：添加数值稳定性检查，防止std为0或过小导致NaN
+        rewards_std = rewards.std()
+        if torch.isnan(rewards_std) or rewards_std < 1e-8:
+            rewards_std = torch.tensor(1.0)  # 如果标准差太小或为NaN，使用默认值
+        
+        rewards = (rewards - rewards.mean()) / (rewards_std + 1e-8)
         
         # 转换为张量
         old_states = torch.stack(memory.states).detach()
@@ -422,17 +593,41 @@ class PPOAgent:
         for _ in range(self.K_epochs):
             # 计算优势
             logprobs, state_values = self.policy(old_states)
+            
+            # 修复：确保logprobs不会包含NaN或无穷大值
+            if torch.isnan(logprobs).any() or torch.isinf(logprobs).any():
+                print("警告: logprobs 包含 NaN 或无穷大值，跳过此批次")
+                continue
+                
+            # 稳定化概率分布
+            logprobs = torch.clamp(logprobs, min=1e-8, max=1.0 - 1e-8)
+            
             dist = torch.distributions.Categorical(logprobs)
             entropy = dist.entropy().mean()
             
             # 计算动作的对数概率
             new_logprobs = dist.log_prob(old_actions)
             
+            # 检查new_logprobs是否有异常值
+            if torch.isnan(new_logprobs).any() or torch.isinf(new_logprobs).any():
+                print("警告: new_logprobs 包含 NaN 或无穷大值，跳过此批次")
+                continue
+            
             # 计算优势
             advantages = rewards - state_values.detach().squeeze(-1)
             
+            # 检查advantages是否有异常值
+            if torch.isnan(advantages).any() or torch.isinf(advantages).any():
+                print("警告: advantages 包含 NaN 或无穷大值，跳过此批次")
+                continue
+            
             # 计算比率 (pi_theta / pi_theta__old)
             ratios = torch.exp(new_logprobs - old_logprobs.detach())
+            
+            # 检查ratios是否有异常值
+            if torch.isnan(ratios).any() or torch.isinf(ratios).any():
+                print("警告: ratios 包含 NaN 或无穷大值，跳过此批次")
+                continue
             
             # 计算PPO损失
             surr1 = ratios * advantages
@@ -442,12 +637,21 @@ class PPOAgent:
             # 计算价值损失
             critic_loss = self.MseLoss(state_values.squeeze(-1), rewards)
             
+            # 检查损失是否有异常值
+            if torch.isnan(actor_loss) or torch.isnan(critic_loss):
+                print("警告: 损失包含 NaN，跳过此批次")
+                continue
+            
             # 总损失
             loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy
             
             # 反向传播
             self.optimizer.zero_grad()
             loss.backward()
+            
+            # 梯度裁剪以防止梯度爆炸
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
+            
             self.optimizer.step()
         
         # 更新旧策略
@@ -520,6 +724,12 @@ def train_gate_search_ppo_agent(episodes=200, model_path="gate_search_ppo_model.
         os.makedirs(model_dir)
         logger.info(f"创建模型保存目录: {model_dir}")
     
+    # 确保地图保存目录存在
+    map_dir = "./map_export"
+    if not os.path.exists(map_dir):
+        os.makedirs(map_dir)
+        logger.info(f"创建地图保存目录: {map_dir}")
+    
     # 初始化环境和智能体
     env = TargetSearchEnvironment(target_description)
     
@@ -559,6 +769,11 @@ def train_gate_search_ppo_agent(episodes=200, model_path="gate_search_ppo_model.
                 print(f"Episode: {episode+1}/{episodes}, Score: {step_count}, Total Reward: {total_reward:.2f}")
                 scores.append(step_count)
                 total_rewards.append(total_reward)
+                
+                # 修复：删除注释符号后的错误代码
+                map_path = export_current_map(env, f"./map_export/map_episode_{episode+1}.png")
+                logger.info(f"Episode {episode+1} 地图已保存到: {map_path}")
+            
                 break
         
         # 更新PPO策略
@@ -569,9 +784,14 @@ def train_gate_search_ppo_agent(episodes=200, model_path="gate_search_ppo_model.
         
         # 每50轮打印一次平均分数
         if episode % 50 == 0 and episode > 0:
+            # 确保使用全局numpy实例
             avg_score = np.mean(scores)
             avg_total_reward = np.mean(total_rewards)
             logger.info(f"Episode {episode}, Average Score: {avg_score:.2f}, Average Total Reward: {avg_total_reward:.2f}")
+    
+    # 训练结束后保存最终地图
+    final_map_path = export_current_map(env, f"./map_export/final_map_after_training.png")
+    logger.info(f"训练完成后最终地图已保存到: {final_map_path}")
     
     logger.info("PPO训练完成！")
     
@@ -651,6 +871,7 @@ def evaluate_trained_ppo_agent(model_path="gate_search_ppo_model.pth", episodes=
     
     # 计算总体统计信息
     successful_episodes = sum(1 for r in evaluation_results if r['success'])
+    # 确保使用全局numpy实例
     avg_steps = np.mean([r['steps'] for r in evaluation_results])
     avg_reward = np.mean([r['total_reward'] for r in evaluation_results])
     
@@ -724,12 +945,28 @@ def load_and_test_ppo_agent(model_path="gate_search_ppo_model.pth", target_descr
         if done:
             if detection_results and env.last_center_distance < 50:
                 logger.info("成功找到目标！")
-                return {"status": "success", "result": f"成功找到{target_description}！", "steps": step_count, "total_reward": total_reward}
+                
+                # 导出最终地图
+                map_path = export_current_map(env)
+                logger.info(f"最终地图已保存到: {map_path}")
+                
+                return {"status": "success", "result": f"成功找到{target_description}！", "steps": step_count, "total_reward": total_reward, "map_path": map_path}
             else:
                 logger.info("未能找到目标")
-                return {"status": "partial_success", "result": f"未能找到{target_description}", "steps": step_count, "total_reward": total_reward}
+                
+                # 导出最终地图
+                map_path = export_current_map(env)
+                logger.info(f"最终地图已保存到: {map_path}")
+                
+                return {"status": "partial_success", "result": f"未能找到{target_description}", "steps": step_count, "total_reward": total_reward, "map_path": map_path}
     
     result = {"status": "timeout", "result": f"测试完成但未找到目标 - Steps: {step_count}, Total Reward: {total_reward}"}
+    
+    # 导出最终地图
+    map_path = export_current_map(env)
+    logger.info(f"最终地图已保存到: {map_path}")
+    
+    result["map_path"] = map_path
     logger.info(result["result"])
     return result
 
@@ -782,14 +1019,41 @@ def find_gate_with_ppo(target_description="gate"):
         if done:
             if detection_results and env.last_center_distance < 50:
                 logger.info("成功找到目标！")
-                return "成功找到目标！"
+                
+                # 导出最终地图
+                map_path = export_current_map(env)
+                logger.info(f"最终地图已保存到: {map_path}")
+                
+                return {"result": "成功找到目标！", "map_path": map_path}
             else:
                 logger.info("未能找到目标")
-                return "未能找到目标"
+                
+                # 导出最终地图
+                map_path = export_current_map(env)
+                logger.info(f"最终地图已保存到: {map_path}")
+                
+                return {"result": "未能找到目标", "map_path": map_path}
     
     result = f"测试完成 - Steps: {step_count}, Total Reward: {total_reward}"
-    logger.info(result)
-    return result
+    
+    # 导出最终地图
+    map_path = export_current_map(env)
+    logger.info(f"最终地图已保存到: {map_path}")
+    
+    return {"result": result, "map_path": map_path}
+
+
+def export_current_map(env, filepath=None):
+    """
+    导出当前环境的地图
+    :param env: TargetSearchEnvironment实例
+    :param filepath: 保存路径，如果不提供则自动生成
+    """
+    if hasattr(env, 'occupancy_map'):
+        return env.occupancy_map.export_map_image(filepath)
+    else:
+        print("环境没有占用地图功能")
+        return None
 
 
 def execute_ppo_tool(tool_name, *args):
@@ -809,7 +1073,8 @@ def execute_ppo_tool(tool_name, *args):
         "find_gate_with_ppo": find_gate_with_ppo,
         "train_gate_search_ppo_agent": train_gate_search_ppo_agent,
         "evaluate_trained_ppo_agent": evaluate_trained_ppo_agent,
-        "load_and_test_ppo_agent": load_and_test_ppo_agent
+        "load_and_test_ppo_agent": load_and_test_ppo_agent,
+        "export_current_map": lambda env, *a: export_current_map(env, *a)
     }
     
     if tool_name in tool_functions:
@@ -832,6 +1097,11 @@ def execute_ppo_tool(tool_name, *args):
             elif tool_name == "find_gate_with_ppo":
                 target_desc = args[0] if args else "gate"
                 result = tool_functions[tool_name](target_desc)
+            elif tool_name == "export_current_map":
+                # 这个工具需要特殊的处理方式
+                env = args[0] if args else None
+                filepath = args[1] if len(args) > 1 else None
+                result = export_current_map(env, filepath)
             else:
                 result = tool_functions[tool_name]()
             logger.info(f"PPO工具执行成功: {tool_name}")
@@ -855,9 +1125,9 @@ def main():
     logger = setup_logging()
     
     if len(sys.argv) < 2:
-        logger.info("用法: python ppo_gate_find.py <tool_name> [args...]")
+        logger.info("用法: python gate_find_ppo.py <tool_name> [args...]")
         logger.info("可用PPO工具: find_gate_with_ppo, train_gate_search_ppo_agent, evaluate_trained_ppo_agent, load_and_test_ppo_agent")
-        print("用法: python ppo_gate_find.py <tool_name> [args...]")
+        print("用法: python gate_find_ppo.py <tool_name> [args...]")
         print("可用PPO工具:")
         print("  find_gate_with_ppo [target_desc] - 训练并使用PPO寻找目标")
         print("  train_gate_search_ppo_agent [episodes] [model_path] [target_desc] - 训练PPO智能体")
