@@ -65,7 +65,7 @@ class TargetSearchEnvironment:
         """
         # 使用现有的浏览器截图功能
         try:
-            from browser_server.prtsc import capture_screen_region
+            from computer_server.prtsc import capture_screen_region
             screenshot = capture_screen_region()
             return screenshot
         except ImportError:
