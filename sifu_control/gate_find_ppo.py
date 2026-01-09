@@ -449,7 +449,7 @@ class PPOAgent:
             action_logprob = dist.log_prob(action)
         
         # 存储状态、动作和对数概率
-        memory.states.append(state)
+        memory.states.append(state.squeeze(0))  # 移除批次维度再存储
         memory.actions.append(action)
         memory.logprobs.append(action_logprob)
         
@@ -476,6 +476,16 @@ class PPOAgent:
         
         # 转换为tensor并归一化
         state_tensor = torch.FloatTensor(state_rgb).permute(2, 0, 1) / 255.0
+        
+        # 确保图像尺寸与网络期望的一致
+        # 如果图像尺寸不是640x480，进行缩放
+        expected_height, expected_width = 480, 640
+        if state_tensor.shape[1] != expected_height or state_tensor.shape[2] != expected_width:
+            # 将单张图像转换为批处理格式以进行resize
+            state_tensor = state_tensor.unsqueeze(0)  # 添加批次维度
+            state_tensor = F.interpolate(state_tensor, size=(expected_height, expected_width), mode='bilinear', align_corners=False)
+            state_tensor = state_tensor.squeeze(0)  # 移除批次维度
+        
         return state_tensor
 
 
@@ -570,7 +580,8 @@ def evaluate_trained_ppo_agent(model_path="gate_search_ppo_model.pth", episodes=
     
     # 加载已保存的模型
     if os.path.exists(model_path):
-        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=ppo_agent.policy_old.device if hasattr(ppo_agent, 'policy_old') else torch.device('cpu')))
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=device))
         ppo_agent.policy.eval()  # 设置为评估模式
         logger.info(f"PPO模型已从 {model_path} 加载")
     else:
@@ -656,7 +667,8 @@ def load_and_test_ppo_agent(model_path="gate_search_ppo_model.pth", target_descr
     
     # 加载已保存的模型
     if os.path.exists(model_path):
-        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=ppo_agent.policy_old.device if hasattr(ppo_agent, 'policy_old') else torch.device('cpu')))
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=device))
         ppo_agent.policy.eval()  # 设置为评估模式
         logger.info(f"PPO模型已从 {model_path} 加载")
     else:
