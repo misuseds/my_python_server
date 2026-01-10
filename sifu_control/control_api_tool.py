@@ -22,7 +22,7 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('w')
             time.sleep(0.1)
-        print("移动完成")
+        #print("移动完成")
         return f"向前移动 {distance} 单位"
         
     def move_backward(self, distance=1):
@@ -35,7 +35,7 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('s')
             time.sleep(0.1)
-        print("移动完成")
+        #print("移动完成")
         return f"向后移动 {distance} 单位"
         
     def turn_left(self, angle=90):
@@ -46,7 +46,7 @@ class MovementController:
         print(f"左转 {angle} 度")
         # 通过鼠标移动来实现视角转动
         self._move_mouse_relative(-angle, 0)
-        print("转动完成")
+        #print("转动完成")
         return f"左转 {angle} 度"
         
     def turn_right(self, angle=90):
@@ -57,7 +57,7 @@ class MovementController:
         print(f"右转 {angle} 度")
         # 通过鼠标移动来实现视角转动
         self._move_mouse_relative(angle, 0)
-        print("转动完成")
+        #print("转动完成")
         return f"右转 {angle} 度"
         
     def strafe_left(self, distance=1):
@@ -70,7 +70,7 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('a')
             time.sleep(0.1)
-        print("平移完成")
+        #print("平移完成")
         return f"左平移 {distance} 单位"
         
     def strafe_right(self, distance=1):
@@ -83,7 +83,7 @@ class MovementController:
         for _ in range(int(distance)):
             self._press_key('d')
             time.sleep(0.1)
-        print("平移完成")
+        #print("平移完成")
         return f"右平移 {distance} 单位"
         
     def move_sequence(self, commands):
@@ -208,7 +208,7 @@ def send_key_event(key, duration=0.1):
         keyboard.press(key)
         time.sleep(duration)
         keyboard.release(key)
-        print(f"使用pynput发送按键: {key} 成功")
+        #print(f"使用pynput发送按键: {key} 成功")
         return f"使用pynput发送按键: {key} 成功"
     except ImportError:
         print("pynput库未安装，尝试安装: pip install pynput")
@@ -279,7 +279,7 @@ def send_mouse_move_relative(x_offset, y_offset, use_raw_input=False):
     try:
         import pydirectinput
         pydirectinput.moveRel(int(x_offset), int(y_offset), relative=True)
-        print(f"使用pydirectinput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
+        #print(f"使用pydirectinput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
         return f"使用pydirectinput相对移动鼠标: ({x_offset}, {y_offset}) 成功"
     except ImportError:
         print("pydirectinput库未安装，尝试其他方法。请运行: pip install pydirectinput")
@@ -292,7 +292,7 @@ def send_mouse_move_relative(x_offset, y_offset, use_raw_input=False):
 
         mouse = Controller()
         mouse.move(int(x_offset), int(y_offset))
-        print(f"使用pynput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
+        #print(f"使用pynput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
         return f"使用pynput相对移动鼠标: ({x_offset}, {y_offset}) 成功"
     except ImportError:
         print("pynput库未安装，尝试安装: pip install pynput")
@@ -341,7 +341,7 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('w')
             time.sleep(0.1)
-        print("移动完成")
+        #print("移动完成")
         return f"向前移动 {distance} 单位"
         
     def move_backward(self, distance=1):
@@ -357,7 +357,7 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('s')
             time.sleep(0.1)
-        print("移动完成")
+        #print("移动完成")
         return f"向后移动 {distance} 单位"
         
     def turn_left(self, angle=90):
@@ -371,7 +371,7 @@ class ImprovedMovementController:
         if not success.startswith("使用"):
             print("鼠标移动失败，使用原始方法")
             result = self._move_mouse_relative(-angle, 0)
-        print("转动完成")
+        #print("转动完成")
         return f"左转 {angle} 度"
         
     def turn_right(self, angle=90):
@@ -385,7 +385,7 @@ class ImprovedMovementController:
         if not success.startswith("使用"):
             print("鼠标移动失败，使用原始方法")
             result = self._move_mouse_relative(angle, 0)
-        print("转动完成")
+        #print("转动完成")
         return f"右转 {angle} 度"
         
     def strafe_left(self, distance=1):
@@ -401,7 +401,7 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('a')
             time.sleep(0.1)
-        print("平移完成")
+        #print("平移完成")
         return f"左平移 {distance} 单位"
         
     def strafe_right(self, distance=1):
@@ -417,7 +417,7 @@ class ImprovedMovementController:
                 print("按键发送失败，使用原始方法")
                 result = self._press_key('d')
             time.sleep(0.1)
-        print("平移完成")
+        #print("平移完成")
         return f"右平移 {distance} 单位"
         
     def move_sequence(self, commands):

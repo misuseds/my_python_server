@@ -83,7 +83,9 @@ class YOLODetector:
         results = model.predict(
             source=image,
             conf=conf_threshold,
-            save=False
+            save=False,
+            
+        verbose=False
         )
         
         # 获取检测结果

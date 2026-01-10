@@ -61,7 +61,7 @@ def capture_window_by_title(window_title, output_path="window_capture.png"):
             bmpstr, 'raw', 'BGRX', 0, 1)
 
         im.save(output_path)
-        print(f"窗口截图已保存到: {output_path}")
+        
 
     # 清理资源
     win32gui.DeleteObject(saveBitMap.GetHandle())

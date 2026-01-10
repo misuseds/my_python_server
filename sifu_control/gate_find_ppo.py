@@ -25,7 +25,7 @@ from ultralytics import YOLO
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # 导入现有的移动控制器
-from sifu_control.control_api_tool import ImprovedMovementController
+from control_api_tool import ImprovedMovementController
 
 # 添加项目根目录到路径，以便导入其他模块
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -63,6 +63,7 @@ class TargetSearchEnvironment:
         self.max_steps = 50  # 增加最大步数，给更多探索机会
         self.last_detection_result = None
         self.last_center_distance = float('inf')
+        self.last_area = 0  # 新增：跟踪上一帧目标区域
         self.logger = logging.getLogger(__name__)
         
         # 记录探索历史，帮助判断是否在原地打转
@@ -152,11 +153,12 @@ class TargetSearchEnvironment:
             return []
         
         try:
-            # 进行预测
+            # 进行预测 - 降低置信度阈值以增加检测敏感性
             results = self.yolo_model.predict(
                 source=image,
-                conf=0.2,  # 置信度阈值
-                save=False
+                conf=0.1,  # 从0.2降低到0.1，提高检测敏感性
+                save=False,
+                 verbose=False
             )
             
             # 获取检测结果
@@ -188,7 +190,9 @@ class TargetSearchEnvironment:
                     detections.append({
                         'bbox': [x1, y1, x2, y2],  # 左上角和右下角坐标
                         'label': class_name,
-                        'score': conf
+                        'score': conf,
+                        'width': width,
+                        'height': height
                     })
             
             self.logger.debug(f"YOLO检测到 {len(detections)} 个目标")
@@ -218,57 +222,92 @@ class TargetSearchEnvironment:
         
         return exploration_bonus
     
-    def calculate_reward(self, detection_results, prev_distance, action_taken=None):
+    def calculate_reward(self, detection_results, prev_distance, action_taken=None, prev_area=None):
         """
         计算奖励值
         """
         reward = 0.0
         
-        if not detection_results:
+        if not detection_results or len(detection_results) == 0:
             # 没有检测到目标，给予基于探索的奖励
             exploration_bonus = self.calculate_exploration_bonus()
-            reward = -0.5 + exploration_bonus  # 减少负奖励，鼓励探索
+            reward = -0.1 + exploration_bonus  # 减少负奖励，鼓励探索
             self.logger.debug(f"未检测到目标，探索奖励: {reward:.2f}")
-            return reward
+            return reward, 0  # 返回当前面积为0
         
         # 找到最近的检测框
         min_distance = float('inf')
+        max_area = 0  # 计算最大的目标区域
+        
+        # 遍历所有检测结果，计算距离和面积
         for detection in detection_results:
             bbox = detection['bbox']
             center_x = (bbox[0] + bbox[2]) / 2
             center_y = (bbox[1] + bbox[3]) / 2
+            
+            # 获取图像尺寸，如果没有则使用默认值
+            img_width = detection.get('img_width', 640)
+            img_height = detection.get('img_height', 480)
+            
             # 计算到图像中心的距离
-            img_center_x = 320  # 假设图像宽度为640
-            img_center_y = 240  # 假设图像高度为480
+            img_center_x = img_width / 2
+            img_center_y = img_height / 2
             distance = np.sqrt((center_x - img_center_x)**2 + (center_y - img_center_y)**2)
             
             if distance < min_distance:
                 min_distance = distance
+            
+            # 计算目标区域
+            area = detection['width'] * detection['height']
+            if area > max_area:
+                max_area = area
         
-        # 如果距离比之前更近，给予正奖励
+        # 基于目标面积变化的奖励（优先级更高）
+        area_reward = 0.0
+        if prev_area is not None and max_area > 0:
+            area_ratio = max_area / prev_area if prev_area > 0 else 1.0
+            if area_ratio > 1.05:  # 如果目标变大超过5%
+                area_bonus = 8.0 * (area_ratio - 1.0)  # 提高基于面积增长的奖励权重
+                area_reward += area_bonus
+                self.logger.debug(f"目标面积增大，额外奖励: {area_bonus:.2f}")
+            elif area_ratio < 0.95:  # 如果目标变小超过5%
+                area_penalty = -2.0 * (1.0 - area_ratio)  # 提高面积减少的惩罚
+                area_reward += area_penalty
+                self.logger.debug(f"目标面积减小，惩罚: {area_penalty:.2f}")
+        
+        # 基于距离的奖励（次要）
+        distance_reward = 0.0
         if prev_distance != float('inf'):  # 只有在之前有有效距离的情况下才比较
             if min_distance < prev_distance:
-                # 避免除零错误，当prev_distance接近0时给予固定奖励
-                if prev_distance > 0:
-                    reward = 5.0 * (prev_distance - min_distance) / max(prev_distance, 1)
-                else:
-                    reward = 5.0  # 当前一次距离为0时的奖励
-                self.logger.debug(f"距离变近，奖励: {reward:.2f}")
+                # 距离变近，给予正奖励
+                distance_improve = prev_distance - min_distance
+                distance_reward = 2.0 * (distance_improve / max(prev_distance, 1))  # 降低距离改善的奖励权重
+                self.logger.debug(f"距离变近，奖励: {distance_reward:.2f}")
             else:
-                reward = -2.0  # 距离变远，给予负奖励，但比原来小
-                self.logger.debug(f"距离变远，奖励: {reward:.2f}")
+                distance_reward = -0.2  # 距离变远，给予较小负奖励
+                self.logger.debug(f"距离变远，奖励: {distance_reward:.2f}")
         else:
             # 第一次检测到目标时的奖励
-            reward = 3.0 - (min_distance / 200.0)  # 距离越近奖励越高，但系数调整
-            self.logger.debug(f"首次检测到目标，奖励: {reward:.2f}")
+            distance_reward = 1.0 - (min_distance / 400.0)  # 降低首次检测到目标时的奖励
+            self.logger.debug(f"首次检测到目标，奖励: {distance_reward:.2f}")
         
         # 如果目标在中心附近，给予额外奖励
+        center_reward = 0.0
         if min_distance < 50:
-            reward += 10.0  # 找到目标，给予大奖励
-            self.logger.info(f"目标接近中心，额外奖励，总奖励: {reward:.2f}")
+            center_reward = 5.0  # 降低目标接近中心的奖励
+            self.logger.info(f"目标接近中心，额外奖励，总奖励: {center_reward:.2f}")
         
-        return reward
+        # 综合奖励计算 - 面积奖励占主导地位
+        reward = area_reward + distance_reward + center_reward
+        
+        # 鼓励连续朝着目标方向移动
+        if action_taken is not None and prev_distance != float('inf'):
+            if min_distance < prev_distance:
+                reward += 0.5  # 朝着目标方向移动的奖励
+        
+        return reward, max_area
     
+  
     def step(self, action):
         """
         执行动作并返回新的状态、奖励和是否结束
@@ -277,21 +316,21 @@ class TargetSearchEnvironment:
         action_names = ["forward", "backward", "turn_left", "turn_right", "strafe_left", "strafe_right"]
         self.logger.debug(f"执行动作: {action_names[action]}")
         
-        # 执行动作 - 增加移动距离和旋转角度
-        if action == 0:  # forward - 增加移动距离
-            self.controller.move_forward(3)  # 从1改为3
+        # 执行动作 - 调整移动参数以提高精确度
+        if action == 0:  # forward
+            self.controller.move_forward(2)  # 从3减少到2，提高精确度
         elif action == 1:  # backward
-            self.controller.move_backward(2)  # 从1改为2
-        elif action == 2:  # turn_left - 增加旋转角度
-            self.controller.turn_left(60)  # 从30改为60
-        elif action == 3:  # turn_right - 增加旋转角度
-            self.controller.turn_right(60)  # 从30改为60
+            self.controller.move_backward(1)  # 从2减少到1
+        elif action == 2:  # turn_left
+            self.controller.turn_left(30)  # 从60减少到30，提高转向精度
+        elif action == 3:  # turn_right
+            self.controller.turn_right(30)  # 从60减少到30
         elif action == 4:  # strafe_left
-            self.controller.strafe_left(2)  # 从1改为2
+            self.controller.strafe_left(1)  # 从2减少到1
         elif action == 5:  # strafe_right
-            self.controller.strafe_right(2)  # 从1改为2
+            self.controller.strafe_right(1)  # 从2减少到1
         
-        time.sleep(0.3)  # 等待动作完成，稍作延长以确保动作完成
+        time.sleep(0.2)  # 从0.3减少到0.2，加快执行速度
         
         # 获取新状态（截图）
         new_state = self.capture_screen()
@@ -299,29 +338,48 @@ class TargetSearchEnvironment:
         # 检测目标
         detection_results = self.detect_target(new_state)
         
-        # 计算奖励
+        # 计算奖励 - 添加当前目标区域
         current_distance = self.last_center_distance
+        current_area = self.last_area  # 获取上一帧的目标区域
+        
         if detection_results:
             # 计算当前最近目标到中心的距离
             min_distance = float('inf')
+            max_area = 0
             for detection in detection_results:
                 bbox = detection['bbox']
                 center_x = (bbox[0] + bbox[2]) / 2
                 center_y = (bbox[1] + bbox[3]) / 2  # 修复：应该是bbox[3]而不是bbox[2]
                 img_center_x = new_state.shape[1] / 2
                 img_center_y = new_state.shape[0] / 2
+                # 添加检测信息到detection字典
+                detection['img_width'] = new_state.shape[1]
+                detection['img_height'] = new_state.shape[0]
+                
                 distance = np.sqrt((center_x - img_center_x)**2 + (center_y - img_center_y)**2)
                 
                 if distance < min_distance:
                     min_distance = distance
+                
+                # 计算目标区域
+                area = detection['width'] * detection['height']
+                if area > max_area:
+                    max_area = area
             current_distance = min_distance
+            current_area = max_area
         
-        reward = self.calculate_reward(detection_results, self.last_center_distance, action)
+        reward, new_area = self.calculate_reward(detection_results, self.last_center_distance, action, current_area)
         self.last_center_distance = current_distance
+        self.last_area = new_area  # 保存当前目标区域
         self.last_detection_result = detection_results
         
         # 更新步数
         self.step_count += 1
+        
+        # 输出每步得分
+        detected_targets = len(detection_results) if detection_results else 0
+        print(f"Step {self.step_count}, area:{area},Reward: {reward:.2f}, "
+              f"Targets Detected: {detected_targets}, Distance to Center: {current_distance:.2f}")
         
         # 更新位置历史，记录当前状态的特征（如检测结果数量）
         state_feature = len(detection_results)  # 这里用检测到的对象数量作为状态特征
@@ -347,6 +405,7 @@ class TargetSearchEnvironment:
         self.logger.debug("重置环境")
         self.step_count = 0
         self.last_center_distance = float('inf')
+        self.last_area = 0  # 重置目标区域
         self.last_detection_result = None
         self.position_history = []  # 重置位置历史
         initial_state = self.capture_screen()
@@ -425,22 +484,29 @@ class PPOAgent:
     """
     PPO智能体
     """
-    def __init__(self, state_dim, action_dim, lr=0.0003, betas=(0.9, 0.999), gamma=0.99, K_epochs=80, eps_clip=0.2):
+    def __init__(self, state_dim, action_dim, lr=0.0003, betas=(0.9, 0.999), gamma=0.99, K_epochs=40, eps_clip=0.1):
         self.lr = lr
         self.betas = betas
         self.gamma = gamma
         self.K_epochs = K_epochs
         self.eps_clip = eps_clip
         
-        self.policy = ActorCritic(state_dim[0], action_dim, state_dim[1], state_dim[2])
+        # 修正：不再使用state_dim参数中的高度和宽度，而是使用固定尺寸
+        input_channels = 3
+        height, width = 480, 640  # 固定网络输入尺寸
+        self.policy = ActorCritic(input_channels, action_dim, height, width)
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=lr, betas=betas)
-        self.policy_old = ActorCritic(state_dim[0], action_dim, state_dim[1], state_dim[2])
+        self.policy_old = ActorCritic(input_channels, action_dim, height, width)
         self.policy_old.load_state_dict(self.policy.state_dict())
         
         self.MseLoss = nn.MSELoss()
         self.logger = logging.getLogger(__name__)
     
     def update(self, memory):
+        # 检查是否有经验数据
+        if len(memory.rewards) == 0:
+            return
+            
         # 计算折扣奖励
         rewards = []
         discounted_reward = 0
@@ -454,12 +520,17 @@ class PPOAgent:
         rewards = torch.tensor(rewards, dtype=torch.float32)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
         
-        # 转换为张量
+        # 处理状态张量 - 确保所有状态都是一致的形状
+        if len(memory.states) == 0:
+            return
+            
+        # 将状态列表堆叠成批量张量
+        # memory.states中的每个元素应该是一个形状为(C, H, W)的张量
         old_states = torch.stack(memory.states).detach()
         old_actions = torch.stack(memory.actions).detach()
         old_logprobs = torch.stack(memory.logprobs).detach()
         
-        # K epochs更新策略
+        # K epochs更新策略 - 减少K_epochs以提高稳定性
         for _ in range(self.K_epochs):
             # 计算优势
             logprobs, state_values = self.policy(old_states)
@@ -484,11 +555,13 @@ class PPOAgent:
             critic_loss = self.MseLoss(state_values.squeeze(-1), rewards)
             
             # 总损失
-            loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy
+            loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy  # 保持熵权重不变
             
             # 反向传播
             self.optimizer.zero_grad()
             loss.backward()
+            # 限制梯度范数以防止梯度爆炸
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
             self.optimizer.step()
         
         # 更新旧策略
@@ -499,16 +572,19 @@ class PPOAgent:
         根据当前策略选择动作
         """
         state = self._preprocess_state(state)
-        state = state.unsqueeze(0)  # 添加批次维度
+        
+        # 添加批次维度进行推理
+        state_batch = state.unsqueeze(0)  # 添加批次维度
         
         with torch.no_grad():
-            action_probs, state_value = self.policy_old(state)
+            action_probs, state_value = self.policy_old(state_batch)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             action_logprob = dist.log_prob(action)
         
         # 存储状态、动作和对数概率
-        memory.states.append(state)
+        # 不要存储带批次维度的状态，只存储原始状态
+        memory.states.append(state)  # 不带批次维度
         memory.actions.append(action)
         memory.logprobs.append(action_logprob)
         
@@ -535,6 +611,16 @@ class PPOAgent:
         
         # 转换为tensor并归一化
         state_tensor = torch.FloatTensor(state_rgb).permute(2, 0, 1) / 255.0
+        
+        # 统一调整图像尺寸为网络期望的大小
+        import torch.nn.functional as F
+        state_tensor = F.interpolate(
+            state_tensor.unsqueeze(0),  # 添加批次维度
+            size=(480, 640),           # 目标尺寸
+            mode='bilinear',
+            align_corners=False
+        ).squeeze(0)  # 移除批次维度
+        
         return state_tensor
 
 
@@ -554,11 +640,10 @@ def train_gate_search_ppo_agent(episodes=200, model_path="gate_search_ppo_model.
     # 初始化环境和智能体
     env = TargetSearchEnvironment(target_description)
     
-    # 定义状态和动作维度
-    state_shape = (3, 480, 640)  # (channels, height, width)
+    # 定义状态和动作维度 - 这里我们只需要动作维度，因为网络使用固定尺寸
     action_dim = 6  # 6种动作类型
     
-    ppo_agent = PPOAgent(state_shape, action_dim)
+    ppo_agent = PPOAgent((3, 480, 640), action_dim)  # 状态维度是固定的
     memory = Memory()
     
     scores = deque(maxlen=100)
@@ -621,15 +706,15 @@ def evaluate_trained_ppo_agent(model_path="gate_search_ppo_model.pth", episodes=
     logger.info(f"开始评估PPO模型: {model_path}")
     
     # 定义状态和动作维度
-    state_shape = (3, 480, 640)
     action_dim = 6
     
     # 创建PPO智能体
-    ppo_agent = PPOAgent(state_shape, action_dim)
+    ppo_agent = PPOAgent((3, 480, 640), action_dim)
     
     # 加载已保存的模型
     if os.path.exists(model_path):
-        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=ppo_agent.policy_old.device if hasattr(ppo_agent, 'policy_old') else torch.device('cpu')))
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=device))
         ppo_agent.policy.eval()  # 设置为评估模式
         logger.info(f"PPO模型已从 {model_path} 加载")
     else:
@@ -706,16 +791,16 @@ def load_and_test_ppo_agent(model_path="gate_search_ppo_model.pth", target_descr
     logger = logging.getLogger(__name__)
     logger.info(f"加载PPO模型并测试: {model_path}")
     
-    # 定义状态和动作维度
-    state_shape = (3, 480, 640)
+    # 定义动作维度
     action_dim = 6
     
     # 创建PPO智能体
-    ppo_agent = PPOAgent(state_shape, action_dim)
+    ppo_agent = PPOAgent((3, 480, 640), action_dim)
     
     # 加载已保存的模型
     if os.path.exists(model_path):
-        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=ppo_agent.policy_old.device if hasattr(ppo_agent, 'policy_old') else torch.device('cpu')))
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=device))
         ppo_agent.policy.eval()  # 设置为评估模式
         logger.info(f"PPO模型已从 {model_path} 加载")
     else:
@@ -884,14 +969,22 @@ def main():
     logger = setup_logging()
     
     if len(sys.argv) < 2:
-        logger.info("用法: python ppo_gate_find.py <tool_name> [args...]")
-        logger.info("可用PPO工具: find_gate_with_ppo, train_gate_search_ppo_agent, evaluate_trained_ppo_agent, load_and_test_ppo_agent")
-        print("用法: python ppo_gate_find.py <tool_name> [args...]")
-        print("可用PPO工具:")
-        print("  find_gate_with_ppo [target_desc] - 训练并使用PPO寻找目标")
-        print("  train_gate_search_ppo_agent [episodes] [model_path] [target_desc] - 训练PPO智能体")
-        print("  evaluate_trained_ppo_agent [model_path] [episodes] [target_desc] - 评估已训练的PPO模型")
-        print("  load_and_test_ppo_agent [model_path] [target_desc] - 加载并测试PPO模型")
+        print("导入成功！")
+        print("\n可用的功能:")
+        print("1. 训练门搜索智能体: train_gate_search_ppo_agent")
+        print("2. 寻找门（包含训练）: find_gate_with_ppo")
+        print("3. 评估已训练模型: evaluate_trained_ppo_agent")
+        print("4. 加载并测试模型: load_and_test_ppo_agent")
+        
+        # 首先执行完整的训练过程，将模型保存到model文件夹
+        print("\n=== 开始训练门搜索智能体 (20轮，模型将保存到model文件夹) ===")
+        result = execute_ppo_tool("train_gate_search_ppo_agent", "20", "./model/gate_search_ppo_model.pth", "gate")
+        print(f"\n训练结果: {result}")
+        
+        print("\n=== 使用训练好的模型进行测试 ===")
+        test_result = execute_ppo_tool("load_and_test_ppo_agent", "./model/gate_search_ppo_model.pth", "gate")
+        print(f"\n测试结果: {test_result}")
+        
         return
 
     tool_name = sys.argv[1]
