@@ -175,6 +175,7 @@ if bpy.context.object:
 
 # 设置3D视口的远裁剪平面
 if bpy.context.space_data:
+    print("当前视口配置:300000")
     bpy.context.space_data.clip_end = 300000
 
 print("Blender缩放设置已应用")
