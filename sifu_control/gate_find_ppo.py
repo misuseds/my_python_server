@@ -18,6 +18,8 @@ from PIL import Image
 import base64
 from collections import deque
 import logging
+from pathlib import Path
+from ultralytics import YOLO
 
 # 添加当前目录到Python路径，确保能正确导入同目录下的模块
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -27,9 +29,6 @@ from sifu_control.control_api_tool import ImprovedMovementController
 
 # 添加项目根目录到路径，以便导入其他模块
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-# 导入现有的目标检测功能
-from grounding_dino.dino import detect_objects_with_text_transformers
 
 
 # 配置日志
@@ -72,7 +71,30 @@ class TargetSearchEnvironment:
         
         # 预先初始化检测模型，确保在执行任何动作前模型已加载
         self._warm_up_detection_model()
+        
+        # 加载YOLO模型
+        self.yolo_model = self._load_yolo_model()
     
+    def _load_yolo_model(self):
+        """
+        加载YOLO模型
+        """
+        # 获取项目根目录
+        current_dir = Path(__file__).parent
+        model_path = current_dir.parent / "models" / "find_gate.pt"
+        
+        if not model_path.exists():
+            self.logger.error(f"YOLO模型文件不存在: {model_path}")
+            return None
+        
+        try:
+            model = YOLO(str(model_path))
+            self.logger.info(f"成功加载YOLO模型: {model_path}")
+            return model
+        except Exception as e:
+            self.logger.error(f"加载YOLO模型失败: {e}")
+            return None
+
     def _warm_up_detection_model(self):
         """
         预热检测模型，确保在训练开始前模型已加载到内存
@@ -123,19 +145,56 @@ class TargetSearchEnvironment:
     
     def detect_target(self, image):
         """
-        使用Grounding DINO检测目标
+        使用YOLO检测目标
         """
-        # 将numpy数组转换为base64
-        _, buffer = cv2.imencode('.jpg', image)
-        base64_image = base64.b64encode(buffer).decode('utf-8')
+        if self.yolo_model is None:
+            self.logger.error("YOLO模型未加载，无法进行检测")
+            return []
         
-        # 调用现有的检测函数
         try:
-            detection_results = detect_objects_with_text_transformers(base64_image, self.target_description)
-            self.logger.debug(f"检测到 {len(detection_results)} 个目标")
-            return detection_results
+            # 进行预测
+            results = self.yolo_model.predict(
+                source=image,
+                conf=0.2,  # 置信度阈值
+                save=False
+            )
+            
+            # 获取检测结果
+            detections = []
+            result = results[0]  # 获取第一个结果
+            
+            if result.boxes is not None:
+                boxes = result.boxes.xyxy.cpu().numpy()  # 获取边界框坐标 [x1, y1, x2, y2]
+                confs = result.boxes.conf.cpu().numpy()  # 获取置信度
+                cls_ids = result.boxes.cls.cpu().numpy()  # 获取类别ID
+                
+                # 获取类别名称（如果模型有类别名称）
+                names = result.names if hasattr(result, 'names') else {}
+                
+                for i in range(len(boxes)):
+                    x1, y1, x2, y2 = boxes[i]
+                    conf = confs[i]
+                    cls_id = int(cls_ids[i])
+                    class_name = names.get(cls_id, f"Class_{cls_id}")
+                    
+                    # 计算边界框中心坐标
+                    center_x = (x1 + x2) / 2
+                    center_y = (y1 + y2) / 2
+                    
+                    # 计算边界框宽度和高度
+                    width = x2 - x1
+                    height = y2 - y1
+                    
+                    detections.append({
+                        'bbox': [x1, y1, x2, y2],  # 左上角和右下角坐标
+                        'label': class_name,
+                        'score': conf
+                    })
+            
+            self.logger.debug(f"YOLO检测到 {len(detections)} 个目标")
+            return detections
         except Exception as e:
-            self.logger.error(f"检测过程中出错: {e}")
+            self.logger.error(f"YOLO检测过程中出错: {e}")
             return []
     
     def calculate_exploration_bonus(self):
@@ -248,7 +307,7 @@ class TargetSearchEnvironment:
             for detection in detection_results:
                 bbox = detection['bbox']
                 center_x = (bbox[0] + bbox[2]) / 2
-                center_y = (bbox[1] + bbox[2]) / 2
+                center_y = (bbox[1] + bbox[3]) / 2  # 修复：应该是bbox[3]而不是bbox[2]
                 img_center_x = new_state.shape[1] / 2
                 img_center_y = new_state.shape[0] / 2
                 distance = np.sqrt((center_x - img_center_x)**2 + (center_y - img_center_y)**2)
