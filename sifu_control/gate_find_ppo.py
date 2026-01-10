@@ -264,28 +264,43 @@ class TargetSearchEnvironment:
         
         # 基于目标面积变化的奖励（优先级更高）
         area_reward = 0.0
-        if prev_area is not None and max_area > 0:
-            area_ratio = max_area / prev_area if prev_area > 0 else 1.0
+        if prev_area is not None and prev_area > 0:  # 修改条件，确保prev_area > 0
+            area_ratio = max_area / prev_area
             if area_ratio > 1.05:  # 如果目标变大超过5%
-                area_bonus = 8.0 * (area_ratio - 1.0)  # 提高基于面积增长的奖励权重
-                area_reward += area_bonus
-                self.logger.debug(f"目标面积增大，额外奖励: {area_bonus:.2f}")
-            elif area_ratio < 0.95:  # 如果目标变小超过5%
-                area_penalty = -2.0 * (1.0 - area_ratio)  # 提高面积减少的惩罚
-                area_reward += area_penalty
-                self.logger.debug(f"目标面积减小，惩罚: {area_penalty:.2f}")
+                # 面积增大奖励，与面积增长率成正比
+                area_bonus = 5.0 * (area_ratio - 1.0)  # 降低面积奖励权重，避免过大
+                area_reward = max(area_bonus, 0.5)  # 确保至少有最小正奖励
+                self.logger.debug(f"目标面积增大 {area_ratio:.2f}倍，额外奖励: {area_reward:.2f}")
+            elif area_ratio >= 0.95:  # 面积变化在5%以内，给予小奖励
+                area_reward = 0.2
+                self.logger.debug(f"目标面积基本不变，小奖励: {area_reward:.2f}")
+            else:  # 面积减少超过5%，给予惩罚
+                area_penalty = -1.0 * (1.0 - area_ratio)  # 降低面积减少的惩罚
+                area_reward = area_penalty
+                self.logger.debug(f"目标面积减小，惩罚: {area_reward:.2f}")
         
         # 基于距离的奖励（次要）
         distance_reward = 0.0
         if prev_distance != float('inf'):  # 只有在之前有有效距离的情况下才比较
             if min_distance < prev_distance:
                 # 距离变近，给予正奖励
-                distance_improve = prev_distance - min_distance
-                distance_reward = 2.0 * (distance_improve / max(prev_distance, 1))  # 降低距离改善的奖励权重
+                distance_improve = (prev_distance - min_distance) / prev_distance  # 归一化改进比例
+                distance_reward = 1.5 * distance_improve  # 调整距离改善奖励权重
                 self.logger.debug(f"距离变近，奖励: {distance_reward:.2f}")
             else:
-                distance_reward = -0.2  # 距离变远，给予较小负奖励
-                self.logger.debug(f"距离变远，奖励: {distance_reward:.2f}")
+                # 距离变远，但在面积增大的情况下，减少惩罚或给予小奖励
+                distance_decrease = (min_distance - prev_distance) / prev_distance  # 归一化距离恶化程度
+                
+                # 如果面积显著增大，即使距离变远也给予小奖励或零奖励
+                if area_ratio > 1.2:  # 面积增大超过20%
+                    distance_reward = 0.1  # 小奖励，因为面积增加表明朝正确的方向移动
+                    self.logger.debug(f"面积显著增大但距离变远，小奖励: {distance_reward:.2f}")
+                elif area_ratio > 1.05:  # 面积略有增大
+                    distance_reward = 0  # 不惩罚，因为面积有所增加
+                    self.logger.debug(f"面积增大但距离变远，不惩罚: {distance_reward:.2f}")
+                else:  # 面积无明显变化或减小，给予负奖励
+                    distance_reward = -0.5 * distance_decrease  # 减少距离变远的惩罚
+                    self.logger.debug(f"距离变远且面积无改善，惩罚: {distance_reward:.2f}")
         else:
             # 第一次检测到目标时的奖励
             distance_reward = 1.0 - (min_distance / 400.0)  # 降低首次检测到目标时的奖励
@@ -294,8 +309,8 @@ class TargetSearchEnvironment:
         # 如果目标在中心附近，给予额外奖励
         center_reward = 0.0
         if min_distance < 50:
-            center_reward = 5.0  # 降低目标接近中心的奖励
-            self.logger.info(f"目标接近中心，额外奖励，总奖励: {center_reward:.2f}")
+            center_reward = 3.0  # 降低目标接近中心的奖励
+            self.logger.info(f"目标接近中心，额外奖励: {center_reward:.2f}")
         
         # 综合奖励计算 - 面积奖励占主导地位
         reward = area_reward + distance_reward + center_reward
@@ -303,7 +318,7 @@ class TargetSearchEnvironment:
         # 鼓励连续朝着目标方向移动
         if action_taken is not None and prev_distance != float('inf'):
             if min_distance < prev_distance:
-                reward += 0.5  # 朝着目标方向移动的奖励
+                reward += 0.3  # 朝着目标方向移动的奖励，降低权重
         
         return reward, max_area
     
@@ -341,7 +356,7 @@ class TargetSearchEnvironment:
         # 计算奖励 - 添加当前目标区域
         current_distance = self.last_center_distance
         current_area = self.last_area  # 获取上一帧的目标区域
-        
+        area=0
         if detection_results:
             # 计算当前最近目标到中心的距离
             min_distance = float('inf')
@@ -367,7 +382,7 @@ class TargetSearchEnvironment:
                     max_area = area
             current_distance = min_distance
             current_area = max_area
-        
+
         reward, new_area = self.calculate_reward(detection_results, self.last_center_distance, action, current_area)
         self.last_center_distance = current_distance
         self.last_area = new_area  # 保存当前目标区域

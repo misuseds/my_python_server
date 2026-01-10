@@ -1,4 +1,3 @@
-
 import time
 import math
 import subprocess
@@ -17,12 +16,10 @@ class MovementController:
         向前移动指定距离 - 按W键
         :param distance: 移动距离，默认为1
         """
-        print(f"向前移动 {distance} 单位")
         # 模拟按W键
         for _ in range(int(distance)):
             self._press_key('w')
             time.sleep(0.1)
-        #print("移动完成")
         return f"向前移动 {distance} 单位"
         
     def move_backward(self, distance=1):
@@ -30,12 +27,10 @@ class MovementController:
         向后移动指定距离 - 按S键
         :param distance: 移动距离，默认为1
         """
-        print(f"向后移动 {distance} 单位")
         # 模拟按S键
         for _ in range(int(distance)):
             self._press_key('s')
             time.sleep(0.1)
-        #print("移动完成")
         return f"向后移动 {distance} 单位"
         
     def turn_left(self, angle=90):
@@ -43,10 +38,8 @@ class MovementController:
         左转指定角度 - 鼠标向左移动
         :param angle: 转动角度，默认为90度
         """
-        print(f"左转 {angle} 度")
         # 通过鼠标移动来实现视角转动
         self._move_mouse_relative(-angle, 0)
-        #print("转动完成")
         return f"左转 {angle} 度"
         
     def turn_right(self, angle=90):
@@ -54,10 +47,8 @@ class MovementController:
         右转指定角度 - 鼠标向右移动
         :param angle: 转动角度，默认为90度
         """
-        print(f"右转 {angle} 度")
         # 通过鼠标移动来实现视角转动
         self._move_mouse_relative(angle, 0)
-        #print("转动完成")
         return f"右转 {angle} 度"
         
     def strafe_left(self, distance=1):
@@ -65,12 +56,10 @@ class MovementController:
         左平移 - 按A键
         :param distance: 移动距离，默认为1
         """
-        print(f"左平移 {distance} 单位")
         # 模拟按A键
         for _ in range(int(distance)):
             self._press_key('a')
             time.sleep(0.1)
-        #print("平移完成")
         return f"左平移 {distance} 单位"
         
     def strafe_right(self, distance=1):
@@ -78,12 +67,10 @@ class MovementController:
         右平移 - 按D键
         :param distance: 移动距离，默认为1
         """
-        print(f"右平移 {distance} 单位")
         # 模拟按D键
         for _ in range(int(distance)):
             self._press_key('d')
             time.sleep(0.1)
-        #print("平移完成")
         return f"右平移 {distance} 单位"
         
     def move_sequence(self, commands):
@@ -138,13 +125,10 @@ class MovementController:
             ], capture_output=True, text=True, cwd="e:/code/my_python_server")
             
             if result.returncode != 0:
-                print(f"按键 {key} 失败: {result.stderr}")
                 return f"按键 {key} 失败: {result.stderr}"
             else:
-                print(f"按键 {key} 成功: {result.stdout.strip()}")
                 return f"按键 {key} 成功: {result.stdout.strip()}"
         except Exception as e:
-            print(f"执行按键操作时出错: {str(e)}")
             return f"执行按键操作时出错: {str(e)}"
 
     def _move_mouse_relative(self, x_offset, y_offset):
@@ -162,7 +146,6 @@ class MovementController:
             ], capture_output=True, text=True, cwd="e:/code/my_python_server")
             
             if result.returncode != 0:
-                print(f"获取鼠标位置失败: {result.stderr}")
                 return f"获取鼠标位置失败: {result.stderr}"
             else:
                 # 解析当前位置
@@ -185,13 +168,10 @@ class MovementController:
                 ], capture_output=True, text=True, cwd="e:/code/my_python_server")
                 
                 if result.returncode != 0:
-                    print(f"移动鼠标失败: {result.stderr}")
                     return f"移动鼠标失败: {result.stderr}"
                 else:
-                    print(f"鼠标移动成功: ({x}, {y}) -> ({new_x}, {new_y})")
                     return f"鼠标移动成功: ({x}, {y}) -> ({new_x}, {new_y})"
         except Exception as e:
-            print(f"执行鼠标移动操作时出错: {str(e)}")
             return f"执行鼠标移动操作时出错: {str(e)}"
 
 
@@ -208,10 +188,8 @@ def send_key_event(key, duration=0.1):
         keyboard.press(key)
         time.sleep(duration)
         keyboard.release(key)
-        #print(f"使用pynput发送按键: {key} 成功")
         return f"使用pynput发送按键: {key} 成功"
     except ImportError:
-        print("pynput库未安装，尝试安装: pip install pynput")
         try:
             # 如果pynput不可用，尝试使用ctypes直接调用Windows API
             import ctypes
@@ -261,13 +239,10 @@ def send_key_event(key, duration=0.1):
             # 发送输入事件
             ret = user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
             if ret != 2:
-                print(f"发送按键事件失败: {ctypes.FormatError(ctypes.get_last_error())}")
                 return f"发送按键事件失败: {ctypes.FormatError(ctypes.get_last_error())}"
 
-            print(f"使用Windows API发送按键: {key} 成功")
             return f"使用Windows API发送按键: {key} 成功"
         except Exception as e:
-            print(f"使用Windows API发送按键事件时出错: {str(e)}")
             return f"使用Windows API发送按键事件时出错: {str(e)}"
 
 
@@ -279,10 +254,8 @@ def send_mouse_move_relative(x_offset, y_offset, use_raw_input=False):
     try:
         import pydirectinput
         pydirectinput.moveRel(int(x_offset), int(y_offset), relative=True)
-        #print(f"使用pydirectinput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
         return f"使用pydirectinput相对移动鼠标: ({x_offset}, {y_offset}) 成功"
     except ImportError:
-        print("pydirectinput库未安装，尝试其他方法。请运行: pip install pydirectinput")
         pass  # 继续尝试其他方法
 
     try:
@@ -292,10 +265,8 @@ def send_mouse_move_relative(x_offset, y_offset, use_raw_input=False):
 
         mouse = Controller()
         mouse.move(int(x_offset), int(y_offset))
-        #print(f"使用pynput相对移动鼠标: ({x_offset}, {y_offset}) 成功")
         return f"使用pynput相对移动鼠标: ({x_offset}, {y_offset}) 成功"
     except ImportError:
-        print("pynput库未安装，尝试安装: pip install pynput")
         pass  # 继续尝试其他方法
 
     try:
@@ -310,13 +281,10 @@ def send_mouse_move_relative(x_offset, y_offset, use_raw_input=False):
 
         success = user32.mouse_event(MOUSEEVENTF_MOVE, int(x_offset), int(y_offset), 0, 0)
         if success:
-            print(f"使用Windows API相对移动鼠标: ({x_offset}, {y_offset}) 成功")
             return f"使用Windows API相对移动鼠标: ({x_offset}, {y_offset}) 成功"
         else:
-            print(f"使用Windows API移动鼠标失败: {ctypes.FormatError(ctypes.get_last_error())}")
             return f"使用Windows API移动鼠标失败: {ctypes.FormatError(ctypes.get_last_error())}"
     except Exception as e:
-        print(f"使用Windows API移动鼠标时出错: {str(e)}")
         return f"使用Windows API移动鼠标时出错: {str(e)}"
 
 
@@ -333,15 +301,12 @@ class ImprovedMovementController:
         向前移动指定距离 - 按W键
         :param distance: 移动距离，默认为1
         """
-        print(f"向前移动 {distance} 单位")
         # 使用改进的按键方法
         for _ in range(int(distance)):
             success = send_key_event('w', 0.1)
             if not success.startswith("使用"):
-                print("按键发送失败，使用原始方法")
                 result = self._press_key('w')
             time.sleep(0.1)
-        #print("移动完成")
         return f"向前移动 {distance} 单位"
         
     def move_backward(self, distance=1):
@@ -349,15 +314,12 @@ class ImprovedMovementController:
         向后移动指定距离 - 按S键
         :param distance: 移动距离，默认为1
         """
-        print(f"向后移动 {distance} 单位")
         # 使用改进的按键方法
         for _ in range(int(distance)):
             success = send_key_event('s', 0.1)
             if not success.startswith("使用"):
-                print("按键发送失败，使用原始方法")
                 result = self._press_key('s')
             time.sleep(0.1)
-        #print("移动完成")
         return f"向后移动 {distance} 单位"
         
     def turn_left(self, angle=90):
@@ -365,13 +327,10 @@ class ImprovedMovementController:
         左转指定角度 - 鼠标向左移动
         :param angle: 转动角度，默认为90度
         """
-        print(f"左转 {angle} 度")
         # 通过相对鼠标移动来实现视角转动
         success = send_mouse_move_relative(-int(angle), 0)
         if not success.startswith("使用"):
-            print("鼠标移动失败，使用原始方法")
             result = self._move_mouse_relative(-angle, 0)
-        #print("转动完成")
         return f"左转 {angle} 度"
         
     def turn_right(self, angle=90):
@@ -379,13 +338,10 @@ class ImprovedMovementController:
         右转指定角度 - 鼠标向右移动
         :param angle: 转动角度，默认为90度
         """
-        print(f"右转 {angle} 度")
         # 通过相对鼠标移动来实现视角转动
         success = send_mouse_move_relative(int(angle), 0)
         if not success.startswith("使用"):
-            print("鼠标移动失败，使用原始方法")
             result = self._move_mouse_relative(angle, 0)
-        #print("转动完成")
         return f"右转 {angle} 度"
         
     def strafe_left(self, distance=1):
@@ -393,15 +349,12 @@ class ImprovedMovementController:
         左平移 - 按A键
         :param distance: 移动距离，默认为1
         """
-        print(f"左平移 {distance} 单位")
         # 使用改进的按键方法
         for _ in range(int(distance)):
             success = send_key_event('a', 0.1)
             if not success.startswith("使用"):
-                print("按键发送失败，使用原始方法")
                 result = self._press_key('a')
             time.sleep(0.1)
-        #print("平移完成")
         return f"左平移 {distance} 单位"
         
     def strafe_right(self, distance=1):
@@ -409,15 +362,12 @@ class ImprovedMovementController:
         右平移 - 按D键
         :param distance: 移动距离，默认为1
         """
-        print(f"右平移 {distance} 单位")
         # 使用改进的按键方法
         for _ in range(int(distance)):
             success = send_key_event('d', 0.1)
             if not success.startswith("使用"):
-                print("按键发送失败，使用原始方法")
                 result = self._press_key('d')
             time.sleep(0.1)
-        #print("平移完成")
         return f"右平移 {distance} 单位"
         
     def move_sequence(self, commands):
@@ -472,13 +422,10 @@ class ImprovedMovementController:
             ], capture_output=True, text=True, cwd="e:/code/my_python_server")
             
             if result.returncode != 0:
-                print(f"按键 {key} 失败: {result.stderr}")
                 return f"按键 {key} 失败: {result.stderr}"
             else:
-                print(f"按键 {key} 成功: {result.stdout.strip()}")
                 return f"按键 {key} 成功: {result.stdout.strip()}"
         except Exception as e:
-            print(f"执行按键操作时出错: {str(e)}")
             return f"执行按键操作时出错: {str(e)}"
 
     def _move_mouse_relative(self, x_offset, y_offset):
@@ -496,7 +443,6 @@ class ImprovedMovementController:
             ], capture_output=True, text=True, cwd="e:/code/my_python_server")
             
             if result.returncode != 0:
-                print(f"获取鼠标位置失败: {result.stderr}")
                 return f"获取鼠标位置失败: {result.stderr}"
             else:
                 # 解析当前位置
@@ -519,13 +465,8 @@ class ImprovedMovementController:
                 ], capture_output=True, text=True, cwd="e:/code/my_python_server")
                 
                 if result.returncode != 0:
-                    print(f"移动鼠标失败: {result.stderr}")
                     return f"移动鼠标失败: {result.stderr}"
                 else:
-                    print(f"鼠标移动成功: ({x}, {y}) -> ({new_x}, {new_y})")
                     return f"鼠标移动成功: ({x}, {y}) -> ({new_x}, {new_y})"
         except Exception as e:
-            print(f"执行鼠标移动操作时出错: {str(e)}")
             return f"执行鼠标移动操作时出错: {str(e)}"
-
-
