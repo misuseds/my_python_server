@@ -690,7 +690,6 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
 
     iteration_count = 0
     max_iterations = 50
-    screenshot_history = []  # 新增：保存截图历史
     
     while iteration_count < max_iterations:
         iteration_count += 1
@@ -699,9 +698,6 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
         screenshot = pyautogui.screenshot()
         screenshot_path = os.path.join(current_dir, f"screenshot_{iteration_count}.png")
         screenshot.save(screenshot_path)
-        
-        # 添加到截图历史
-        screenshot_history.append(screenshot_path)
         
         system_prompt = "\n".join(system_prompt_parts)
         
@@ -750,7 +746,7 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
         
         print(f"user_message: 【{user_message}】")
         
-        # 构建消息内容 - 包含所有截图
+        # 构建消息内容 - 只包含当前截图
         content_list = []
         
         # 添加文本内容
@@ -759,14 +755,13 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
             "text": user_message
         })
         
-        # 添加所有历史截图
-        for idx, screenshot_path in enumerate(screenshot_history):
-            content_list.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{image_to_base64(screenshot_path)}"
-                }
-            })
+        # 只添加当前截图
+        content_list.append({
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{image_to_base64(screenshot_path)}"
+            }
+        })
         
         # 构建用户消息
         messages.append({
@@ -814,16 +809,14 @@ def vision_task_loop(task_description, knowledge_file=None, memory_file=None, wo
             yield error_msg
             break
     
-    # 清理截图文件
-    for screenshot_path in screenshot_history:
-        try:
-            os.remove(screenshot_path)
-        except:
-            pass
+    # 清理当前截图文件
+    try:
+        os.remove(screenshot_path)
+    except:
+        pass
     
     if iteration_count >= max_iterations:
         yield "达到最大迭代次数，停止任务执行"
-
 # 定义全局变量
 CURRENT_DIR = Path(__file__).parent
 workenvs =load_workenvs()
