@@ -76,8 +76,8 @@ class TargetSearchEnvironment:
         self._warm_up_detection_model()
         
         # 新增：定义成功条件的阈值
-        self.MIN_GATE_AREA = 30000  # 根据实际情况调整，降低阈值以便更容易达成目标
-        self.CENTER_THRESHOLD = 80  # 放宽居中要求
+        self.MIN_GATE_AREA = 50000  # 根据实际情况调整，降低阈值以便更容易达成目标
+        self.CENTER_THRESHOLD = 280  # 放宽居中要求
         
 
     def reset_to_origin(self):
@@ -123,7 +123,7 @@ class TargetSearchEnvironment:
         pyautogui.press('enter')
         time.sleep(0.5)  # 等待0.5秒
         pyautogui.press('enter')
-        time.sleep(10)
+        time.sleep(3)
         print("重置到原点操作完成")
         self.logger.info("重置到原点操作完成")
 
@@ -207,7 +207,7 @@ class TargetSearchEnvironment:
             # 进行预测 - 降低置信度阈值以增加检测敏感性
             results = self.yolo_model.predict(
                 source=image,
-                conf=0.1,  # 从0.2降低到0.1，提高检测敏感性
+                conf=0.7,  # 从0.2降低到0.1，提高检测敏感性
                 save=False,
                  verbose=False
             )
@@ -252,35 +252,17 @@ class TargetSearchEnvironment:
             self.logger.error(f"YOLO检测过程中出错: {e}")
             return []
     
-    def calculate_exploration_bonus(self):
-        """
-        计算探索奖励，避免在原地打转
-        简化版本：只检查连续相同状态的数量
-        """
-        if len(self.position_history) < 2:
-            return 0.0
-        
-        # 检查最近的状态是否重复过多（可能表示在原地打转）
-        recent_states = self.position_history[-5:] if len(self.position_history) >= 5 else self.position_history
-        most_common_state = max(set(recent_states), key=recent_states.count)
-        repetition_count = recent_states.count(most_common_state)
-        
-        # 如果最近5个状态中有4个以上是相同的，说明可能在原地打转
-        if repetition_count >= 4:
-            return -0.1  # 给予轻微惩罚，鼓励改变行为
-        else:
-            return 0.0   # 不给予奖励，专注于主要的奖励信号
-    
+
     def calculate_reward(self, detection_results, prev_distance, action_taken=None, prev_area=None):
         """
-        改进的奖励函数：弱化居中奖励，强化面积增长，移除首次检测的高额奖励
+        改进的奖励函数：检测到门就给正反馈，基于目标绝对大小给予奖励
         """
         reward = 0.0
         
         if not detection_results or len(detection_results) == 0:
             # 没有检测到目标，给予轻微惩罚
-            exploration_bonus = self.calculate_exploration_bonus()
-            reward = -0.2 + exploration_bonus
+            
+            reward = -0.2 
             self.logger.debug(f"未检测到目标，奖励: {reward:.2f}")
             return reward, 0
         
@@ -307,77 +289,34 @@ class TargetSearchEnvironment:
             if area > max_area:
                 max_area = area
         
-        # 基于面积变化的奖励（主要奖励）
-        area_reward = 0.0
-        if prev_area is not None and prev_area > 0:
-            area_ratio = max_area / prev_area
-            if area_ratio > 1.05:  # 面积增大超过5%
-                area_bonus = 2.0 * (area_ratio - 1.0)  # 调整面积奖励权重
-                area_reward = max(area_bonus, 0.2)  # 确保最小正奖励
-                self.logger.debug(f"目标面积增大 {area_ratio:.2f}倍，面积奖励: {area_reward:.2f}")
-            elif area_ratio >= 0.95:  # 面积变化在5%以内
-                area_reward = 0.1
-                self.logger.debug(f"目标面积基本不变，小奖励: {area_reward:.2f}")
-            else:  # 面积减少
-                area_penalty = -0.5 * (1.0 - area_ratio)
-                area_reward = area_penalty
-                self.logger.debug(f"目标面积减小，惩罚: {area_reward:.2f}")
-        else:
-            # 第一次检测到目标时的奖励，降低
-            area_reward = 0.3
-            self.logger.debug(f"首次检测到目标，奖励: {area_reward:.2f}")
+        # 基础奖励：只要检测到门就给予正反馈
+        base_detection_reward = 1.0  # 提高检测到门的基础奖励
+        reward += base_detection_reward
+        self.logger.debug(f"检测到门，基础奖励: {base_detection_reward}")
         
-        # 基于距离的奖励（辅助）
-        distance_reward = 0.0
-        if prev_distance != float('inf'):
-            if min_distance < prev_distance:
-                distance_improve = (prev_distance - min_distance) / prev_distance
-                distance_reward = 0.5 * distance_improve  # 降低距离奖励权重
-                self.logger.debug(f"距离变近，距离奖励: {distance_reward:.2f}")
-            else:
-                distance_decrease = (min_distance - prev_distance) / prev_distance
-                if area_ratio > 1.1:  # 面积增大超过10%
-                    distance_reward = 0.1
-                    self.logger.debug(f"面积增大但距离变远，小奖励: {distance_reward:.2f}")
-                else:
-                    distance_reward = -0.2 * distance_decrease
-                    self.logger.debug(f"距离变远且面积无改善，惩罚: {distance_reward:.2f}")
+        # 基于目标绝对大小的奖励：目标越大，奖励越高
+        size_based_reward = 0.0
+        # 根据目标面积的绝对大小给予奖励，使用对数函数避免过大奖励
+        if max_area > 0:
+            # 使用分段函数，不同大小范围给予不同奖励
+            size_based_reward = max_area / 10000
         
-        # 改进的居中奖励（不再是固定值）
-        center_reward = 0.0
-        if min_distance < 80:  # 居中奖励与面积相关
-            center_bonus = min(0.5, (max_area / 20000))  # 面积越大，居中奖励越高，但上限较低
-            center_reward = center_bonus
-            self.logger.debug(f"居中奖励: {center_reward:.2f}")
+        reward += size_based_reward
+        self.logger.debug(f"基于目标大小的奖励: {size_based_reward}, 目标面积: {max_area}")
         
-        # 综合奖励
-        reward = area_reward + distance_reward + center_reward
-        
-        # 鼓励朝着目标方向移动
-        if action_taken is not None and prev_distance != float('inf'):
-            if min_distance < prev_distance:
-                reward += 0.1
+
+
         
         return reward, max_area
-    
-  
-    def step(self, action):
+
+    def step(self, action, move_forward_step=2, turn_angle=30):
         """
         执行动作并返回新的状态、奖励和是否结束
         动作空间: 0-forward, 1-backward, 2-turn_left, 3-turn_right, 4-strafe_left, 5-strafe_right
         """
         action_names = ["forward", "backward", "turn_left", "turn_right", "strafe_left", "strafe_right"]
-        self.logger.debug(f"执行动作: {action_names[action]}")
+        self.logger.debug(f"执行动作: {action_names[action]}, 步长: {move_forward_step}, 角度: {turn_angle}")
         
-        # 动态调整动作步长
-        current_area = self.last_area
-        move_forward_step = 2
-        turn_angle = 30
-        
-        # 如果目标已经比较大，使用更精细的动作
-        if current_area > 20000:  # 目标已经比较近
-            move_forward_step = 1  # 更小的移动步长
-            turn_angle = 15       # 更小的转向角度
         
         # 执行动作
         if action == 0:  # forward
@@ -451,14 +390,17 @@ class TargetSearchEnvironment:
         
         # 如果成功找到门，给予额外奖励
         if gate_found_and_close:
-            reward += 10.0  # 成功完成任务的大奖励
-            self.logger.info(f"成功找到目标！额外奖励: 10.0, 当前面积: {current_area}")
+            # 计算快速完成的额外奖励：基于剩余步数给予额外奖励，每剩余一步奖励5分
+            remaining_steps = self.max_steps - self.step_count
+            speed_bonus = remaining_steps * 10  # 快一步奖励5分
+            reward += 200 + speed_bonus  # 成功完成任务的大奖励加上速度奖励
+            self.logger.info(f"成功找到目标！基础奖励: 100.0, 速度奖励: {speed_bonus}, 当前面积: {current_area}")
         
         # 输出每步得分
         detected_targets = len(detection_results) if detection_results else 0
         print(f"Step {self.step_count}, Area: {current_area:.2f}, Reward: {reward:.2f}, "
               f"Targets Detected: {detected_targets}, Distance to Center: {current_distance:.2f}, "
-              f"Done: {done}")
+              f"Done: {done}, Move Step: {move_forward_step}, Turn Angle: {turn_angle}")
         
         # 更新位置历史，记录当前状态的特征（如检测结果数量）
         state_feature = len(detection_results)  # 这里用检测到的对象数量作为状态特征
@@ -511,15 +453,22 @@ class ActorCritic(nn.Module):
         # 全连接层 - 输入大小是固定的，因为池化层输出固定尺寸
         conv_out_size = 64 * 10 * 10  # 64个通道 * 10 * 10 = 6400
         
-        # Actor (策略网络) - 输出动作概率分布
-        self.actor = nn.Sequential(
+        # Actor (策略网络) - 输出动作概率分布和连续动作参数
+        self.action_layer = nn.Sequential(
             nn.Linear(conv_out_size, 512),
             nn.ReLU(),
-            nn.Linear(512, action_space)
+            nn.Linear(512, action_space)  # 离散动作选择
+        )
+        
+        # 动作参数层 - 输出连续动作参数（如步长和角度）
+        self.param_layer = nn.Sequential(
+            nn.Linear(conv_out_size, 512),
+            nn.ReLU(),
+            nn.Linear(512, 2)  # 输出2个连续参数：步长和角度
         )
         
         # Critic (价值网络) - 输出状态价值
-        self.critic = nn.Sequential(
+        self.value_layer = nn.Sequential(
             nn.Linear(conv_out_size, 512),
             nn.ReLU(),
             nn.Linear(512, 1)
@@ -530,11 +479,12 @@ class ActorCritic(nn.Module):
         x = self.adaptive_pool(x)  # 确保输出尺寸一致
         x = x.view(x.size(0), -1)  # 展平
         
-        # 分别计算动作概率和状态价值
-        action_probs = F.softmax(self.actor(x), dim=-1)
-        state_value = self.critic(x)
+        # 分别计算动作概率、动作参数和状态价值
+        action_probs = F.softmax(self.action_layer(x), dim=-1)
+        action_params = torch.sigmoid(self.param_layer(x))  # 使用sigmoid确保输出在[0,1]范围内
+        state_value = self.value_layer(x)
         
-        return action_probs, state_value
+        return action_probs, action_params, state_value
 
 
 class Memory:
@@ -547,6 +497,7 @@ class Memory:
         self.logprobs = []
         self.rewards = []
         self.is_terminals = []
+        self.action_params = []
 
 
     def clear_memory(self):
@@ -555,6 +506,7 @@ class Memory:
         del self.logprobs[:]
         del self.rewards[:]
         del self.is_terminals[:]
+        del self.action_params[:]
 
 
 class PPOAgent:
@@ -586,6 +538,7 @@ class PPOAgent:
             
         # 计算折扣奖励
         rewards = []
+
         discounted_reward = 0
         for reward, is_terminal in zip(reversed(memory.rewards), reversed(memory.is_terminals)):
             if is_terminal:
@@ -608,11 +561,15 @@ class PPOAgent:
             # memory.states中的每个元素应该是一个形状为(C, H, W)的张量
             old_states = torch.stack(memory.states).detach()
             
-            # 确保所有动作和对数概率张量形状一致
+            # 确保动作和参数张量形状一致
             old_actions_list = []
+            old_action_params_list = []
             old_logprobs_list = []
             
-            for action, logprob in zip(memory.actions, memory.logprobs):
+            for i in range(len(memory.actions)):
+                action = memory.actions[i]
+                param = memory.action_params[i] if hasattr(memory, 'action_params') and i < len(memory.action_params) else torch.zeros(2)
+                
                 # 确保动作是标量张量
                 if not isinstance(action, torch.Tensor):
                     action = torch.tensor(action, dtype=torch.long)
@@ -622,33 +579,48 @@ class PPOAgent:
                     action = action.item()
                     action = torch.tensor(action, dtype=torch.long)
                 
+                # 确保动作参数是2维张量
+                if not isinstance(param, torch.Tensor):
+                    param = torch.tensor(param, dtype=torch.float32)
+                elif param.dim() == 0:  # 如果是标量
+                    param = torch.tensor([param, param], dtype=torch.float32)  # 创建2维向量
+                elif param.dim() == 1 and param.numel() == 1:  # 如果是单元素一维张量
+                    param = torch.tensor([param.item(), param.item()], dtype=torch.float32)
+                
                 # 确保对数概率是标量张量
-                if not isinstance(logprob, torch.Tensor):
-                    logprob = torch.tensor(logprob, dtype=torch.float32)
-                elif logprob.dim() == 0:  # 如果已经是标量
-                    pass
-                elif logprob.dim() == 1 and logprob.numel() == 1:  # 如果是单元素一维张量
-                    logprob = logprob.item()
-                    logprob = torch.tensor(logprob, dtype=torch.float32)
+                if i < len(memory.logprobs):
+                    logprob = memory.logprobs[i]
+                    if not isinstance(logprob, torch.Tensor):
+                        logprob = torch.tensor(logprob, dtype=torch.float32)
+                    elif logprob.dim() == 0:  # 如果已经是标量
+                        pass
+                    elif logprob.dim() == 1 and logprob.numel() == 1:  # 如果是单元素一维张量
+                        logprob = logprob.item()
+                        logprob = torch.tensor(logprob, dtype=torch.float32)
+                else:
+                    logprob = torch.tensor(0.0, dtype=torch.float32)  # 默认值
                 
                 old_actions_list.append(action)
+                old_action_params_list.append(param)
                 old_logprobs_list.append(logprob)
             
             # 现在堆叠处理后的张量
             old_actions = torch.stack(old_actions_list).detach()
+            old_action_params = torch.stack(old_action_params_list).detach()
             old_logprobs = torch.stack(old_logprobs_list).detach()
         
         except RuntimeError as e:
             self.logger.error(f"Error stacking tensors: {e}")
             self.logger.error(f"State shapes: {[s.shape for s in memory.states[:5]]}")
             self.logger.error(f"Action shapes: {[a.shape if isinstance(a, torch.Tensor) else type(a) for a in memory.actions[:5]]}")
+            self.logger.error(f"Param shapes: {[p.shape if isinstance(p, torch.Tensor) else type(p) for p in old_action_params_list[:5]]}")
             self.logger.error(f"Logprob shapes: {[l.shape if isinstance(l, torch.Tensor) else type(l) for l in memory.logprobs[:5]]}")
             return
         
         # K epochs更新策略 - 减少K_epochs以提高稳定性
         for _ in range(self.K_epochs):
             # 计算优势
-            logprobs, state_values = self.policy(old_states)
+            logprobs, action_params, state_values = self.policy(old_states)
             dist = torch.distributions.Categorical(logprobs)
             entropy = dist.entropy().mean()
             
@@ -666,11 +638,14 @@ class PPOAgent:
             surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
             actor_loss = -torch.min(surr1, surr2).mean()
             
+            # 计算动作参数的MSE损失（如果有真实参数值的话）
+            param_loss = F.mse_loss(action_params, old_action_params) if old_action_params.numel() > 0 else 0
+            
             # 计算价值损失
             critic_loss = self.MseLoss(state_values.squeeze(-1), rewards)
             
             # 总损失
-            loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy  # 保持熵权重不变
+            loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy + param_loss  # 保持熵权重不变
             
             # 反向传播
             self.optimizer.zero_grad()
@@ -692,27 +667,36 @@ class PPOAgent:
         state_batch = state.unsqueeze(0)  # 添加批次维度
         
         with torch.no_grad():
-            action_probs, state_value = self.policy_old(state_batch)
+            action_probs, action_params, state_value = self.policy_old(state_batch)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             action_logprob = dist.log_prob(action)
+        
+        # 将连续参数转换为实际的步长和角度值
+        # 将[0,1]范围映射到实际范围
+        scaled_params = action_params.squeeze(0)  # 移除批次维度
+        move_forward_step = 1 + 4 * scaled_params[0].item()  # 映射到[1, 5]范围
+        turn_angle = 10 + 50 * scaled_params[1].item()  # 映射到[10, 60]范围
         
         # 存储状态、动作和对数概率
         # 不要存储带批次维度的状态，只存储原始状态
         memory.states.append(state)  # 不带批次维度
         memory.actions.append(action.item())  # 确保是标量值
         memory.logprobs.append(action_logprob.item())  # 确保是标量值
+        if not hasattr(memory, 'action_params'):
+            memory.action_params = []
+        memory.action_params.append(scaled_params.tolist())  # 存储动作参数
         
-        return action.item()
+        return action.item(), move_forward_step, turn_angle
     
     def evaluate(self, state):
         """
         评估状态-动作对的价值
         """
-        action_probs, state_value = self.policy(state)
+        action_probs, action_params, state_value = self.policy(state)
         dist = torch.distributions.Categorical(action_probs)
         
-        return dist, state_value.squeeze(-1)
+        return dist, action_params, state_value.squeeze(-1)
     
     def _preprocess_state(self, state):
         """
@@ -786,10 +770,10 @@ def train_gate_search_ppo_agent(episodes=200, model_path="gate_search_ppo_model.
         
         while not done:
             # 选择动作 - 这会在act方法中自动添加状态、动作和对数概率到memory
-            action = ppo_agent.act(state, memory)
+            action, move_forward_step, turn_angle = ppo_agent.act(state, memory)
             
             # 执行动作
-            next_state, reward, done, detection_results = env.step(action)
+            next_state, reward, done, detection_results = env.step(action, move_forward_step, turn_angle)
             
             # 存储奖励和终止标志到当前episode的memory
             memory.rewards.append(reward)
@@ -804,8 +788,8 @@ def train_gate_search_ppo_agent(episodes=200, model_path="gate_search_ppo_model.
                 final_area = max(d['width'] * d['height'] for d in detection_results)
             
             if done:
-                logger.info(f"Episode: {episode}, Score: {step_count}, Total Reward: {total_reward:.2f}, Final Area: {final_area:.2f}")
-                print(f"Episode: {episode+1}/{episodes}, Score: {step_count}, Total Reward: {total_reward:.2f}, Final Area: {final_area:.2f}")
+                logger.info(f"Episode: {episode}, Score: {step_count}, Total Reward: {total_reward:.2f}, Final Area: {final_area:.2f}, Last Move Step: {move_forward_step}, Last Turn Angle: {turn_angle}")
+                print(f"Episode: {episode+1}/{episodes}, Score: {step_count}, Total Reward: {total_reward:.2f}, Final Area: {final_area:.2f}, Last Move Step: {move_forward_step}, Last Turn Angle: {turn_angle}")
                 scores.append(step_count)
                 total_rewards.append(total_reward)
                 final_areas.append(final_area)
@@ -820,6 +804,8 @@ def train_gate_search_ppo_agent(episodes=200, model_path="gate_search_ppo_model.
         batch_memory.logprobs.extend(memory.logprobs)
         batch_memory.rewards.extend(memory.rewards)
         batch_memory.is_terminals.extend(memory.is_terminals)
+        if hasattr(memory, 'action_params'):
+            batch_memory.action_params.extend(memory.action_params)
         
         # 清空当前episode的memory
         memory.clear_memory()
@@ -899,16 +885,17 @@ def evaluate_trained_ppo_agent(model_path="gate_search_ppo_model.pth", episodes=
         
         done = False
         while not done and step_count < 50:
-            action = ppo_agent.act(state, memory)
+            action, move_forward_step, turn_angle = ppo_agent.act(state, memory)
             
             # 清空临时记忆中的数据，因为我们只是在评估
             memory.clear_memory()
             
             # 打印动作
             action_names = ["forward", "backward", "turn_left", "turn_right", "strafe_left", "strafe_right"]
-            logger.info(f"Episode {episode+1}, Step {step_count}: Taking action - {action_names[action]}")
+            logger.info(f"Episode {episode+1}, Step {step_count}: Taking action - {action_names[action]}, "
+                       f"Step: {move_forward_step}, Turn Angle: {turn_angle}")
             
-            state, reward, done, detection_results = env.step(action)
+            state, reward, done, detection_results = env.step(action, move_forward_step, turn_angle)
             total_reward += reward
             step_count += 1
             
@@ -1006,16 +993,17 @@ def load_and_test_ppo_agent(model_path="gate_search_ppo_model.pth", target_descr
     logger.info("开始测试PPO智能体...")
     
     while not done and step_count < 50:
-        action = ppo_agent.act(state, memory)
+        action, move_forward_step, turn_angle = ppo_agent.act(state, memory)
         
         # 清空临时记忆中的数据，因为我们只是在评估
         memory.clear_memory()
         
         # 打印动作
         action_names = ["forward", "backward", "turn_left", "turn_right", "strafe_left", "strafe_right"]
-        logger.info(f"Step {step_count}: Taking action - {action_names[action]}")
+        logger.info(f"Step {step_count}: Taking action - {action_names[action]}, "
+                   f"Step: {move_forward_step}, Turn Angle: {turn_angle}")
         
-        state, reward, done, detection_results = env.step(action)
+        state, reward, done, detection_results = env.step(action, move_forward_step, turn_angle)
         total_reward += reward
         step_count += 1
         
@@ -1082,16 +1070,17 @@ def find_gate_with_ppo(target_description="gate"):
     logger.info("开始测试PPO智能体...")
     
     while not done and step_count < 50:
-        action = trained_agent.act(state, memory)
+        action, move_forward_step, turn_angle = trained_agent.act(state, memory)
         
         # 清空临时记忆中的数据，因为我们只是在评估
         memory.clear_memory()
         
         # 打印动作
         action_names = ["forward", "backward", "turn_left", "turn_right", "strafe_left", "strafe_right"]
-        logger.info(f"Step {step_count}: Taking action - {action_names[action]}")
+        logger.info(f"Step {step_count}: Taking action - {action_names[action]}, "
+                   f"Step: {move_forward_step}, Turn Angle: {turn_angle}")
         
-        state, reward, done, detection_results = env.step(action)
+        state, reward, done, detection_results = env.step(action, move_forward_step, turn_angle)
         total_reward += reward
         step_count += 1
         
