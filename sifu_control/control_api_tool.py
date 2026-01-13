@@ -37,29 +37,23 @@ class ImprovedMovementController:
     def __init__(self):
         pass  # 不再跟踪位置和方向
 
-    def move_forward(self, distance=1, duration=0.1):
+    def move_forward(self, duration=1.0):
         """
-        向前移动指定距离 - 按W键
-        :param distance: 移动距离，默认为1
-        :param duration: 按键持续时间，默认为0.1秒
+        向前移动指定时间 - 持续按住W键
+        :param duration: 按键持续时间，默认为1.0秒
         """
-        # 使用改进的按键方法
-        for _ in range(int(distance)):
-            success = self._send_key_event('w', duration)
-            time.sleep(0.1)
-        return f"向前移动 {distance} 单位"
+        # 使用改进的按键方法，持续按住W键指定时间
+        success = self._send_key_event_hold('w', duration)
+        return f"向前移动，持续时间 {duration} 秒"
         
-    def move_backward(self, distance=1, duration=0.1):
+    def move_backward(self, duration=1.0):
         """
-        向后移动指定距离 - 按S键
-        :param distance: 移动距离，默认为1
-        :param duration: 按键持续时间，默认为0.1秒
+        向后移动指定时间 - 持续按住S键
+        :param duration: 按键持续时间，默认为1.0秒
         """
-        # 使用改进的按键方法
-        for _ in range(int(distance)):
-            success = self._send_key_event('s', duration)
-            time.sleep(0.1)
-        return f"向后移动 {distance} 单位"
+        # 使用改进的按键方法，持续按住S键指定时间
+        success = self._send_key_event_hold('s', duration)
+        return f"向后移动，持续时间 {duration} 秒"
         
     def turn_left(self, angle=90, duration=0.1):
         """
@@ -85,54 +79,50 @@ class ImprovedMovementController:
         self._send_mouse_move_relative(adjusted_movement, 0, duration)
         return f"右转 {angle} 度"
         
-    def strafe_left(self, distance=1, duration=0.1):
+    def strafe_left(self, duration=1.0):
         """
-        左平移 - 按A键
-        :param distance: 移动距离，默认为1
-        :param duration: 按键持续时间，默认为0.1秒
+        左平移指定时间 - 持续按住A键
+        :param duration: 按键持续时间，默认为1.0秒
         """
-        # 使用改进的按键方法
-        for _ in range(int(distance)):
-            success = self._send_key_event('a', duration)
-            time.sleep(0.1)
-        return f"左平移 {distance} 单位"
+        # 使用改进的按键方法，持续按住A键指定时间
+        success = self._send_key_event_hold('a', duration)
+        return f"左平移，持续时间 {duration} 秒"
         
-    def strafe_right(self, distance=1, duration=0.1):
+    def strafe_right(self, duration=1.0):
         """
-        右平移 - 按D键
-        :param distance: 移动距离，默认为1
-        :param duration: 按键持续时间，默认为0.1秒
+        右平移指定时间 - 持续按住D键
+        :param duration: 按键持续时间，默认为1.0秒
         """
-        # 使用改进的按键方法
-        for _ in range(int(distance)):
-            success = self._send_key_event('d', duration)
-            time.sleep(0.1)
-        return f"右平移 {distance} 单位"
+        # 使用改进的按键方法，持续按住D键指定时间
+        success = self._send_key_event_hold('d', duration)
+        return f"右平移，持续时间 {duration} 秒"
 
-    def _send_key_event(self, key, duration=0.1):
+    def _send_key_event_hold(self, key, duration=1.0):
         """
-        使用更底层的API发送按键事件，适用于游戏
+        使用更底层的API发送按键事件并保持按下状态一段时间，适用于游戏
+        :param key: 要按下的键
+        :param duration: 按键持续时间
         """
         try:
             # 尝试使用pynput库，它比pyautogui更兼容游戏
             from pynput.keyboard import Key, Controller
-
+            
             keyboard = Controller()
             keyboard.press(key)
             time.sleep(duration)
             keyboard.release(key)
-            return f"使用pynput发送按键: {key} 成功"
+            return f"使用pynput发送按键: {key}，持续 {duration} 秒，成功"
         except ImportError:
             # 如果pynput不可用，使用ctypes直接调用Windows API
             try:
                 import ctypes
                 from ctypes import wintypes
-
+                
                 user32 = ctypes.WinDLL('user32', use_last_error=True)
-
+                
                 # 定义虚拟键码
                 vk_code = ord(key.upper())
-
+                
                 # 定义输入结构
                 class KEYBDINPUT(ctypes.Structure):
                     _fields_ = (("wVk", wintypes.WORD),
@@ -140,29 +130,34 @@ class ImprovedMovementController:
                                 ("dwFlags", wintypes.DWORD),
                                 ("time", wintypes.DWORD),
                                 ("dwExtraInfo", ctypes.POINTER(wintypes.ULONG)))
-
+                
                 class INPUT(ctypes.Structure):
                     _anonymous_ = (("ki", KEYBDINPUT),)
                     _fields_ = (("type", wintypes.DWORD),
                                 ("ki", KEYBDINPUT))
-
+                
                 # 定义标志
                 KEYEVENTF_KEYUP = 0x0002
-
-                # 创建键盘输入事件
-                inputs = [INPUT(type=2,  # INPUT_KEYBOARD
-                               ki=KEYBDINPUT(wVk=vk_code, wScan=0, dwFlags=0, time=0, dwExtraInfo=None)),
-                         INPUT(type=2,  # INPUT_KEYBOARD
-                               ki=KEYBDINPUT(wVk=vk_code, wScan=0, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=None))]
-
-                # 发送输入事件
-                ret = user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
-                if ret != 2:
-                    print(f"使用Windows API发送按键事件失败: {ctypes.FormatError(ctypes.get_last_error())}")
-                    return f"发送按键事件失败: {ctypes.FormatError(ctypes.get_last_error())}"
-
-                print(f"使用Windows API发送按键: {key} 成功")
-                return f"使用Windows API发送按键: {key} 成功"
+                KEYEVENTF_KEYDOWN = 0x0000
+                
+                # 按下键
+                press_input = INPUT(type=1,  # INPUT_KEYBOARD
+                                  ki=KEYBDINPUT(wVk=vk_code, wScan=0, dwFlags=KEYEVENTF_KEYDOWN, time=0, dwExtraInfo=None))
+                
+                # 释放键
+                release_input = INPUT(type=1,  # INPUT_KEYBOARD
+                                    ki=KEYBDINPUT(wVk=vk_code, wScan=0, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=None))
+                
+                # 按下键
+                user32.SendInput(1, ctypes.byref(press_input), ctypes.sizeof(INPUT))
+                
+                # 等待指定时间
+                time.sleep(duration)
+                
+                # 释放键
+                user32.SendInput(1, ctypes.byref(release_input), ctypes.sizeof(INPUT))
+                
+                return f"使用Windows API发送按键: {key}，持续 {duration} 秒，成功"
             except Exception as e:
                 print(f"使用Windows API发送按键事件时出错: {str(e)}")
                 return f"使用Windows API发送按键事件时出错: {str(e)}"
@@ -229,5 +224,3 @@ class ImprovedMovementController:
             return f"使用Windows API相对移动鼠标: ({x_offset}, {y_offset}) 成功"
         except Exception as e:
             return f"使用Windows API移动鼠标时出错: {str(e)}"
-
-
