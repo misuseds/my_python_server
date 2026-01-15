@@ -78,25 +78,27 @@ def continue_training_gru_ppo_agent(model_path=None):
         turn_action_dim
     )
     
-    # 检查模型文件是否存在
-    if os.path.exists(model_path):
-        latest_checkpoint = find_latest_checkpoint(model_path)
-        
-        if latest_checkpoint:
-            start_episode = ppo_agent.load_checkpoint(latest_checkpoint)
-        else:
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            try:
-                ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=device))
-                ppo_agent.policy_old.load_state_dict(torch.load(model_path, map_location=device))
-                logger.info(f"从主模型文件加载: {model_path}")
-                start_episode = 0
-            except Exception as e:
-                logger.error(f"加载模型失败: {e}")
-                return {"status": "error", "message": f"加载模型失败: {e}"}
+    # 首先查找检查点文件
+    latest_checkpoint = find_latest_checkpoint(model_path)
+    
+    if latest_checkpoint:
+        # 如果找到检查点，优先加载检查点
+        start_episode = ppo_agent.load_checkpoint(latest_checkpoint)
+        logger.info(f"从最新检查点加载: {latest_checkpoint}")
+    elif os.path.exists(model_path):
+        # 没有检查点但主模型存在，加载主模型
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        try:
+            ppo_agent.policy.load_state_dict(torch.load(model_path, map_location=device))
+            ppo_agent.policy_old.load_state_dict(torch.load(model_path, map_location=device))
+            logger.info(f"从主模型文件加载: {model_path}")
+            start_episode = 0
+        except Exception as e:
+            logger.error(f"加载模型失败: {e}")
+            return {"status": "error", "message": f"加载模型失败: {e}"}
     else:
-        # 模型文件不存在，创建新模型开始训练
-        logger.info(f"模型文件不存在: {model_path}，创建新模型开始训练")
+        # 模型文件和检查点都不存在，创建新模型
+        logger.info(f"模型文件和检查点都不存在: {model_path}，创建新模型开始训练")
         start_episode = 0
         
         # 确保模型目录存在

@@ -144,7 +144,7 @@ class ResNetFeatureExtractor(nn.Module):
 
 class GRUPolicyNetwork(nn.Module):
     """
-    带有GRU的策略网络
+    带有GRU的策略网络 - 增强输出多样性
     """
     def __init__(self, state_dim, move_action_dim, turn_action_dim, hidden_size=128):
         super(GRUPolicyNetwork, self).__init__()
@@ -153,31 +153,43 @@ class GRUPolicyNetwork(nn.Module):
         feature_size = 128  # 根据ResNetFeatureExtractor的输出调整
         
         # GRU层
-        self.gru = nn.GRU(feature_size, hidden_size, batch_first=True)
-        
-        # Actor heads
+        self.gru = nn.GRU( feature_size, hidden_size, num_layers=2, batch_first=True, dropout=0.1) 
+                # Actor heads
         self.move_actor = nn.Sequential(
-            nn.Linear(hidden_size, 64),
+            nn.Linear(hidden_size, 128),  # 增加隐藏层大小
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, move_action_dim)
         )
         
         self.turn_actor = nn.Sequential(
-            nn.Linear(hidden_size, 64),
+            nn.Linear(hidden_size, 128),  # 增加隐藏层大小
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, turn_action_dim)
         )
         
-        # Action parameter prediction head
+        # Action parameter prediction head - 使用不同的激活函数
         self.action_param_head = nn.Sequential(
-            nn.Linear(hidden_size, 64),
-            nn.ReLU(),
-            nn.Linear(64, 2)  # For move step and turn angle
+            nn.Linear(hidden_size, 128),
+            nn.LeakyReLU(negative_slope=0.01),  # 使用LeakyReLU增加非线性
+            nn.Dropout(0.2),
+            nn.Linear(128, 64),
+            nn.LeakyReLU(negative_slope=0.01),
+            nn.Linear(64, 2),
+            nn.Tanh()  # 保持tanh输出到[-1,1]范围
         )
         
         # Critic head
         self.critic = nn.Sequential(
-            nn.Linear(hidden_size, 64),
+            nn.Linear(hidden_size, 128),  # 增加隐藏层大小
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 1)
         )
@@ -203,7 +215,7 @@ class GRUPolicyNetwork(nn.Module):
         move_logits = self.move_actor(last_output)
         turn_logits = self.turn_actor(last_output)
         
-        # Action parameters
+        # Action parameters - 使用tanh确保输出在[-1, 1]之间
         action_params = torch.tanh(self.action_param_head(last_output))
         
         # Critic output
@@ -316,22 +328,41 @@ class GRUPPOAgent:
             turn_logprob = turn_dist.log_prob(turn_action)
             logprob = move_logprob + turn_logprob
         
-        # 处理动作参数，确保在合理范围内
-        # action_params来自tanh激活函数，范围为[-1, 1]
+        # 处理动作参数，采用更灵活的映射方式
         move_forward_step_raw = action_params[0][0].item()  # [-1,1]范围
-        turn_angle_raw = action_params[0][1].item()          # [-1,1]范围
+        turn_angle_raw = action_params[0][1].item()         # [-1,1]范围
         
-        # 将[-1,1]映射到[0,1]范围，确保分布均匀
-        move_forward_step_normalized = (move_forward_step_raw + 1.0) / 2.0  # [0,1]范围
-        turn_angle_normalized = (turn_angle_raw + 1.0) / 2.0               # [0,1]范围
-        
-        # 从[0,1]映射到实际动作参数范围
-        # 移动步长范围配置
-        MOVE_STEP_MIN = CONFIG.get('MOVE_STEP_MIN', 0.5)
-        MOVE_STEP_MAX = CONFIG.get('MOVE_STEP_MAX', 2.0)
-        # 转向角度范围配置
+        # 使用配置文件中的参数范围
+        MOVE_STEP_MIN = CONFIG.get('MOVE_STEP_MIN', 0.0)
+        MOVE_STEP_MAX = CONFIG.get('MOVE_STEP_MAX', 1.0)
         TURN_ANGLE_MIN = CONFIG.get('TURN_ANGLE_MIN', 5.0)
         TURN_ANGLE_MAX = CONFIG.get('TURN_ANGLE_MAX', 60.0)
+        
+        # 改进的探索策略：增加动态噪声
+        exploration_rate = CONFIG.get('INITIAL_EXPLORATION_RATE', 1.0) * \
+                        (CONFIG.get('EXPLORATION_DECAY_RATE', 0.999) ** len(self.state_history))
+        
+        exploration_noise = CONFIG.get('ACTION_EXPLORATION_NOISE', 0.15) * exploration_rate
+        
+        # 对原始输出添加更强的噪声
+        move_raw_with_noise = move_forward_step_raw + np.random.normal(0, exploration_noise)
+        turn_raw_with_noise = turn_angle_raw + np.random.normal(0, exploration_noise)
+        
+        # 确保在 [-1, 1] 范围内
+        move_raw_clipped = np.clip(move_raw_with_noise, -1.0, 1.0)
+        turn_raw_clipped = np.clip(turn_raw_with_noise, -1.0, 1.0)
+        
+        # 使用非线性映射，让边缘值更容易出现
+        # 将 [-1, 1] 映射到 [0, 1]，但使用sigmoid-like函数让极值更容易出现
+        def enhanced_mapping(raw_value):
+            # 将 [-1, 1] 映射到 [-3, 3] 以扩大sigmoid的作用范围
+            expanded_value = raw_value * 3.0
+            # 使用tanh作为非线性映射，这样边缘值更容易出现
+            mapped_value = (np.tanh(expanded_value) + 1.0) / 2.0  # 映射到 [0, 1]
+            return np.clip(mapped_value, 0.0, 1.0)
+        
+        move_forward_step_normalized = enhanced_mapping(move_raw_clipped)
+        turn_angle_normalized = enhanced_mapping(turn_raw_clipped)
         
         # 应用线性变换到实际范围
         move_forward_step = move_forward_step_normalized * (MOVE_STEP_MAX - MOVE_STEP_MIN) + MOVE_STEP_MIN
@@ -349,6 +380,7 @@ class GRUPPOAgent:
         )
         
         return move_action.item(), turn_action.item(), move_forward_step, turn_angle
+
     def update(self, memory):
         if len(memory.states) == 0:
             return
@@ -386,6 +418,11 @@ class GRUPPOAgent:
             turn_logprobs = turn_dists.log_prob(turn_actions)
             logprobs = move_logprobs + turn_logprobs
             
+            # Calculate entropy bonus to encourage exploration
+            move_entropy = -(move_probs * torch.log(move_probs + 1e-10)).sum(dim=-1).mean()
+            turn_entropy = -(turn_probs * torch.log(turn_probs + 1e-10)).sum(dim=-1).mean()
+            entropy_bonus = move_entropy + turn_entropy
+            
             # Calculate ratios
             ratios = torch.exp(logprobs - old_logprobs.detach())
             
@@ -400,8 +437,9 @@ class GRUPPOAgent:
             # Value loss
             critic_loss = self.MseLoss(state_vals.squeeze(-1), discounted_rewards)
             
-            # Total loss
-            loss = actor_loss + 0.5 * critic_loss
+            # Total loss - including entropy regularization
+            entropy_coeff = CONFIG.get('ENTROPY_COEFFICIENT', 0.01)
+            loss = actor_loss + 0.5 * critic_loss - entropy_coeff * entropy_bonus
             
             # Update network
             self.optimizer.zero_grad()
@@ -438,7 +476,7 @@ class GRUPPOAgent:
         checkpoint = {
             'episode': episode,
             'policy_state_dict': self.policy.state_dict(),
-            'policy_old_state_dict': self.policy.old.state_dict(),
+            'policy_old_state_dict': self.policy_old.state_dict(),
             'optimizer_state_dict': optimizer_state_dict or self.optimizer.state_dict(),
         }
         torch.save(checkpoint, filepath)
@@ -459,7 +497,6 @@ class GRUPPOAgent:
         else:
             print(f"检查点文件不存在: {filepath}")
             return 0
-
 
 class TargetSearchEnvironment:
     """
@@ -733,7 +770,7 @@ class TargetSearchEnvironment:
         if pre_climb_detected:
             self.logger.info(f"动作执行前已检测到climb类别，立即终止")
             reward, new_area = self.calculate_reward(pre_action_detections, self.last_center_distance, (move_action, turn_action), self.last_area)
-            speed_bonus = CONFIG['CLIMB_REWARD_BONUS'] / max(1, self.step_count + 1)
+            speed_bonus = CONFIG['BASE_COMPLETION_REWARD'] / max(1, self.step_count + 1)
             reward += speed_bonus
             self.last_area = new_area
             self.last_detection_result = pre_action_detections
