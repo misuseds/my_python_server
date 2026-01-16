@@ -50,14 +50,12 @@ def find_latest_checkpoint(model_path):
     return None
 
 
-
-
 def continue_training_gru_ppo_agent(model_path=None):
     """
     基于现有GRU模型继续训练 - 使用全局配置，带收敛监控
     """
     config = CONFIG
-    
+    convergence_info = {}
     # 如果没有传入model_path，使用默认路径
     if model_path is None:
         model_path = config['MODEL_PATH']
@@ -65,14 +63,14 @@ def continue_training_gru_ppo_agent(model_path=None):
     logger = logging.getLogger(__name__)
     logger.info(f"基于现有GRU模型继续训练: {model_path}, 额外训练 {config['EPISODES']} 轮")
     
-    from ppo_agents import TargetSearchEnvironment
-    env = TargetSearchEnvironment(config['TARGET_DESCRIPTION'])
+    from ppo_agents import EnhancedTargetSearchEnvironment
+    env = EnhancedTargetSearchEnvironment(config['TARGET_DESCRIPTION'])
     
     move_action_dim = 4
     turn_action_dim = 2
     
-    from ppo_agents import GRUPPOAgent
-    ppo_agent = GRUPPOAgent(
+    from ppo_agents import EnhancedGRUPPOAgent
+    ppo_agent = EnhancedGRUPPOAgent(
         (3, 480, 640), 
         move_action_dim,
         turn_action_dim
@@ -129,83 +127,84 @@ def continue_training_gru_ppo_agent(model_path=None):
         
         ppo_agent.state_history.clear()
         
-        while not done:
-            move_action, turn_action, move_forward_step, turn_angle, debug_info = ppo_agent.act(state, memory, return_debug_info=True)
-                        # GRU最后输出层 - 这是网络学到的状态表示
-           
-            print(f"  GRU前5个值: {[f'{val:.2f}' for val in debug_info['gru_last_output'][0][:5]]}")
-
-            # Move动作分支输出 - 4个离散动作的概率
-            move_probs = debug_info['move_logits'][0]
-            move_softmax = np.exp(move_probs) / np.sum(np.exp(move_probs))
-            
+    while not done:
+        move_action, turn_action, move_forward_step, turn_angle, debug_info = ppo_agent.act(state, memory, return_debug_info=True)
+                    
+        # 打印神经网络输出和动作参数在一起
+        print(f"\n--- 动作详情 ---")
+        print(f"GRU前5个值: {[f'{val:.2f}' for val in debug_info['gru_last_output'][0][:5]]}")
         
-            print(f"  MoveProbabilities: {[f'{p:.2f}' for p in move_softmax]}")
-      
+        # Move动作分支输出 - 4个离散动作的概率
+        move_probs = debug_info['move_logits'][0]
+        move_softmax = np.exp(move_probs) / np.sum(np.exp(move_probs))
+        print(f"MoveProbabilities: {[f'{p:.2f}' for p in move_softmax]}")
+        
+        # Turn动作分支输出 - 2个离散动作的概率
+        turn_probs = debug_info['turn_logits'][0]
+        turn_softmax = np.exp(turn_probs) / np.sum(np.exp(turn_probs))
+        print(f"TurnProbabilities: {[f'{p:.2f}' for p in turn_softmax]}")
+        
+        # 价值函数输出
+        print(f"价值函数输出: {debug_info['value'][0][0]:.2f}")
+        
+        # 动作和参数信息
+        move_action_names = ["forward", "backward", "strafe_left", "strafe_right"]
+        turn_action_names = ["turn_left", "turn_right"]
+        print(f"执行动作: Move Action: {move_action_names[move_action]}, Turn Action: {turn_action_names[turn_action]}, Move Step: {move_forward_step:.2f}, Turn Angle: {turn_angle:.2f}")
+        print(f"------------------\n")
+        
+        next_state, reward, done, detection_results = env.step(move_action, turn_action, move_forward_step, turn_angle)
+        
+        if len(memory.rewards) > 0:
+            memory.rewards[-1] = reward
+            memory.is_terminals[-1] = done
+        
+        state = next_state
+        total_reward += reward
+        step_count += 1
+        
+        if detection_results:
+            final_area = max(d['width'] * d['height'] for d in detection_results if 'width' in d and 'height' in d)
+        
+        if done:
+            move_action_names = ["forward", "backward", "strafe_left", "strafe_right"]
+            turn_action_names = ["turn_left", "turn_right"]
             
-            # Turn动作分支输出 - 2个离散动作的概率
-            turn_probs = debug_info['turn_logits'][0]
-            turn_softmax = np.exp(turn_probs) / np.sum(np.exp(turn_probs))
-
-            print(f"  TurnProbabilities: {[f'{p:.2f}' for p in turn_softmax]}")
-          
-
+            # 检查是否成功找到目标
+            climb_detected = any(
+                detection['label'].lower() == 'climb' or 'climb' in detection['label'].lower()
+                for detection in detection_results
+            )
+            success_flag = climb_detected
             
-            # 价值函数输出
-            print(f"\n价值函数输出: {debug_info['value'][0][0]:.2f}")
-          
-            next_state, reward, done, detection_results = env.step(move_action, turn_action, move_forward_step, turn_angle)
+            logger.info(f"Episode: {episode}, Score: {step_count}, Total Reward: {total_reward:.2f}, Final Area: {final_area:.2f}, Success: {success_flag}")
+            print(f"Ep: {episode+1}/{total_training_episodes}, S: {step_count}, R: {total_reward:.2f}, A: {final_area:.2f}, "
+                f"Success: {success_flag}, MAct: {move_action_names[move_action]}, TAct: {turn_action_names[turn_action]}, "
+                f"MStep: {move_forward_step:.2f}, TAngle: {turn_angle:.2f}")
+            scores.append(step_count)
+            total_rewards.append(total_reward)
+            final_areas.append(final_area)
             
-            if len(memory.rewards) > 0:
-                memory.rewards[-1] = reward
-                memory.is_terminals[-1] = done
+            # 使用收敛监控
+            convergence_info = ppo_agent.check_convergence_status(total_reward, step_count, success_flag)
             
-            state = next_state
-            total_reward += reward
-            step_count += 1
+            # 每10轮打印一次收敛报告
+            if episode % 10 == 0:
+                print(f"收敛监控 - 平均奖励: {convergence_info['avg_recent_reward']:.2f}, "
+                    f"成功率: {convergence_info['recent_success_rate']:.2f}, "
+                    f"学习率: {convergence_info['current_learning_rate']:.6f}, "
+                    f"剩余耐心: {convergence_info['current_patience']}")
             
-            if detection_results:
-                final_area = max(d['width'] * d['height'] for d in detection_results if 'width' in d and 'height' in d)
-            
-            if done:
-                move_action_names = ["forward", "backward", "strafe_left", "strafe_right"]
-                turn_action_names = ["turn_left", "turn_right"]
-                
-                # 检查是否成功找到目标
-                climb_detected = any(
-                    detection['label'].lower() == 'climb' or 'climb' in detection['label'].lower()
-                    for detection in detection_results
-                )
-                success_flag = climb_detected
-                
-                logger.info(f"Episode: {episode}, Score: {step_count}, Total Reward: {total_reward:.2f}, Final Area: {final_area:.2f}, Success: {success_flag}")
-                print(f"Ep: {episode+1}/{total_training_episodes}, S: {step_count}, R: {total_reward:.2f}, A: {final_area:.2f}, "
-                      f"Success: {success_flag}, MAct: {move_action_names[move_action]}, TAct: {turn_action_names[turn_action]}, "
-                      f"MStep: {move_forward_step:.2f}, TAngle: {turn_angle:.2f}")
-                scores.append(step_count)
-                total_rewards.append(total_reward)
-                final_areas.append(final_area)
-                
-                # 使用收敛监控
-                convergence_info = ppo_agent.check_convergence_status(total_reward, step_count, success_flag)
-                
-                # 每10轮打印一次收敛报告
-                if episode % 10 == 0:
-                    print(f"收敛监控 - 平均奖励: {convergence_info['avg_recent_reward']:.2f}, "
-                          f"成功率: {convergence_info['recent_success_rate']:.2f}, "
-                          f"学习率: {convergence_info['current_learning_rate']:.6f}, "
-                          f"剩余耐心: {convergence_info['current_patience']}")
-                
-                # 检查早停条件
-                if convergence_info['should_stop_early']:
-                    logger.info(f"早停触发: 连续{ppo_agent.patience}轮无改善")
-                    print(f"早停触发: 连续{ppo_agent.patience}轮无改善，训练结束")
-                    break
-                
-                # 修复：重置环境并获取新的初始状态
-                env.reset_to_origin()
-                state = env.reset()
+            # 检查早停条件
+            if convergence_info['should_stop_early']:
+                logger.info(f"早停触发: 连续{ppo_agent.patience}轮无改善")
+                print(f"早停触发: 连续{ppo_agent.patience}轮无改善，训练结束")
                 break
+            
+            # 修复：重置环境并获取新的初始状态
+            env.reset_to_origin()
+            state = env.reset()
+            break
 
         # 每个episode结束后都将其记忆加入批量记忆
         batch_memory.states.extend(memory.states)
@@ -266,7 +265,6 @@ def continue_training_gru_ppo_agent(model_path=None):
         "final_episode": total_training_episodes,
         "convergence_report": final_report
     }
-
 
 
 def execute_ppo_tool(tool_name, *args):

@@ -143,22 +143,33 @@ class ResNetFeatureExtractor(nn.Module):
         return x
 
 
-class GRUPolicyNetwork(nn.Module):
+class EnhancedGRUPolicyNetwork(nn.Module):
     """
-    带有GRU的策略网络 - 增强输出多样性，并支持输出中间层值
+    增强版带有GRU的策略网络 - 改进价值函数输出，增强卡死检测
     """
     def __init__(self, state_dim, move_action_dim, turn_action_dim, hidden_size=128):
-        super(GRUPolicyNetwork, self).__init__()
+        super(EnhancedGRUPolicyNetwork, self).__init__()
         
         self.feature_extractor = ResNetFeatureExtractor(3)
         feature_size = 128  # 根据ResNetFeatureExtractor的输出调整
         
-        # GRU层
-        self.gru = nn.GRU(feature_size, hidden_size, num_layers=2, batch_first=True, dropout=0.1) 
+        # 双向GRU层 - 更好地捕获序列信息
+        self.gru = nn.GRU(
+            feature_size, 
+            hidden_size, 
+            num_layers=2, 
+            batch_first=True, 
+            dropout=0.1,
+            bidirectional=True  # 双向GRU
+        )
+        self.gru_output = nn.Linear(hidden_size * 2, hidden_size)  # 处理双向GRU输出
         
         # Actor heads
         self.move_actor = nn.Sequential(
-            nn.Linear(hidden_size, 128),  # 增加隐藏层大小
+            nn.Linear(hidden_size, 256),  # 增加隐藏层大小
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(128, 64),
@@ -167,7 +178,10 @@ class GRUPolicyNetwork(nn.Module):
         )
         
         self.turn_actor = nn.Sequential(
-            nn.Linear(hidden_size, 128),  # 增加隐藏层大小
+            nn.Linear(hidden_size, 256),  # 增加隐藏层大小
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(128, 64),
@@ -186,14 +200,19 @@ class GRUPolicyNetwork(nn.Module):
             nn.Tanh()  # 保持tanh输出到[-1,1]范围
         )
         
-        # Critic head
+        # 增强的价值网络 - 提高价值函数输出的幅度
         self.critic = nn.Sequential(
-            nn.Linear(hidden_size, 128),  # 增加隐藏层大小
+            nn.Linear(hidden_size, 256),  # 增加宽度
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(64, 32),  # 新增一层
+            nn.ReLU(),
+            nn.Linear(32, 1)
         )
         
         # 添加标志位控制是否输出调试信息
@@ -212,6 +231,7 @@ class GRUPolicyNetwork(nn.Module):
         
         # Pass through GRU
         gru_out, hidden = self.gru(features, hidden_state)
+        gru_out = self.gru_output(gru_out)  # 处理双向GRU输出
         
         # Use the last output from GRU
         last_output = gru_out[:, -1, :]
@@ -251,6 +271,7 @@ class GRUPolicyNetwork(nn.Module):
                 hidden
             )
 
+
 class GRUMemory:
     """
     GRU智能体的记忆存储类
@@ -285,468 +306,36 @@ class GRUMemory:
             self.action_params.append(action_param)
 
 
-class GRUPPOAgent:
+class EnhancedStuckDetector:
     """
-    基于GRU的PPO智能体 - 增加收敛监控
-    """
-    def __init__(self, state_dim, move_action_dim, turn_action_dim):
-        config = CONFIG
-        
-        self.lr = config['LEARNING_RATE']
-        self.betas = (0.9, 0.999)
-        self.gamma = config['GAMMA']
-        self.K_epochs = config['K_EPOCHS']
-        self.eps_clip = config['EPS_CLIP']
-        self.sequence_length = config['SEQUENCE_LENGTH']
-        self.hidden_size = config['HIDDEN_SIZE']
-        
-        # Create policy networks
-        self.policy = GRUPolicyNetwork(
-            state_dim, move_action_dim, turn_action_dim, self.hidden_size
-        )
-        self.optimizer = torch.optim.Adam(
-            self.policy.parameters(), 
-            lr=self.lr, 
-            betas=self.betas
-        )
-        self.policy_old = GRUPolicyNetwork(
-            state_dim, move_action_dim, turn_action_dim, self.hidden_size
-        )
-        self.policy_old.load_state_dict(self.policy.state_dict())
-        
-        self.MseLoss = nn.MSELoss()
-        
-        # State history for sequence input
-        self.state_history = deque(maxlen=self.sequence_length)
-        
-        # 收敛监控相关变量
-        self.convergence_monitor = {
-            'episode_rewards': [],
-            'episode_lengths': [],
-            'episode_successes': [],
-            'loss_history': [],
-            'learning_rates': [],
-            'grad_norms': [],
-            'entropy_history': [],
-            'kl_divergence': []
-        }
-        
-        # 早停相关
-        self.best_avg_reward = float('-inf')
-        self.no_improve_count = 0
-        self.patience = config.get('EARLY_STOP_PATIENCE', 50)
-        
-        # 学习率调度器 - 移除verbose参数
-        try:
-            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, 
-                mode='max', 
-                factor=0.5, 
-                patience=10
-                # 注意：这里移除了verbose参数，因为它在某些PyTorch版本中不受支持
-            )
-        except TypeError:
-            # 如果仍然有问题，提供备选方案
-            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, 
-                mode='max', 
-                factor=0.5, 
-                patience=10
-            )
-
-    def act(self, state, memory, return_debug_info=False):
-        # 预处理状态
-        state_tensor = self._preprocess_state(state)
-        
-        # 将当前状态添加到历史记录
-        self.state_history.append(state_tensor)
-        
-        # 如果历史记录长度不足，用当前状态填充
-        while len(self.state_history) < self.sequence_length:
-            self.state_history.appendleft(state_tensor)
-        
-        # 转换为张量并添加批次维度
-        state_seq = torch.stack(list(self.state_history)).unsqueeze(0)  # [batch=1, seq_len, channels, height, width]
-        
-        # 使用旧策略获取动作概率
-        with torch.no_grad():
-            if return_debug_info:
-                move_probs, turn_probs, action_params, state_val, _, debug_info = self.policy_old(state_seq, return_debug_info=True)
-            else:
-                move_probs, turn_probs, action_params, state_val, _ = self.policy_old(state_seq)
-                
-            move_dist = Categorical(move_probs)
-            turn_dist = Categorical(turn_probs)
-            
-            # 采样动作
-            move_action = move_dist.sample()
-            turn_action = turn_dist.sample()
-            
-            # 计算对数概率
-            move_logprob = move_dist.log_prob(move_action)
-            turn_logprob = turn_dist.log_prob(turn_action)
-            logprob = move_logprob + turn_logprob
-        
-        # 处理动作参数，采用更灵活的映射方式
-        move_forward_step_raw = action_params[0][0].item()  # [-1,1]范围
-        turn_angle_raw = action_params[0][1].item()         # [-1,1]范围
-        
-        # 使用配置文件中的参数范围
-        MOVE_STEP_MIN = CONFIG.get('MOVE_STEP_MIN', 0.0)
-        MOVE_STEP_MAX = CONFIG.get('MOVE_STEP_MAX', 1.0)
-        TURN_ANGLE_MIN = CONFIG.get('TURN_ANGLE_MIN', 5.0)
-        TURN_ANGLE_MAX = CONFIG.get('TURN_ANGLE_MAX', 60.0)
-        
-        # 改进的探索策略：增加动态噪声
-        exploration_rate = CONFIG.get('INITIAL_EXPLORATION_RATE', 1.0) * \
-                        (CONFIG.get('EXPLORATION_DECAY_RATE', 0.999) ** len(self.state_history))
-        
-        exploration_noise = CONFIG.get('ACTION_EXPLORATION_NOISE', 0.15) * exploration_rate
-        
-        # 对原始输出添加更强的噪声
-        move_raw_with_noise = move_forward_step_raw + np.random.normal(0, exploration_noise)
-        turn_raw_with_noise = turn_angle_raw + np.random.normal(0, exploration_noise)
-        
-        # 确保在 [-1, 1] 范围内
-        move_raw_clipped = np.clip(move_raw_with_noise, -1.0, 1.0)
-        turn_raw_clipped = np.clip(turn_raw_with_noise, -1.0, 1.0)
-        
-        # 使用非线性映射，让边缘值更容易出现
-        def enhanced_mapping(raw_value):
-            # 将 [-1, 1] 映射到 [-3, 3] 以扩大sigmoid的作用范围
-            expanded_value = raw_value * 3.0
-            # 使用tanh作为非线性映射，这样边缘值更容易出现
-            mapped_value = (np.tanh(expanded_value) + 1.0) / 2.0  # 映射到 [0, 1]
-            return np.clip(mapped_value, 0.0, 1.0)
-        
-        move_forward_step_normalized = enhanced_mapping(move_raw_clipped)
-        turn_angle_normalized = enhanced_mapping(turn_raw_clipped)
-        
-        # 应用线性变换到实际范围
-        move_forward_step = move_forward_step_normalized * (MOVE_STEP_MAX - MOVE_STEP_MIN) + MOVE_STEP_MIN
-        turn_angle = turn_angle_normalized * (TURN_ANGLE_MAX - TURN_ANGLE_MIN) + TURN_ANGLE_MIN
-        
-        # 存储到记忆中
-        memory.append(
-            state_tensor,
-            move_action.item(),
-            turn_action.item(),
-            logprob.item(),
-            0,  # 奖励稍后更新
-            False,  # 是否结束稍后更新
-            [move_forward_step_normalized, turn_angle_normalized]  # 存储归一化的参数
-        )
-        
-        if return_debug_info:
-            return move_action.item(), turn_action.item(), move_forward_step, turn_angle, debug_info
-        else:
-            return move_action.item(), turn_action.item(), move_forward_step, turn_angle
-    def update(self, memory):
-        if len(memory.states) == 0:
-            return
-            
-        # Convert memory to tensors - 保持单个episode的序列结构
-        states_list = list(memory.states)
-        if len(states_list) == 0:
-            return
-        
-        # 构建状态序列
-        states = torch.stack(states_list).unsqueeze(0)  # [1, seq_len, channels, height, width]
-        move_actions = torch.tensor(list(memory.move_actions), dtype=torch.long)  # [seq_len]
-        turn_actions = torch.tensor(list(memory.turn_actions), dtype=torch.long)  # [seq_len]
-        old_logprobs = torch.tensor(list(memory.logprobs), dtype=torch.float)    # [seq_len]
-        rewards = torch.tensor(list(memory.rewards), dtype=torch.float)          # [seq_len]
-        terminals = torch.tensor(list(memory.is_terminals), dtype=torch.bool)    # [seq_len]
-
-        if len(rewards) == 0:
-            return
-
-        # Compute discounted rewards
-        discounted_rewards = []
-        running_add = 0
-        for reward, is_terminal in zip(reversed(rewards), reversed(terminals)):
-            if is_terminal:
-                running_add = 0
-            running_add = reward + (self.gamma * running_add)
-            discounted_rewards.insert(0, running_add)
-        
-        discounted_rewards = torch.tensor(discounted_rewards, dtype=torch.float)
-        if discounted_rewards.numel() > 1:  # 只有在有多于一个元素时才标准化
-            discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-5)
-        else:
-            # 如果只有一个元素，跳过标准化
-            pass
-
-        # 初始化梯度范数和其他指标变量
-        total_loss = 0
-        total_actor_loss = 0
-        total_critic_loss = 0
-        total_entropy = 0
-        grad_norm = 0  # 初始化梯度范数，防止变量未定义错误
-        
-        # Optimize policy K epochs
-        for _ in range(self.K_epochs):
-            # Forward pass - 获取整个序列的输出
-            move_probs, turn_probs, action_params, state_vals, _ = self.policy(states)
-            
-            # state_vals shape: [batch=1, seq_len, 1] -> [seq_len]
-            state_vals = state_vals.squeeze(0).squeeze(-1)  # [seq_len]
-            
-            # Ensure we have the right dimensions for action probabilities
-            move_probs_squeezed = move_probs.squeeze(0)  # [seq_len, move_action_dim]
-            turn_probs_squeezed = turn_probs.squeeze(0)  # [seq_len, turn_action_dim]
-            
-            # 检查维度并确保有足够的维度进行gather操作
-            if move_probs_squeezed.dim() == 1:
-                if move_probs_squeezed.size(0) == len(move_actions):
-                    move_probs_squeezed = move_probs_squeezed.unsqueeze(0).expand(len(move_actions), -1)
-                else:
-                    continue
-                    
-            if turn_probs_squeezed.dim() == 1:
-                if turn_probs_squeezed.size(0) == len(turn_actions):
-                    turn_probs_squeezed = turn_probs_squeezed.unsqueeze(0).expand(len(turn_actions), -1)
-                else:
-                    continue
-
-            # 确保动作索引在有效范围内
-            move_actions = torch.clamp(move_actions, 0, move_probs_squeezed.size(1) - 1)
-            turn_actions = torch.clamp(turn_actions, 0, turn_probs_squeezed.size(1) - 1)
-
-            # Calculate action logprobs - FIXED: 更安全的处理
-            try:
-                # 使用更安全的gather操作
-                if move_probs_squeezed.size(0) != move_actions.size(0):
-                    min_len = min(move_probs_squeezed.size(0), move_actions.size(0))
-                    move_probs_squeezed = move_probs_squeezed[:min_len]
-                    move_actions = move_actions[:min_len]
-                    
-                if turn_probs_squeezed.size(0) != turn_actions.size(0):
-                    min_len = min(turn_probs_squeezed.size(0), turn_actions.size(0))
-                    turn_probs_squeezed = turn_probs_squeezed[:min_len]
-                    turn_actions = turn_actions[:min_len]
-                
-                # 现在进行gather操作
-                gathered_move = move_probs_squeezed.gather(1, move_actions.unsqueeze(1))
-                move_logprobs = torch.log(gathered_move.squeeze(-1))
-                
-                gathered_turn = turn_probs_squeezed.gather(1, turn_actions.unsqueeze(1))
-                turn_logprobs = torch.log(gathered_turn.squeeze(-1))
-                
-                logprobs = move_logprobs + turn_logprobs
-                
-            except IndexError as e:
-                print(f"Gather操作索引错误: {e}")
-                continue
-            except RuntimeError as e:
-                print(f"Gather操作运行时错误: {e}")
-                continue
-                
-            # Calculate entropy bonus to encourage exploration
-            move_entropy = -(move_probs_squeezed * torch.log(move_probs_squeezed + 1e-10)).sum(dim=-1).mean()
-            turn_entropy = -(turn_probs_squeezed * torch.log(turn_probs_squeezed + 1e-10)).sum(dim=-1).mean()
-            entropy_bonus = move_entropy + turn_entropy
-            
-            # Calculate ratios
-            ratios = torch.exp(logprobs - old_logprobs.detach())
-            
-            # Calculate advantages - now both should be [seq_len]
-            advantages = discounted_rewards - state_vals.detach()
-            
-            # Calculate surrogate losses
-            surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
-            actor_loss = -torch.min(surr1, surr2).mean()
-            
-            # Value loss - ensure both tensors are the same size
-            critic_loss = self.MseLoss(state_vals, discounted_rewards)
-            
-            # Total loss - including entropy regularization
-            entropy_coeff = CONFIG.get('ENTROPY_COEFFICIENT', 0.01)
-            loss = actor_loss + 0.5 * critic_loss - entropy_coeff * entropy_bonus
-            
-            # Update network
-            self.optimizer.zero_grad()
-            # 添加梯度裁剪以避免梯度爆炸
-            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=CONFIG.get('GRADIENT_CLIP_NORM', 0.5))
-            loss.backward()
-            
-            # 计算梯度范数用于监控
-            total_norm = 0
-            param_count = 0
-            for p in self.policy.parameters():
-                if p.grad is not None:
-                    param_count += 1
-                    total_norm += p.grad.data.norm(2).item() ** 2
-            grad_norm = (total_norm / param_count) ** 0.5 if param_count > 0 else 0
-            
-            self.optimizer.step()
-            
-            # 累积损失值用于监控
-            total_loss += loss.item()
-            total_actor_loss += actor_loss.item()
-            total_critic_loss += critic_loss.item()
-            total_entropy += entropy_bonus.item()
-
-        # Copy new weights into old policy
-        self.policy_old.load_state_dict(self.policy.state_dict())
-        
-        # 更新收敛监控数据
-        self.convergence_monitor['loss_history'].append({
-            'total_loss': total_loss / self.K_epochs,
-            'actor_loss': total_actor_loss / self.K_epochs,
-            'critic_loss': total_critic_loss / self.K_epochs,
-            'entropy': total_entropy / self.K_epochs,
-            'grad_norm': grad_norm  # 现在即使循环没有执行，变量也已定义
-        })
-        
-        # 记录当前学习率
-        current_lr = self.optimizer.param_groups[0]['lr']
-        self.convergence_monitor['learning_rates'].append(current_lr)
-    def check_convergence_status(self, episode_reward, episode_length, success_flag=False):
-        """
-        检查收敛状态并返回相关信息
-        """
-        self.convergence_monitor['episode_rewards'].append(episode_reward)
-        self.convergence_monitor['episode_lengths'].append(episode_length)
-        self.convergence_monitor['episode_successes'].append(success_flag)
-        
-        # 计算滑动窗口统计数据
-        window_size = 20  # 可配置的滑动窗口大小
-        recent_rewards = self.convergence_monitor['episode_rewards'][-window_size:]
-        recent_lengths = self.convergence_monitor['episode_lengths'][-window_size:]
-        recent_successes = self.convergence_monitor['episode_successes'][-window_size:]
-        
-        if len(recent_rewards) >= window_size:
-            avg_reward = np.mean(recent_rewards)
-            avg_length = np.mean(recent_lengths)
-            success_rate = np.mean(recent_successes)
-            
-            # 更新早停计数
-            if avg_reward > self.best_avg_reward:
-                self.best_avg_reward = avg_reward
-                self.no_improve_count = 0
-            else:
-                self.no_improve_count += 1
-            
-            # 如果性能持续下降，降低学习率
-            if len(recent_rewards) >= 10:
-                recent_trend = np.polyfit(range(len(recent_rewards[-10:])), recent_rewards[-10:], 1)
-                if recent_trend[0] < -0.05:  # 负斜率超过阈值，说明性能在下降
-                    for param_group in self.optimizer.param_groups:
-                        param_group['lr'] = max(param_group['lr'] * 0.9, 1e-6)  # 最小学习率1e-6
-            
-            # 更新学习率调度器
-            self.scheduler.step(avg_reward)
-            
-            return {
-                'avg_recent_reward': avg_reward,
-                'avg_recent_length': avg_length,
-                'recent_success_rate': success_rate,
-                'should_stop_early': self.no_improve_count >= self.patience,
-                'current_patience': self.patience - self.no_improve_count,
-                'current_learning_rate': self.optimizer.param_groups[0]['lr'],
-                'is_improving': recent_trend[0] > 0 if len(recent_rewards) >= 10 else True
-            }
-        
-        return {
-            'avg_recent_reward': np.mean(recent_rewards) if recent_rewards else 0,
-            'avg_recent_length': np.mean(recent_lengths) if recent_lengths else 0,
-            'recent_success_rate': np.mean(recent_successes) if recent_successes else 0,
-            'should_stop_early': False,
-            'current_patience': self.patience,
-            'current_learning_rate': self.optimizer.param_groups[0]['lr'],
-            'is_improving': True
-        }
-
-    def get_convergence_report(self):
-        """
-        获取收敛报告
-        """
-        report = {}
-        
-        if self.convergence_monitor['loss_history']:
-            recent_losses = self.convergence_monitor['loss_history'][-10:]
-            report['recent_avg_total_loss'] = np.mean([l['total_loss'] for l in recent_losses])
-            report['recent_avg_actor_loss'] = np.mean([l['actor_loss'] for l in recent_losses])
-            report['recent_avg_critic_loss'] = np.mean([l['critic_loss'] for l in recent_losses])
-            report['recent_avg_entropy'] = np.mean([l['entropy'] for l in recent_losses])
-            report['recent_avg_grad_norm'] = np.mean([l['grad_norm'] for l in recent_losses])
-        
-        if self.convergence_monitor['learning_rates']:
-            report['current_learning_rate'] = self.convergence_monitor['learning_rates'][-1]
-            report['learning_rate_trend'] = 'decreasing' if len(self.convergence_monitor['learning_rates']) > 1 and \
-                self.convergence_monitor['learning_rates'][-1] < self.convergence_monitor['learning_rates'][0] else 'stable'
-        
-        if len(self.convergence_monitor['episode_rewards']) >= 20:
-            recent_rewards = self.convergence_monitor['episode_rewards'][-20:]
-            reward_trend = np.polyfit(range(len(recent_rewards)), recent_rewards, 1)[0]
-            report['reward_trend'] = reward_trend
-            report['is_converging'] = reward_trend > 0  # 正斜率表示改善趋势
-        
-        report['total_episodes_trained'] = len(self.convergence_monitor['episode_rewards'])
-        report['total_updates'] = len(self.convergence_monitor['loss_history'])
-        report['success_rate'] = np.mean(self.convergence_monitor['episode_successes']) if self.convergence_monitor['episode_successes'] else 0
-        
-        return report
-
-    def _preprocess_state(self, state):
-        """
-        预处理状态（图像）
-        """
-        if len(state.shape) == 3:
-            state_rgb = cv2.cvtColor(state, cv2.COLOR_BGR2RGB)
-        else:
-            state_rgb = state
-        
-        expected_height = CONFIG.get('IMAGE_HEIGHT', 480)
-        expected_width = CONFIG.get('IMAGE_WIDTH', 640)
-        
-        if state_rgb.shape[0] != expected_height or state_rgb.shape[1] != expected_width:
-            state_rgb = cv2.resize(state_rgb, (expected_width, expected_height))
-        
-        state_tensor = torch.FloatTensor(state_rgb).permute(2, 0, 1) / 255.0
-        
-        return state_tensor
-
-    def save_checkpoint(self, filepath, episode, optimizer_state_dict=None):
-        """
-        保存模型检查点
-        """
-        checkpoint = {
-            'episode': episode,
-            'policy_state_dict': self.policy.state_dict(),
-            'policy_old_state_dict': self.policy_old.state_dict(),
-            'optimizer_state_dict': optimizer_state_dict or self.optimizer.state_dict(),
-        }
-        torch.save(checkpoint, filepath)
-        print(f"模型检查点已保存: {filepath}")
-
-    def load_checkpoint(self, filepath):
-        """
-        加载模型检查点
-        """
-        if os.path.exists(filepath):
-            checkpoint = torch.load(filepath, map_location=torch.device('cpu'))
-            self.policy.load_state_dict(checkpoint['policy_state_dict'])
-            self.policy_old.load_state_dict(checkpoint['policy_old_state_dict'])
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            start_episode = checkpoint.get('episode', 0)
-            print(f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
-            return start_episode + 1
-        else:
-            print(f"检查点文件不存在: {filepath}")
-            return 0
-
-
-class StuckDetector:
-    """
-    卡死检测器 - 检测AI是否陷入无法前进的状态
+    增强版卡死检测器 - 检测AI是否陷入无法前进的状态
     """
     def __init__(self, window_size=5):
         self.window_size = window_size
         self.movement_history = deque(maxlen=window_size)
         self.stuck_threshold = 3  # 连续多少次认为卡死
+        self.position_history = deque(maxlen=10)  # 新增：位置历史
+        self.visual_change_history = deque(maxlen=5)  # 新增：视觉变化历史
+        self.action_history = deque(maxlen=8)  # 新增：动作历史
+
+    def record_position(self, position_feature):
+        """记录位置特征"""
+        self.position_history.append(position_feature)
+
+    def record_action(self, action):
+        """记录动作"""
+        self.action_history.append(action)
+
+    def is_repeating_pattern(self):
+        """检测重复模式"""
+        if len(self.action_history) < 4:
+            return False
+        
+        # 检查最近的动作是否重复
+        recent_actions = list(self.action_history)[-4:]
+        unique_actions = set(recent_actions)
+        
+        return len(unique_actions) <= 2  # 4个动作中有2个或更少唯一动作
 
     def record_movement(self):
         """记录有效移动"""
@@ -757,13 +346,12 @@ class StuckDetector:
         self.movement_history.append(0)  # 0表示卡死
 
     def is_stuck(self):
-        """判断是否卡死"""
+        """改进的卡死判断"""
         if len(self.movement_history) < self.window_size:
             return False
         
-        # 如果最近window_size次中大部分都是卡死状态
         stuck_count = sum(1 for x in self.movement_history if x == 0)
-        return stuck_count >= self.stuck_threshold
+        return stuck_count >= self.stuck_threshold or self.is_repeating_pattern()
 
     def get_stuck_ratio(self):
         """获取卡死比例"""
@@ -772,9 +360,9 @@ class StuckDetector:
         return sum(1 for x in self.movement_history if x == 0) / len(self.movement_history)
 
 
-class TargetSearchEnvironment:
+class EnhancedTargetSearchEnvironment:
     """
-    目标搜索环境 - 使用全局配置
+    增强版目标搜索环境 - 使用全局配置，加强卡死检测
     """
     def __init__(self, target_description=None):
         # 如果没有传入target_description，使用默认配置
@@ -806,7 +394,7 @@ class TargetSearchEnvironment:
         self.action_history = deque(maxlen=10)  # 记录最近10个动作
         self.visual_change_history = deque(maxlen=10)  # 记录最近10帧的视觉变化
         self.action_effectiveness = defaultdict(lambda: deque(maxlen=5))  # 动作有效性统计
-        self.stuck_detector = StuckDetector(window_size=5)  # 卡死检测器
+        self.stuck_detector = EnhancedStuckDetector(window_size=5)  # 增强卡死检测器
         self.frame_change_threshold = 0.05  # 视觉变化阈值
         self.no_progress_steps = 0  # 连续无进展步数
         self.total_no_progress_steps = 0  # 总无进展步数
@@ -852,8 +440,25 @@ class TargetSearchEnvironment:
         
         if action_taken:
             self.action_history.append(action_taken)
+            self.stuck_detector.record_action(action_taken)
+        
+        # 记录位置特征用于卡死检测
+        position_feature = self._extract_position_feature(current_frame, detection_results)
+        self.stuck_detector.record_position(position_feature)
         
         return reward, self._get_max_detection_area(detection_results)
+
+    def _extract_position_feature(self, frame, detections):
+        """提取位置特征用于重复检测"""
+        if frame is None:
+            return (0, 0, 0)  # 默认特征
+        
+        # 提取图像哈希值和检测结果统计
+        img_hash = hash(frame.tostring())
+        detection_count = len(detections) if detections else 0
+        total_area = sum(det['width'] * det['height'] for det in detections) if detections else 0
+        
+        return (img_hash, detection_count, total_area)
 
     def _calculate_visual_change_reward(self, action_taken):
         """
@@ -883,13 +488,13 @@ class TargetSearchEnvironment:
         # 如果视觉变化小于预期且大于阈值，给予奖励；否则给予惩罚
         if frame_diff > expected_change * 0.3:  # 有足够变化
             # 根据变化量给予适度奖励
-            change_reward = min(frame_diff * 0.5, 0.1)
+            change_reward = min(frame_diff * 0.8, 0.15)  # 增加奖励幅度
             self.stuck_detector.record_movement()
             return change_reward
         else:
             # 视觉变化不足，可能卡死了
             self.stuck_detector.record_stuck()
-            return -0.05  # 小惩罚
+            return -0.15  # 增加惩罚力度
 
     def _get_expected_change_for_action(self, move_action, turn_action):
         """
@@ -899,13 +504,13 @@ class TargetSearchEnvironment:
         
         # 移动动作通常产生较大的透视变化
         if move_action in [0, 1]:  # forward/backward
-            expected += 0.2
+            expected += 0.25
         elif move_action in [2, 3]:  # strafe left/right
-            expected += 0.15
+            expected += 0.20
             
         # 转头动作产生视角变化
         if turn_action in [0, 1]:  # turn left/right
-            expected += 0.1
+            expected += 0.15
             
         return expected
 
@@ -922,22 +527,25 @@ class TargetSearchEnvironment:
         avg_change = np.mean(recent_changes) if recent_changes else 0.0
         
         # 如果执行了移动动作但视觉变化很小，说明可能无效
-        if move_action in [0, 1, 2, 3] and avg_change < 0.05:
-            return -0.03  # 移动无效惩罚
-        elif turn_action in [0, 1] and avg_change < 0.02:
-            return -0.02  # 转头无效惩罚
-        elif avg_change > 0.1:  # 显著变化奖励
-            return 0.02
+        if move_action in [0, 1, 2, 3] and avg_change < 0.03:
+            return -0.05  # 移动无效惩罚
+        elif turn_action in [0, 1] and avg_change < 0.015:
+            return -0.04  # 转头无效惩罚
+        elif avg_change > 0.12:  # 显著变化奖励
+            return 0.03
             
         return 0.0
 
     def _calculate_stuck_penalty(self):
         """
-        计算卡死惩罚
+        强化的卡死惩罚
         """
         if self.stuck_detector.is_stuck():
             self.total_no_progress_steps += 1
-            return CONFIG.get('STUCK_PENALTY', -0.1) * min(self.total_no_progress_steps / 10, 1.0)
+            # 根据连续卡死次数增加惩罚
+            consecutive_stuck = min(self.total_no_progress_steps / 8, 2.0)
+            base_penalty = CONFIG.get('STUCK_PENALTY', -0.25)  # 提高基础惩罚
+            return base_penalty * consecutive_stuck
         return 0.0
 
     def _calculate_exploration_reward(self):
@@ -951,27 +559,27 @@ class TargetSearchEnvironment:
         changes = list(self.visual_change_history)
         variation = np.std(changes)
         
-        if variation > 0.05:  # 高变化性奖励
-            return 0.02
-        elif variation < 0.01:  # 低变化性惩罚
-            return -0.01
+        if variation > 0.06:  # 高变化性奖励
+            return 0.03
+        elif variation < 0.008:  # 低变化性惩罚
+            return -0.02
             
         return 0.0
 
     def _calculate_repetition_penalty(self, action_taken):
         """
-        重复动作惩罚
+        强化的重复动作惩罚
         """
-        if not action_taken or len(self.action_history) < 3:
+        if not action_taken or len(self.action_history) < 4:  # 增加历史长度
             return 0.0
-            
-        recent_actions = list(self.action_history)[-3:]
+        
+        recent_actions = list(self.action_history)[-4:]  # 检查更多历史
         same_action_count = sum(1 for act in recent_actions if act == action_taken)
         
         if same_action_count >= 3:  # 连续3次相同动作
-            return -0.05
+            return -0.35  # 大幅提高惩罚
         elif same_action_count >= 2:  # 连续2次相同动作
-            return -0.02
+            return -0.2  # 提高惩罚
             
         return 0.0
 
@@ -981,11 +589,11 @@ class TargetSearchEnvironment:
         """
         if not detection_results:
             self.no_progress_steps += 1
-            return -0.01
+            return -0.02
         else:
             # 如果检测到目标，减少无进展计数
             self.no_progress_steps = max(0, self.no_progress_steps - 1)
-            return 0.01
+            return 0.02
 
     def _calculate_target_presence_reward(self, detection_results):
         """
@@ -998,10 +606,10 @@ class TargetSearchEnvironment:
                 for detection in detection_results
             )
             if gate_detected:
-                return 0.05
+                return 0.08
             else:
-                return 0.01  # 检测到其他目标的小奖励
-        return -0.01  # 未检测到任何目标的轻微惩罚
+                return 0.02  # 检测到其他目标的小奖励
+        return -0.02  # 未检测到任何目标的轻微惩罚
 
     def _calculate_frame_difference(self, frame1, frame2):
         """
@@ -1283,8 +891,7 @@ class TargetSearchEnvironment:
 
         # 输出每步得分
         print(f"S {self.step_count}, A: {new_area:.2f}, R: {reward:.2f}, "
-              f"Move Action: {move_action_names[move_action]}, Turn Action: {turn_action_names[turn_action]}, "
-              f"Move Step: {move_forward_step:.2f}, Turn Angle: {turn_angle:.2f}")
+         )
         
         # 更新位置历史
         state_feature = len(detection_results) if detection_results else 0
@@ -1315,5 +922,476 @@ class TargetSearchEnvironment:
         self.no_progress_steps = 0
         self.total_no_progress_steps = 0
         self.previous_frame = None
+        self.stuck_detector = EnhancedStuckDetector(window_size=5)
         initial_state = self.capture_screen()
         return initial_state
+
+
+class EnhancedGRUPPOAgent:
+    """
+    增强版基于GRU的PPO智能体 - 增加收敛监控，改进卡死检测
+    """
+    def __init__(self, state_dim, move_action_dim, turn_action_dim):
+        config = CONFIG
+        
+        self.lr = config['LEARNING_RATE']
+        self.betas = (0.9, 0.999)
+        self.gamma = config['GAMMA']
+        self.K_epochs = config['K_EPOCHS']
+        self.eps_clip = config['EPS_CLIP']
+        self.sequence_length = config['SEQUENCE_LENGTH']
+        self.hidden_size = config['HIDDEN_SIZE']
+        
+        # Create policy networks
+        self.policy = EnhancedGRUPolicyNetwork(
+            state_dim, move_action_dim, turn_action_dim, self.hidden_size
+        )
+        self.optimizer = torch.optim.Adam(
+            self.policy.parameters(), 
+            lr=self.lr, 
+            betas=self.betas
+        )
+        self.policy_old = EnhancedGRUPolicyNetwork(
+            state_dim, move_action_dim, turn_action_dim, self.hidden_size
+        )
+        self.policy_old.load_state_dict(self.policy.state_dict())
+        
+        self.MseLoss = nn.MSELoss()
+        
+        # State history for sequence input
+        self.state_history = deque(maxlen=self.sequence_length)
+        
+        # 收敛监控相关变量
+        self.convergence_monitor = {
+            'episode_rewards': [],
+            'episode_lengths': [],
+            'episode_successes': [],
+            'loss_history': [],
+            'learning_rates': [],
+            'grad_norms': [],
+            'entropy_history': [],
+            'kl_divergence': []
+        }
+        
+        # 早停相关
+        self.best_avg_reward = float('-inf')
+        self.no_improve_count = 0
+        self.patience = config.get('EARLY_STOP_PATIENCE', 50)
+        
+        # 学习率调度器 - 移除verbose参数
+        try:
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer, 
+                mode='max', 
+                factor=0.5, 
+                patience=10
+                # 注意：这里移除了verbose参数，因为它在某些PyTorch版本中不受支持
+            )
+        except TypeError:
+            # 如果仍然有问题，提供备选方案
+            self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                self.optimizer, 
+                mode='max', 
+                factor=0.5, 
+                patience=10
+            )
+        
+        # 自适应学习率因子
+        self.adaptive_lr_factor = 1.0
+
+    def act(self, state, memory, return_debug_info=False):
+        # 预处理状态
+        state_tensor = self._preprocess_state(state)
+        
+        # 将当前状态添加到历史记录
+        self.state_history.append(state_tensor)
+        
+        # 如果历史记录长度不足，用当前状态填充
+        while len(self.state_history) < self.sequence_length:
+            self.state_history.appendleft(state_tensor)
+        
+        # 转换为张量并添加批次维度
+        state_seq = torch.stack(list(self.state_history)).unsqueeze(0)  # [batch=1, seq_len, channels, height, width]
+        
+        # 使用旧策略获取动作概率
+        with torch.no_grad():
+            if return_debug_info:
+                move_probs, turn_probs, action_params, state_val, _, debug_info = self.policy_old(state_seq, return_debug_info=True)
+            else:
+                move_probs, turn_probs, action_params, state_val, _ = self.policy_old(state_seq)
+                
+            move_dist = Categorical(move_probs)
+            turn_dist = Categorical(turn_probs)
+            
+            # 采样动作
+            move_action = move_dist.sample()
+            turn_action = turn_dist.sample()
+            
+            # 计算对数概率
+            move_logprob = move_dist.log_prob(move_action)
+            turn_logprob = turn_dist.log_prob(turn_action)
+            logprob = move_logprob + turn_logprob
+        
+        # 处理动作参数，采用更灵活的映射方式
+        move_forward_step_raw = action_params[0][0].item()  # [-1,1]范围
+        turn_angle_raw = action_params[0][1].item()         # [-1,1]范围
+        
+        # 使用配置文件中的参数范围
+        MOVE_STEP_MIN = CONFIG.get('MOVE_STEP_MIN', 0.0)
+        MOVE_STEP_MAX = CONFIG.get('MOVE_STEP_MAX', 1.0)
+        TURN_ANGLE_MIN = CONFIG.get('TURN_ANGLE_MIN', 5.0)
+        TURN_ANGLE_MAX = CONFIG.get('TURN_ANGLE_MAX', 60.0)
+        
+        # 改进的探索策略：增加动态噪声
+        exploration_rate = CONFIG.get('INITIAL_EXPLORATION_RATE', 1.0) * \
+                        (CONFIG.get('EXPLORATION_DECAY_RATE', 0.999) ** len(self.state_history))
+        
+        exploration_noise = CONFIG.get('ACTION_EXPLORATION_NOISE', 0.4) * exploration_rate  # 增加噪声
+        
+        # 对原始输出添加更强的噪声
+        move_raw_with_noise = move_forward_step_raw + np.random.normal(0, exploration_noise)
+        turn_raw_with_noise = turn_angle_raw + np.random.normal(0, exploration_noise)
+        
+        # 确保在 [-1, 1] 范围内
+        move_raw_clipped = np.clip(move_raw_with_noise, -1.0, 1.0)
+        turn_raw_clipped = np.clip(turn_raw_with_noise, -1.0, 1.0)
+        
+        # 使用非线性映射，让边缘值更容易出现
+        def enhanced_mapping(raw_value):
+            # 将 [-1, 1] 映射到 [-3, 3] 以扩大sigmoid的作用范围
+            expanded_value = raw_value * 3.0
+            # 使用tanh作为非线性映射，这样边缘值更容易出现
+            mapped_value = (np.tanh(expanded_value) + 1.0) / 2.0  # 映射到 [0, 1]
+            return np.clip(mapped_value, 0.0, 1.0)
+        
+        move_forward_step_normalized = enhanced_mapping(move_raw_clipped)
+        turn_angle_normalized = enhanced_mapping(turn_raw_clipped)
+        
+        # 应用线性变换到实际范围
+        move_forward_step = move_forward_step_normalized * (MOVE_STEP_MAX - MOVE_STEP_MIN) + MOVE_STEP_MIN
+        turn_angle = turn_angle_normalized * (TURN_ANGLE_MAX - TURN_ANGLE_MIN) + TURN_ANGLE_MIN
+        
+        # 存储到记忆中
+        memory.append(
+            state_tensor,
+            move_action.item(),
+            turn_action.item(),
+            logprob.item(),
+            0,  # 奖励稍后更新
+            False,  # 是否结束稍后更新
+            [move_forward_step_normalized, turn_angle_normalized]  # 存储归一化的参数
+        )
+        
+        if return_debug_info:
+            return move_action.item(), turn_action.item(), move_forward_step, turn_angle, debug_info
+        else:
+            return move_action.item(), turn_action.item(), move_forward_step, turn_angle
+
+    def update(self, memory):
+        if len(memory.states) == 0:
+            return
+            
+        # Convert memory to tensors - 保持单个episode的序列结构
+        states_list = list(memory.states)
+        if len(states_list) == 0:
+            return
+        
+        # 构建状态序列
+        states = torch.stack(states_list).unsqueeze(0)  # [1, seq_len, channels, height, width]
+        move_actions = torch.tensor(list(memory.move_actions), dtype=torch.long)  # [seq_len]
+        turn_actions = torch.tensor(list(memory.turn_actions), dtype=torch.long)  # [seq_len]
+        old_logprobs = torch.tensor(list(memory.logprobs), dtype=torch.float)    # [seq_len]
+        rewards = torch.tensor(list(memory.rewards), dtype=torch.float)          # [seq_len]
+        terminals = torch.tensor(list(memory.is_terminals), dtype=torch.bool)    # [seq_len]
+
+        if len(rewards) == 0:
+            return
+
+        # Compute discounted rewards
+        discounted_rewards = []
+        running_add = 0
+        for reward, is_terminal in zip(reversed(rewards), reversed(terminals)):
+            if is_terminal:
+                running_add = 0
+            running_add = reward + (self.gamma * running_add)
+            discounted_rewards.insert(0, running_add)
+        
+        discounted_rewards = torch.tensor(discounted_rewards, dtype=torch.float)
+        if discounted_rewards.numel() > 1:  # 只有在有多于一个元素时才标准化
+            discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-5)
+        else:
+            # 如果只有一个元素，跳过标准化
+            pass
+
+        # 初始化梯度范数和其他指标变量
+        total_loss = 0
+        total_actor_loss = 0
+        total_critic_loss = 0
+        total_entropy = 0
+        grad_norm = 0  # 初始化梯度范数，防止变量未定义错误
+        
+        # Optimize policy K epochs
+        for _ in range(self.K_epochs):
+            # Forward pass - 获取整个序列的输出
+            move_probs, turn_probs, action_params, state_vals, _ = self.policy(states)
+            
+            # state_vals shape: [batch=1, seq_len, 1] -> [seq_len]
+            state_vals = state_vals.squeeze(0).squeeze(-1)  # [seq_len]
+            
+            # Ensure we have the right dimensions for action probabilities
+            move_probs_squeezed = move_probs.squeeze(0)  # [seq_len, move_action_dim]
+            turn_probs_squeezed = turn_probs.squeeze(0)  # [seq_len, turn_action_dim]
+            
+            # 检查维度并确保有足够的维度进行gather操作
+            if move_probs_squeezed.dim() == 1:
+                if move_probs_squeezed.size(0) == len(move_actions):
+                    move_probs_squeezed = move_probs_squeezed.unsqueeze(0).expand(len(move_actions), -1)
+                else:
+                    continue
+                    
+            if turn_probs_squeezed.dim() == 1:
+                if turn_probs_squeezed.size(0) == len(turn_actions):
+                    turn_probs_squeezed = turn_probs_squeezed.unsqueeze(0).expand(len(turn_actions), -1)
+                else:
+                    continue
+
+            # 确保动作索引在有效范围内
+            move_actions = torch.clamp(move_actions, 0, move_probs_squeezed.size(1) - 1)
+            turn_actions = torch.clamp(turn_actions, 0, turn_probs_squeezed.size(1) - 1)
+
+            # Calculate action logprobs - FIXED: 更安全的处理
+            try:
+                # 使用更安全的gather操作
+                if move_probs_squeezed.size(0) != move_actions.size(0):
+                    min_len = min(move_probs_squeezed.size(0), move_actions.size(0))
+                    move_probs_squeezed = move_probs_squeezed[:min_len]
+                    move_actions = move_actions[:min_len]
+                    
+                if turn_probs_squeezed.size(0) != turn_actions.size(0):
+                    min_len = min(turn_probs_squeezed.size(0), turn_actions.size(0))
+                    turn_probs_squeezed = turn_probs_squeezed[:min_len]
+                    turn_actions = turn_actions[:min_len]
+                
+                # 现在进行gather操作
+                gathered_move = move_probs_squeezed.gather(1, move_actions.unsqueeze(1))
+                move_logprobs = torch.log(gathered_move.squeeze(-1))
+                
+                gathered_turn = turn_probs_squeezed.gather(1, turn_actions.unsqueeze(1))
+                turn_logprobs = torch.log(gathered_turn.squeeze(-1))
+                
+                logprobs = move_logprobs + turn_logprobs
+                
+            except IndexError as e:
+                print(f"Gather操作索引错误: {e}")
+                continue
+            except RuntimeError as e:
+                print(f"Gather操作运行时错误: {e}")
+                continue
+                
+            # Calculate entropy bonus to encourage exploration
+            move_entropy = -(move_probs_squeezed * torch.log(move_probs_squeezed + 1e-10)).sum(dim=-1).mean()
+            turn_entropy = -(turn_probs_squeezed * torch.log(turn_probs_squeezed + 1e-10)).sum(dim=-1).mean()
+            entropy_bonus = move_entropy + turn_entropy
+            
+            # Calculate ratios
+            ratios = torch.exp(logprobs - old_logprobs.detach())
+            
+            # Calculate advantages - now both should be [seq_len]
+            advantages = discounted_rewards - state_vals.detach()
+            
+            # Calculate surrogate losses
+            surr1 = ratios * advantages
+            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
+            actor_loss = -torch.min(surr1, surr2).mean()
+            
+            # Value loss - ensure both tensors are the same size
+            critic_loss = self.MseLoss(state_vals, discounted_rewards)
+            
+            # Total loss - including entropy regularization
+            entropy_coeff = CONFIG.get('ENTROPY_COEFFICIENT', 0.02)
+            loss = actor_loss + 0.5 * critic_loss - entropy_coeff * entropy_bonus
+            
+            # Update network
+            self.optimizer.zero_grad()
+            # 添加梯度裁剪以避免梯度爆炸
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=CONFIG.get('GRADIENT_CLIP_NORM', 0.5))
+            loss.backward()
+            
+            # 计算梯度范数用于监控
+            total_norm = 0
+            param_count = 0
+            for p in self.policy.parameters():
+                if p.grad is not None:
+                    param_count += 1
+                    total_norm += p.grad.data.norm(2).item() ** 2
+            grad_norm = (total_norm / param_count) ** 0.5 if param_count > 0 else 0
+            
+            self.optimizer.step()
+            
+            # 累积损失值用于监控
+            total_loss += loss.item()
+            total_actor_loss += actor_loss.item()
+            total_critic_loss += critic_loss.item()
+            total_entropy += entropy_bonus.item()
+
+        # Copy new weights into old policy
+        self.policy_old.load_state_dict(self.policy.state_dict())
+        
+        # 更新收敛监控数据
+        self.convergence_monitor['loss_history'].append({
+            'total_loss': total_loss / self.K_epochs,
+            'actor_loss': total_actor_loss / self.K_epochs,
+            'critic_loss': total_critic_loss / self.K_epochs,
+            'entropy': total_entropy / self.K_epochs,
+            'grad_norm': grad_norm  # 现在即使循环没有执行，变量也已定义
+        })
+        
+        # 记录当前学习率
+        current_lr = self.optimizer.param_groups[0]['lr']
+        self.convergence_monitor['learning_rates'].append(current_lr)
+        
+        # 根据性能动态调整学习率
+        avg_reward = np.mean([r for r in memory.rewards]) if memory.rewards else 0
+        if avg_reward < -0.1:  # 持续负奖励，提高学习率以跳出局部最优
+            self.adaptive_lr_factor = min(self.adaptive_lr_factor * 1.05, 2.0)
+        elif avg_reward > 0.1:  # 正向进展，降低学习率稳定训练
+            self.adaptive_lr_factor = max(self.adaptive_lr_factor * 0.95, 0.5)
+        
+        # 应用调整后的学习率
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = self.lr * self.adaptive_lr_factor
+
+    def check_convergence_status(self, episode_reward, episode_length, success_flag=False):
+        """
+        检查收敛状态并返回相关信息
+        """
+        self.convergence_monitor['episode_rewards'].append(episode_reward)
+        self.convergence_monitor['episode_lengths'].append(episode_length)
+        self.convergence_monitor['episode_successes'].append(success_flag)
+        
+        # 计算滑动窗口统计数据
+        window_size = 20  # 可配置的滑动窗口大小
+        recent_rewards = self.convergence_monitor['episode_rewards'][-window_size:]
+        recent_lengths = self.convergence_monitor['episode_lengths'][-window_size:]
+        recent_successes = self.convergence_monitor['episode_successes'][-window_size:]
+        
+        if len(recent_rewards) >= window_size:
+            avg_reward = np.mean(recent_rewards)
+            avg_length = np.mean(recent_lengths)
+            success_rate = np.mean(recent_successes)
+            
+            # 更新早停计数
+            if avg_reward > self.best_avg_reward:
+                self.best_avg_reward = avg_reward
+                self.no_improve_count = 0
+            else:
+                self.no_improve_count += 1
+            
+            # 如果性能持续下降，降低学习率
+            if len(recent_rewards) >= 10:
+                recent_trend = np.polyfit(range(len(recent_rewards[-10:])), recent_rewards[-10:], 1)
+                if recent_trend[0] < -0.05:  # 负斜率超过阈值，说明性能在下降
+                    for param_group in self.optimizer.param_groups:
+                        param_group['lr'] = max(param_group['lr'] * 0.9, 1e-6)  # 最小学习率1e-6
+            
+            # 更新学习率调度器
+            self.scheduler.step(avg_reward)
+            
+            return {
+                'avg_recent_reward': avg_reward,
+                'avg_recent_length': avg_length,
+                'recent_success_rate': success_rate,
+                'should_stop_early': self.no_improve_count >= self.patience,
+                'current_patience': self.patience - self.no_improve_count,
+                'current_learning_rate': self.optimizer.param_groups[0]['lr'],
+                'is_improving': recent_trend[0] > 0 if len(recent_rewards) >= 10 else True
+            }
+        
+        return {
+            'avg_recent_reward': np.mean(recent_rewards) if recent_rewards else 0,
+            'avg_recent_length': np.mean(recent_lengths) if recent_lengths else 0,
+            'recent_success_rate': np.mean(recent_successes) if recent_successes else 0,
+            'should_stop_early': False,
+            'current_patience': self.patience,
+            'current_learning_rate': self.optimizer.param_groups[0]['lr'],
+            'is_improving': True
+        }
+
+    def get_convergence_report(self):
+        """
+        获取收敛报告
+        """
+        report = {}
+        
+        if self.convergence_monitor['loss_history']:
+            recent_losses = self.convergence_monitor['loss_history'][-10:]
+            report['recent_avg_total_loss'] = np.mean([l['total_loss'] for l in recent_losses])
+            report['recent_avg_actor_loss'] = np.mean([l['actor_loss'] for l in recent_losses])
+            report['recent_avg_critic_loss'] = np.mean([l['critic_loss'] for l in recent_losses])
+            report['recent_avg_entropy'] = np.mean([l['entropy'] for l in recent_losses])
+            report['recent_avg_grad_norm'] = np.mean([l['grad_norm'] for l in recent_losses])
+        
+        if self.convergence_monitor['learning_rates']:
+            report['current_learning_rate'] = self.convergence_monitor['learning_rates'][-1]
+            report['learning_rate_trend'] = 'decreasing' if len(self.convergence_monitor['learning_rates']) > 1 and \
+                self.convergence_monitor['learning_rates'][-1] < self.convergence_monitor['learning_rates'][0] else 'stable'
+        
+        if len(self.convergence_monitor['episode_rewards']) >= 20:
+            recent_rewards = self.convergence_monitor['episode_rewards'][-20:]
+            reward_trend = np.polyfit(range(len(recent_rewards)), recent_rewards, 1)[0]
+            report['reward_trend'] = reward_trend
+            report['is_converging'] = reward_trend > 0  # 正斜率表示改善趋势
+        
+        report['total_episodes_trained'] = len(self.convergence_monitor['episode_rewards'])
+        report['total_updates'] = len(self.convergence_monitor['loss_history'])
+        report['success_rate'] = np.mean(self.convergence_monitor['episode_successes']) if self.convergence_monitor['episode_successes'] else 0
+        
+        return report
+
+    def _preprocess_state(self, state):
+        """
+        预处理状态（图像）
+        """
+        if len(state.shape) == 3:
+            state_rgb = cv2.cvtColor(state, cv2.COLOR_BGR2RGB)
+        else:
+            state_rgb = state
+        
+        expected_height = CONFIG.get('IMAGE_HEIGHT', 480)
+        expected_width = CONFIG.get('IMAGE_WIDTH', 640)
+        
+        if state_rgb.shape[0] != expected_height or state_rgb.shape[1] != expected_width:
+            state_rgb = cv2.resize(state_rgb, (expected_width, expected_height))
+        
+        state_tensor = torch.FloatTensor(state_rgb).permute(2, 0, 1) / 255.0
+        
+        return state_tensor
+
+    def save_checkpoint(self, filepath, episode, optimizer_state_dict=None):
+        """
+        保存模型检查点
+        """
+        checkpoint = {
+            'episode': episode,
+            'policy_state_dict': self.policy.state_dict(),
+            'policy_old_state_dict': self.policy_old.state_dict(),
+            'optimizer_state_dict': optimizer_state_dict or self.optimizer.state_dict(),
+        }
+        torch.save(checkpoint, filepath)
+        print(f"模型检查点已保存: {filepath}")
+
+    def load_checkpoint(self, filepath):
+        """
+        加载模型检查点
+        """
+        if os.path.exists(filepath):
+            checkpoint = torch.load(filepath, map_location=torch.device('cpu'))
+            self.policy.load_state_dict(checkpoint['policy_state_dict'])
+            self.policy_old.load_state_dict(checkpoint['policy_old_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_episode = checkpoint.get('episode', 0)
+            print(f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
+            return start_episode + 1
+        else:
+            print(f"检查点文件不存在: {filepath}")
+            return 0
