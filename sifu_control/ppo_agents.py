@@ -33,14 +33,15 @@ CONFIG = load_config()
 # 配置日志
 def setup_logging():
     """设置日志配置"""
+    # 创建logger实例
+    logger = logging.getLogger('ppo_agent_logger')  # 添加logger名称
+    
     log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     
     log_filename = os.path.join(log_dir, f"gate_find_ppo_{time.strftime('%Y%m%d_%H%M%S')}.log")
-    
-    # 创建logger实例
-    logger = logging.getLogger('ppo_agents')
+
     logger.setLevel(logging.INFO)
     
     # 清除已有的处理器，避免重复
@@ -55,7 +56,7 @@ def setup_logging():
     console_handler.setLevel(logging.INFO)
     
     # 创建格式器
-    formatter = logging.Formatter('  %(message)s')
+    formatter = logging.Formatter('%(message)s')
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
     
@@ -66,12 +67,6 @@ def setup_logging():
     return logger
 
 
-def log_and_print(logger, message):
-    """
-    同时记录日志和打印消息
-    """
-    
-    logger.info(message)
 
 
 class ResidualBlock(nn.Module):
@@ -240,6 +235,9 @@ class EnhancedGRUPolicyNetwork(nn.Module):
         
         # 添加标志位控制是否输出调试信息
         self.debug_mode = False
+        
+        # 初始化logger
+        self.logger = setup_logging()
 
     def forward(self, states, hidden_state=None, return_debug_info=False):
         batch_size = states.size(0)
@@ -281,14 +279,11 @@ class EnhancedGRUPolicyNetwork(nn.Module):
             }
             
             # 打印模型输出信息
-
-          
-# 打印模型输出信息
-            print(f"GRU: {[round(float(x), 2) for x in debug_info['gru_last_output'][0][:4]]}")
-            print(f"Move: {[round(float(x), 2) for x in debug_info['move_logits'][0][:10]]}")
-            print(f"Turn: {[round(float(x), 2) for x in debug_info['turn_logits'][0][:10]]}")
-            print(f"参数: {[round(float(x), 2) for x in debug_info['action_params'][0]]}")
-            print(f"价值: {round(float(debug_info['value'][0][0]), 2)}")
+            self.logger.info(f"GRU: {[round(float(x), 2) for x in debug_info['gru_last_output'][0][:4]]}")
+            self.logger.info(f"Move: {[round(float(x), 2) for x in debug_info['move_logits'][0][:10]]}")
+            self.logger.info(f"Turn: {[round(float(x), 2) for x in debug_info['turn_logits'][0][:10]]}")
+            self.logger.info(f"参数: {[round(float(x), 2) for x in debug_info['action_params'][0]]}")
+            self.logger.info(f"价值: {round(float(debug_info['value'][0][0]), 2)}")
             return (
                 F.softmax(move_logits, dim=-1),
                 F.softmax(turn_logits, dim=-1),
@@ -305,8 +300,6 @@ class EnhancedGRUPolicyNetwork(nn.Module):
                 value,
                 hidden
             )
-
-
 class GRUMemory:
     """
     GRU智能体的记忆存储类
@@ -675,7 +668,7 @@ class EnhancedTargetSearchEnvironment:
         重置到原点操作
         """
         self.logger.info("执行重置到原点操作")
-        log_and_print(self.logger, "执行重置到原点操作...")
+        self.logger.info( "执行重置到原点操作...")
         
         # 按键操作序列
         pyautogui.press('esc')
@@ -703,7 +696,7 @@ class EnhancedTargetSearchEnvironment:
                     break
             
             if not gate_detected:
-                log_and_print(self.logger, f"未检测到门，等待1秒后按回车重新检测...")
+                self.logger.info( f"未检测到门，等待1秒后按回车重新检测...")
                 time.sleep(1)
                 pyautogui.press('enter')
                 time.sleep(0.2)
@@ -713,7 +706,19 @@ class EnhancedTargetSearchEnvironment:
         time.sleep(0.2)
         pyautogui.press('enter')
         time.sleep(0.2)
-        log_and_print(self.logger, "重置到原点操作完成")
+            # 重置环境内部状态
+        self.step_count = 0
+        self.last_center_distance = float('inf')
+        self.last_area = 0
+        self.last_detection_result = None
+        self.position_history = []
+        self.action_history.clear()
+        self.visual_change_history.clear()
+        self.no_progress_steps = 0
+        self.total_no_progress_steps = 0
+        self.previous_frame = None
+        self.stuck_detector = EnhancedStuckDetector(window_size=5)
+        self.logger.info( "重置到原点操作完成")
         self.logger.info("重置到原点操作完成")
 
     def _load_yolo_model(self):
@@ -856,8 +861,11 @@ class EnhancedTargetSearchEnvironment:
             self.last_detection_result = pre_action_detections
             self.step_count += 1
             
-            log_and_print(self.logger, f"Step {self.step_count}, Area: {new_area:.2f}, Reward: {reward:.2f}, "
-                  f"Detected: climb (pre-action), Move Action: {move_action_names[move_action]}, Turn Action: {turn_action_names[turn_action]}")
+            self.logger.info(f"Step {self.step_count}, Area: {new_area:.2f}, Reward: {reward:.2f}, "
+                f"Detected: climb (pre-action), Move Action: {move_action_names[move_action]}, Turn Action: {turn_action_names[turn_action]}")
+            
+            # 关键：执行游戏重置操作
+            self.reset_to_origin()
             
             return pre_action_state, reward, True, pre_action_detections
         
@@ -923,9 +931,12 @@ class EnhancedTargetSearchEnvironment:
             reward += total_completion_bonus
             self.logger.info(f"检测到climb类别！步骤: {self.step_count}, 基础奖励: {base_completion_reward:.2f}, "
                             f"快速完成奖励: {quick_completion_bonus:.2f}, 总奖励: {total_completion_bonus:.2f}")
+            
+            # 关键：执行游戏重置操作
+            self.reset_to_origin()
 
         # 输出每步得分
-        log_and_print(self.logger, f"S {self.step_count}, A: {new_area:.2f}, R: {reward:.2f}")
+        self.logger.info(f"S {self.step_count}, A: {new_area:.2f}, R: {reward:.2f}")
         
         # 更新位置历史
         state_feature = len(detection_results) if detection_results else 0
@@ -933,14 +944,15 @@ class EnhancedTargetSearchEnvironment:
         if len(self.position_history) > self.max_history_length:
             self.position_history.pop(0)
         
-        if done:
-            if climb_detected:
-                self.logger.info(f"在第 {self.step_count} 步检测到 climb 类别")
-            else:
-                self.logger.info(f"达到最大步数 {self.max_steps}")
+        # 修改：只有在达到最大步数时才重置，避免重复重置
+        if done and not climb_detected:  # 如果不是因为climb而结束，也要重置
+            self.logger.info(f"达到最大步数 {self.max_steps}")
+            # 在episode结束时重置游戏环境
+            self.reset_to_origin()
         
         return new_state, reward, done, detection_results
-    
+  
+  
     def reset(self):
         """
         重置环境
@@ -1191,16 +1203,48 @@ class EnhancedGRUPPOAgent:
             # 前向传播
             move_probs, turn_probs, action_params, state_vals, _ = self.policy(states)
             
-            # 处理输出维度
-            state_vals = state_vals.squeeze(0).squeeze(-1)  # [seq_len]
+            # 修正张量形状处理 - 确保维度一致
+            # state_vals形状应该是 [batch, seq_len, 1] -> [seq_len]
+            if state_vals.dim() == 3:
+                state_vals = state_vals.squeeze(0).squeeze(-1)  # [seq_len]
+            elif state_vals.dim() == 2:
+                state_vals = state_vals.squeeze(-1)  # [seq_len]
+            elif state_vals.dim() == 1 and state_vals.size(0) != len(rewards):
+                # 如果只剩一个值，需要扩展
+                state_vals = state_vals.expand(len(rewards))
+            
+            # 确保state_vals和discounted_rewards维度一致
+            if state_vals.size(0) != discounted_rewards.size(0):
+                # 如果长度不匹配，调整到相同的长度
+                min_len = min(state_vals.size(0), discounted_rewards.size(0))
+                state_vals = state_vals[:min_len]
+                discounted_rewards = discounted_rewards[:min_len]
+
+            # 确保两个张量具有相同的形状
+            assert state_vals.shape == discounted_rewards.shape, \
+                f"state_vals shape {state_vals.shape} must match discounted_rewards shape {discounted_rewards.shape}"
+
+            # 处理输出维度 - 修正形状处理逻辑
+            # move_probs, turn_probs形状应该是 [batch, seq_len, action_dim]
             move_probs_squeezed = move_probs.squeeze(0)  # [seq_len, move_action_dim]
             turn_probs_squeezed = turn_probs.squeeze(0)  # [seq_len, turn_action_dim]
 
-            # 确保动作索引有效
-            move_actions = torch.clamp(move_actions, 0, move_probs_squeezed.size(1) - 1)
-            turn_actions = torch.clamp(turn_actions, 0, turn_probs_squeezed.size(1) - 1)
+            # 检查张量形状并进行必要的修正
+            if move_probs_squeezed.dim() == 1:
+                # 如果只有1维，扩展为2维 [1, action_dim]
+                move_probs_squeezed = move_probs_squeezed.unsqueeze(0).expand(len(move_actions), -1)
+            if turn_probs_squeezed.dim() == 1:
+                # 如果只有1维，扩展为2维 [1, action_dim] 
+                turn_probs_squeezed = turn_probs_squeezed.unsqueeze(0).expand(len(turn_actions), -1)
 
-            # 计算对数概率
+            # 确保动作索引在有效范围内
+            max_move_action = move_probs_squeezed.size(1) - 1
+            max_turn_action = turn_probs_squeezed.size(1) - 1
+            
+            move_actions = torch.clamp(move_actions, 0, max_move_action)
+            turn_actions = torch.clamp(turn_actions, 0, max_turn_action)
+
+            # 计算对数概率 - 确保gather操作的维度正确
             move_logprobs = torch.log(move_probs_squeezed.gather(1, move_actions.unsqueeze(1)).squeeze(-1))
             turn_logprobs = torch.log(turn_probs_squeezed.gather(1, turn_actions.unsqueeze(1)).squeeze(-1))
             logprobs = move_logprobs + turn_logprobs
@@ -1214,7 +1258,7 @@ class EnhancedGRUPPOAgent:
             surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
             actor_loss = -torch.min(surr1, surr2).mean()
 
-            # 价值损失
+            # 价值损失 - 现在维度应该匹配
             critic_loss = self.MseLoss(state_vals, discounted_rewards)
 
             # 熵损失
@@ -1232,7 +1276,7 @@ class EnhancedGRUPPOAgent:
             
             # 梯度裁剪
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=CONFIG.get('GRADIENT_CLIP_NORM', 0.5))
-            self.optimizer.step()
+            self.optimizer.step() 
     def check_convergence_status(self, episode_reward, episode_length, success_flag=False):
         """
         检查收敛状态并返回相关信息
@@ -1350,7 +1394,7 @@ class EnhancedGRUPPOAgent:
             'optimizer_state_dict': optimizer_state_dict or self.optimizer.state_dict(),
         }
         torch.save(checkpoint, filepath)
-        log_and_print(logging.getLogger('ppo_agents'), f"模型检查点已保存: {filepath}")
+        self.logger.info( f"模型检查点已保存: {filepath}")
 
     def load_checkpoint(self, filepath):
         """
@@ -1362,8 +1406,8 @@ class EnhancedGRUPPOAgent:
             self.policy_old.load_state_dict(checkpoint['policy_old_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_episode = checkpoint.get('episode', 0)
-            log_and_print(logging.getLogger('ppo_agents'), f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
+            self.logger.info( f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
             return start_episode + 1
         else:
-            log_and_print(logging.getLogger('ppo_agents'), f"检查点文件不存在: {filepath}")
+            self.logger.info( f"检查点文件不存在: {filepath}")
             return 0
