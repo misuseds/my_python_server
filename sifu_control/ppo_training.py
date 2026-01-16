@@ -133,26 +133,26 @@ def continue_training_gru_ppo_agent(model_path=None):
             move_action, turn_action, move_forward_step, turn_angle, debug_info = ppo_agent.act(state, memory, return_debug_info=True)
                         # GRU最后输出层 - 这是网络学到的状态表示
            
-            print(f"  GRU前5个值: {debug_info['gru_last_output'][0][:5]}")
+            print(f"  GRU前5个值: {[f'{val:.2f}' for val in debug_info['gru_last_output'][0][:5]]}")
 
             # Move动作分支输出 - 4个离散动作的概率
             move_probs = debug_info['move_logits'][0]
             move_softmax = np.exp(move_probs) / np.sum(np.exp(move_probs))
             
         
-            print(f"  MoveProbabilities: {[f'{p:.3f}' for p in move_softmax]}")
+            print(f"  MoveProbabilities: {[f'{p:.2f}' for p in move_softmax]}")
       
             
             # Turn动作分支输出 - 2个离散动作的概率
             turn_probs = debug_info['turn_logits'][0]
             turn_softmax = np.exp(turn_probs) / np.sum(np.exp(turn_probs))
 
-            print(f"  TurnProbabilities: {[f'{p:.3f}' for p in turn_softmax]}")
+            print(f"  TurnProbabilities: {[f'{p:.2f}' for p in turn_softmax]}")
           
 
             
             # 价值函数输出
-            print(f"\n价值函数输出: {debug_info['value'][0][0]:.4f}")
+            print(f"\n价值函数输出: {debug_info['value'][0][0]:.2f}")
           
             next_state, reward, done, detection_results = env.step(move_action, turn_action, move_forward_step, turn_angle)
             
@@ -181,7 +181,7 @@ def continue_training_gru_ppo_agent(model_path=None):
                 logger.info(f"Episode: {episode}, Score: {step_count}, Total Reward: {total_reward:.2f}, Final Area: {final_area:.2f}, Success: {success_flag}")
                 print(f"Ep: {episode+1}/{total_training_episodes}, S: {step_count}, R: {total_reward:.2f}, A: {final_area:.2f}, "
                       f"Success: {success_flag}, MAct: {move_action_names[move_action]}, TAct: {turn_action_names[turn_action]}, "
-                      f"MStep: {move_forward_step:.3f}, TAngle: {turn_angle:.3f}")
+                      f"MStep: {move_forward_step:.2f}, TAngle: {turn_angle:.2f}")
                 scores.append(step_count)
                 total_rewards.append(total_reward)
                 final_areas.append(final_area)

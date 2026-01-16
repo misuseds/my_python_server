@@ -1,7 +1,7 @@
 {
   "config": {
-    "ENV_MAX_STEPS": 100,
-    "EVAL_MAX_STEPS": 100,
+    "ENV_MAX_STEPS": 60,
+    "EVAL_MAX_STEPS": 60,
     "MIN_GATE_AREA": 50000,
     "CENTER_THRESHOLD": 180,
     "DETECTION_CONFIDENCE": 0.8,
@@ -19,7 +19,7 @@
     "turn_coe": 6,
     "EPISODES": 100,
     "LEARNING_RATE": 0.001,
-    "GAMMA": 0.88,
+    "GAMMA": 0.92,
     "K_EPOCHS": 8,
     "EPS_CLIP": 0.3,
     "BATCH_SIZE": 16,

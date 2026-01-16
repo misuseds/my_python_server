@@ -1282,9 +1282,9 @@ class TargetSearchEnvironment:
                             f"快速完成奖励: {quick_completion_bonus:.2f}, 总奖励: {total_completion_bonus:.2f}")
 
         # 输出每步得分
-        print(f"S {self.step_count}, A: {new_area:.2f}, R: {reward:.3f}, "
+        print(f"S {self.step_count}, A: {new_area:.2f}, R: {reward:.2f}, "
               f"Move Action: {move_action_names[move_action]}, Turn Action: {turn_action_names[turn_action]}, "
-              f"Move Step: {move_forward_step:.3f}, Turn Angle: {turn_angle:.3f}")
+              f"Move Step: {move_forward_step:.2f}, Turn Angle: {turn_angle:.2f}")
         
         # 更新位置历史
         state_feature = len(detection_results) if detection_results else 0
