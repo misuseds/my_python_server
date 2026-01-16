@@ -39,16 +39,39 @@ def setup_logging():
     
     log_filename = os.path.join(log_dir, f"gate_find_ppo_{time.strftime('%Y%m%d_%H%M%S')}.log")
     
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_filename, encoding='utf-8'),
-            logging.StreamHandler()
-        ]
-    )
+    # 创建logger实例
+    logger = logging.getLogger('ppo_agents')
+    logger.setLevel(logging.INFO)
     
-    return logging.getLogger(__name__)
+    # 清除已有的处理器，避免重复
+    logger.handlers.clear()
+    
+    # 创建文件处理器
+    file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    
+    # 创建控制台处理器
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    
+    # 创建格式器
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    
+    # 添加处理器到logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
+    return logger
+
+
+def log_and_print(logger, message):
+    """
+    同时记录日志和打印消息
+    """
+    print(message)
+    logger.info(message)
 
 
 class ResidualBlock(nn.Module):
@@ -240,7 +263,7 @@ class EnhancedGRUPolicyNetwork(nn.Module):
         move_logits = self.move_actor(last_output)
         turn_logits = self.turn_actor(last_output)
         
-        # Action parameters - 使用tanh确保输出在[-1, 1]之间
+        # Action parameters - 使用tanh确保输出在[-1,1]之间
         action_params = torch.tanh(self.action_param_head(last_output))
         
         # Critic output
@@ -377,7 +400,7 @@ class EnhancedTargetSearchEnvironment:
         self.last_detection_result = None
         self.last_center_distance = float('inf')
         self.last_area = 0
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logging()  # 使用统一的日志配置
         
         # 记录探索历史
         self.position_history = []
@@ -640,7 +663,7 @@ class EnhancedTargetSearchEnvironment:
         重置到原点操作
         """
         self.logger.info("执行重置到原点操作")
-        print("执行重置到原点操作...")
+        log_and_print(self.logger, "执行重置到原点操作...")
         
         # 按键操作序列
         pyautogui.press('esc')
@@ -668,7 +691,7 @@ class EnhancedTargetSearchEnvironment:
                     break
             
             if not gate_detected:
-                print(f"未检测到门，等待1秒后按回车重新检测...")
+                log_and_print(self.logger, f"未检测到门，等待1秒后按回车重新检测...")
                 time.sleep(1)
                 pyautogui.press('enter')
                 time.sleep(0.2)
@@ -678,7 +701,7 @@ class EnhancedTargetSearchEnvironment:
         time.sleep(0.2)
         pyautogui.press('enter')
         time.sleep(0.2)
-        print("重置到原点操作完成")
+        log_and_print(self.logger, "重置到原点操作完成")
         self.logger.info("重置到原点操作完成")
 
     def _load_yolo_model(self):
@@ -821,7 +844,7 @@ class EnhancedTargetSearchEnvironment:
             self.last_detection_result = pre_action_detections
             self.step_count += 1
             
-            print(f"Step {self.step_count}, Area: {new_area:.2f}, Reward: {reward:.2f}, "
+            log_and_print(self.logger, f"Step {self.step_count}, Area: {new_area:.2f}, Reward: {reward:.2f}, "
                   f"Detected: climb (pre-action), Move Action: {move_action_names[move_action]}, Turn Action: {turn_action_names[turn_action]}")
             
             return pre_action_state, reward, True, pre_action_detections
@@ -890,8 +913,7 @@ class EnhancedTargetSearchEnvironment:
                             f"快速完成奖励: {quick_completion_bonus:.2f}, 总奖励: {total_completion_bonus:.2f}")
 
         # 输出每步得分
-        print(f"S {self.step_count}, A: {new_area:.2f}, R: {reward:.2f}, "
-         )
+        log_and_print(self.logger, f"S {self.step_count}, A: {new_area:.2f}, R: {reward:.2f}")
         
         # 更新位置历史
         state_feature = len(detection_results) if detection_results else 0
@@ -1090,24 +1112,56 @@ class EnhancedGRUPPOAgent:
     def update(self, memory):
         if len(memory.states) == 0:
             return
-            
-        # Convert memory to tensors - 保持单个episode的序列结构
-        states_list = list(memory.states)
-        if len(states_list) == 0:
+        
+        # 将长序列切分成多个固定长度的子序列进行训练
+        batch_size = 32  # 或其他合适的批大小
+        sequence_length = self.sequence_length
+        
+        # 将记忆切分成多个序列段
+        all_states = list(memory.states)
+        all_move_actions = list(memory.move_actions)
+        all_turn_actions = list(memory.turn_actions)
+        all_logprobs = list(memory.logprobs)
+        all_rewards = list(memory.rewards)
+        all_terminals = list(memory.is_terminals)
+        
+        if len(all_states) < sequence_length:
+            # 如果序列太短，直接使用全部数据
+            self._train_single_sequence(
+                all_states, all_move_actions, all_turn_actions,
+                all_logprobs, all_rewards, all_terminals
+            )
             return
         
+        # 滑动窗口切分序列
+        for start_idx in range(0, len(all_states) - sequence_length + 1, sequence_length // 2):
+            end_idx = min(start_idx + sequence_length, len(all_states))
+            
+            seq_states = all_states[start_idx:end_idx]
+            seq_move_actions = all_move_actions[start_idx:end_idx]
+            seq_turn_actions = all_turn_actions[start_idx:end_idx]
+            seq_logprobs = all_logprobs[start_idx:end_idx]
+            seq_rewards = all_rewards[start_idx:end_idx]
+            seq_terminals = all_terminals[start_idx:end_idx]
+            
+            if len(seq_states) == sequence_length:
+                self._train_single_sequence(
+                    seq_states, seq_move_actions, seq_turn_actions,
+                    seq_logprobs, seq_rewards, seq_terminals
+                )
+
+    def _train_single_sequence(self, states_list, move_actions, turn_actions, 
+                            old_logprobs, rewards, terminals):
+        """训练单个序列段"""
         # 构建状态序列
-        states = torch.stack(states_list).unsqueeze(0)  # [1, seq_len, channels, height, width]
-        move_actions = torch.tensor(list(memory.move_actions), dtype=torch.long)  # [seq_len]
-        turn_actions = torch.tensor(list(memory.turn_actions), dtype=torch.long)  # [seq_len]
-        old_logprobs = torch.tensor(list(memory.logprobs), dtype=torch.float)    # [seq_len]
-        rewards = torch.tensor(list(memory.rewards), dtype=torch.float)          # [seq_len]
-        terminals = torch.tensor(list(memory.is_terminals), dtype=torch.bool)    # [seq_len]
+        states = torch.stack(states_list).unsqueeze(0)  # [1, seq_len, C, H, W]
+        move_actions = torch.tensor(move_actions, dtype=torch.long)
+        turn_actions = torch.tensor(turn_actions, dtype=torch.long)
+        old_logprobs = torch.tensor(old_logprobs, dtype=torch.float)
+        rewards = torch.tensor(rewards, dtype=torch.float)
+        terminals = torch.tensor(terminals, dtype=torch.bool)
 
-        if len(rewards) == 0:
-            return
-
-        # Compute discounted rewards
+        # 计算折扣奖励
         discounted_rewards = []
         running_add = 0
         for reward, is_terminal in zip(reversed(rewards), reversed(terminals)):
@@ -1117,150 +1171,56 @@ class EnhancedGRUPPOAgent:
             discounted_rewards.insert(0, running_add)
         
         discounted_rewards = torch.tensor(discounted_rewards, dtype=torch.float)
-        if discounted_rewards.numel() > 1:  # 只有在有多于一个元素时才标准化
+        if discounted_rewards.numel() > 1:
             discounted_rewards = (discounted_rewards - discounted_rewards.mean()) / (discounted_rewards.std() + 1e-5)
-        else:
-            # 如果只有一个元素，跳过标准化
-            pass
 
-        # 初始化梯度范数和其他指标变量
-        total_loss = 0
-        total_actor_loss = 0
-        total_critic_loss = 0
-        total_entropy = 0
-        grad_norm = 0  # 初始化梯度范数，防止变量未定义错误
-        
-        # Optimize policy K epochs
+        # PPO更新循环
         for _ in range(self.K_epochs):
-            # Forward pass - 获取整个序列的输出
+            # 前向传播
             move_probs, turn_probs, action_params, state_vals, _ = self.policy(states)
             
-            # state_vals shape: [batch=1, seq_len, 1] -> [seq_len]
+            # 处理输出维度
             state_vals = state_vals.squeeze(0).squeeze(-1)  # [seq_len]
-            
-            # Ensure we have the right dimensions for action probabilities
             move_probs_squeezed = move_probs.squeeze(0)  # [seq_len, move_action_dim]
             turn_probs_squeezed = turn_probs.squeeze(0)  # [seq_len, turn_action_dim]
-            
-            # 检查维度并确保有足够的维度进行gather操作
-            if move_probs_squeezed.dim() == 1:
-                if move_probs_squeezed.size(0) == len(move_actions):
-                    move_probs_squeezed = move_probs_squeezed.unsqueeze(0).expand(len(move_actions), -1)
-                else:
-                    continue
-                    
-            if turn_probs_squeezed.dim() == 1:
-                if turn_probs_squeezed.size(0) == len(turn_actions):
-                    turn_probs_squeezed = turn_probs_squeezed.unsqueeze(0).expand(len(turn_actions), -1)
-                else:
-                    continue
 
-            # 确保动作索引在有效范围内
+            # 确保动作索引有效
             move_actions = torch.clamp(move_actions, 0, move_probs_squeezed.size(1) - 1)
             turn_actions = torch.clamp(turn_actions, 0, turn_probs_squeezed.size(1) - 1)
 
-            # Calculate action logprobs - FIXED: 更安全的处理
-            try:
-                # 使用更安全的gather操作
-                if move_probs_squeezed.size(0) != move_actions.size(0):
-                    min_len = min(move_probs_squeezed.size(0), move_actions.size(0))
-                    move_probs_squeezed = move_probs_squeezed[:min_len]
-                    move_actions = move_actions[:min_len]
-                    
-                if turn_probs_squeezed.size(0) != turn_actions.size(0):
-                    min_len = min(turn_probs_squeezed.size(0), turn_actions.size(0))
-                    turn_probs_squeezed = turn_probs_squeezed[:min_len]
-                    turn_actions = turn_actions[:min_len]
-                
-                # 现在进行gather操作
-                gathered_move = move_probs_squeezed.gather(1, move_actions.unsqueeze(1))
-                move_logprobs = torch.log(gathered_move.squeeze(-1))
-                
-                gathered_turn = turn_probs_squeezed.gather(1, turn_actions.unsqueeze(1))
-                turn_logprobs = torch.log(gathered_turn.squeeze(-1))
-                
-                logprobs = move_logprobs + turn_logprobs
-                
-            except IndexError as e:
-                print(f"Gather操作索引错误: {e}")
-                continue
-            except RuntimeError as e:
-                print(f"Gather操作运行时错误: {e}")
-                continue
-                
-            # Calculate entropy bonus to encourage exploration
-            move_entropy = -(move_probs_squeezed * torch.log(move_probs_squeezed + 1e-10)).sum(dim=-1).mean()
-            turn_entropy = -(turn_probs_squeezed * torch.log(turn_probs_squeezed + 1e-10)).sum(dim=-1).mean()
-            entropy_bonus = move_entropy + turn_entropy
-            
-            # Calculate ratios
+            # 计算对数概率
+            move_logprobs = torch.log(move_probs_squeezed.gather(1, move_actions.unsqueeze(1)).squeeze(-1))
+            turn_logprobs = torch.log(turn_probs_squeezed.gather(1, turn_actions.unsqueeze(1)).squeeze(-1))
+            logprobs = move_logprobs + turn_logprobs
+
+            # 计算比率和优势
             ratios = torch.exp(logprobs - old_logprobs.detach())
-            
-            # Calculate advantages - now both should be [seq_len]
             advantages = discounted_rewards - state_vals.detach()
-            
-            # Calculate surrogate losses
+
+            # PPO损失
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
             actor_loss = -torch.min(surr1, surr2).mean()
-            
-            # Value loss - ensure both tensors are the same size
+
+            # 价值损失
             critic_loss = self.MseLoss(state_vals, discounted_rewards)
-            
-            # Total loss - including entropy regularization
+
+            # 熵损失
+            move_entropy = -(move_probs_squeezed * torch.log(move_probs_squeezed + 1e-10)).sum(dim=-1).mean()
+            turn_entropy = -(turn_probs_squeezed * torch.log(turn_probs_squeezed + 1e-10)).sum(dim=-1).mean()
+            entropy_bonus = move_entropy + turn_entropy
+
+            # 总损失
             entropy_coeff = CONFIG.get('ENTROPY_COEFFICIENT', 0.02)
             loss = actor_loss + 0.5 * critic_loss - entropy_coeff * entropy_bonus
-            
-            # Update network
+
+            # 反向传播
             self.optimizer.zero_grad()
-            # 添加梯度裁剪以避免梯度爆炸
-            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=CONFIG.get('GRADIENT_CLIP_NORM', 0.5))
             loss.backward()
             
-            # 计算梯度范数用于监控
-            total_norm = 0
-            param_count = 0
-            for p in self.policy.parameters():
-                if p.grad is not None:
-                    param_count += 1
-                    total_norm += p.grad.data.norm(2).item() ** 2
-            grad_norm = (total_norm / param_count) ** 0.5 if param_count > 0 else 0
-            
+            # 梯度裁剪
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=CONFIG.get('GRADIENT_CLIP_NORM', 0.5))
             self.optimizer.step()
-            
-            # 累积损失值用于监控
-            total_loss += loss.item()
-            total_actor_loss += actor_loss.item()
-            total_critic_loss += critic_loss.item()
-            total_entropy += entropy_bonus.item()
-
-        # Copy new weights into old policy
-        self.policy_old.load_state_dict(self.policy.state_dict())
-        
-        # 更新收敛监控数据
-        self.convergence_monitor['loss_history'].append({
-            'total_loss': total_loss / self.K_epochs,
-            'actor_loss': total_actor_loss / self.K_epochs,
-            'critic_loss': total_critic_loss / self.K_epochs,
-            'entropy': total_entropy / self.K_epochs,
-            'grad_norm': grad_norm  # 现在即使循环没有执行，变量也已定义
-        })
-        
-        # 记录当前学习率
-        current_lr = self.optimizer.param_groups[0]['lr']
-        self.convergence_monitor['learning_rates'].append(current_lr)
-        
-        # 根据性能动态调整学习率
-        avg_reward = np.mean([r for r in memory.rewards]) if memory.rewards else 0
-        if avg_reward < -0.1:  # 持续负奖励，提高学习率以跳出局部最优
-            self.adaptive_lr_factor = min(self.adaptive_lr_factor * 1.05, 2.0)
-        elif avg_reward > 0.1:  # 正向进展，降低学习率稳定训练
-            self.adaptive_lr_factor = max(self.adaptive_lr_factor * 0.95, 0.5)
-        
-        # 应用调整后的学习率
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = self.lr * self.adaptive_lr_factor
-
     def check_convergence_status(self, episode_reward, episode_length, success_flag=False):
         """
         检查收敛状态并返回相关信息
@@ -1378,7 +1338,7 @@ class EnhancedGRUPPOAgent:
             'optimizer_state_dict': optimizer_state_dict or self.optimizer.state_dict(),
         }
         torch.save(checkpoint, filepath)
-        print(f"模型检查点已保存: {filepath}")
+        log_and_print(logging.getLogger('ppo_agents'), f"模型检查点已保存: {filepath}")
 
     def load_checkpoint(self, filepath):
         """
@@ -1390,8 +1350,8 @@ class EnhancedGRUPPOAgent:
             self.policy_old.load_state_dict(checkpoint['policy_old_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_episode = checkpoint.get('episode', 0)
-            print(f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
+            log_and_print(logging.getLogger('ppo_agents'), f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
             return start_episode + 1
         else:
-            print(f"检查点文件不存在: {filepath}")
+            log_and_print(logging.getLogger('ppo_agents'), f"检查点文件不存在: {filepath}")
             return 0

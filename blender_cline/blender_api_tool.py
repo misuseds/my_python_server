@@ -173,10 +173,18 @@ if bpy.context.object:
     bpy.context.object.scale[1] = 100
     bpy.context.object.scale[2] = 100
 
-# 设置3D视口的远裁剪平面
-if bpy.context.space_data:
-    print("当前视口配置:300000")
-    bpy.context.space_data.clip_end = 300000
+# 安全地设置3D视口的远裁剪平面
+try:
+    # 遍历所有屏幕区域，查找3D视口
+    for area in bpy.context.screen.areas:
+        if area.type == 'VIEW_3D':
+            for space in area.spaces:
+                if space.type == 'VIEW_3D':
+                    space.clip_end = 300000
+                    print("已设置3D视口远裁剪平面")
+                    break
+except Exception as e:
+    print(f"设置3D视口裁剪平面时出错: {e}")
 
 print("Blender缩放设置已应用")
 '''
