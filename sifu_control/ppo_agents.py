@@ -55,7 +55,7 @@ def setup_logging():
     console_handler.setLevel(logging.INFO)
     
     # 创建格式器
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('  %(message)s')
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
     
@@ -70,7 +70,7 @@ def log_and_print(logger, message):
     """
     同时记录日志和打印消息
     """
-    print(message)
+    
     logger.info(message)
 
 
@@ -275,8 +275,20 @@ class EnhancedGRUPolicyNetwork(nn.Module):
                 'move_logits': move_logits.detach().cpu().numpy(),
                 'turn_logits': turn_logits.detach().cpu().numpy(),
                 'action_params': action_params.detach().cpu().numpy(),
-                'value': value.detach().cpu().numpy()
+                'value': value.detach().cpu().numpy(),
+                'last_output_shape': last_output.shape,
+                'features_shape': features.shape
             }
+            
+            # 打印模型输出信息
+
+          
+# 打印模型输出信息
+            print(f"GRU: {[round(float(x), 2) for x in debug_info['gru_last_output'][0][:4]]}")
+            print(f"Move: {[round(float(x), 2) for x in debug_info['move_logits'][0][:10]]}")
+            print(f"Turn: {[round(float(x), 2) for x in debug_info['turn_logits'][0][:10]]}")
+            print(f"参数: {[round(float(x), 2) for x in debug_info['action_params'][0]]}")
+            print(f"价值: {round(float(debug_info['value'][0][0]), 2)}")
             return (
                 F.softmax(move_logits, dim=-1),
                 F.softmax(turn_logits, dim=-1),
