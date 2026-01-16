@@ -32,7 +32,8 @@
     "IMAGE_HEIGHT": 480,
     "IMAGE_WIDTH": 640,
     "DETECTION_CONFIDENCE": 0.4,
-    
+    "forward_coe": 10,
+    "turn_coe": 4,
  
     "MIN_GATE_AREA": 50,
     "CENTER_THRESHOLD": 150,

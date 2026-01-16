@@ -25,8 +25,7 @@ def load_config():
     config_path = Path(__file__).parent / "ppo_config.json"
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
-    return config['config']
-
+    return config 
 CONFIG = load_config()
 
 
@@ -321,9 +320,7 @@ class EnhancedGRUPolicyNetwork(nn.Module):
             self.logger.info(f"参数: {[round(float(x), 2) for x in debug_info['action_params'][0]]}")
             self.logger.info(f"价值: {round(float(debug_info['value'][0][0]), 2)}")
             
-            # 添加状态差异检测
-            if len(self.feature_extractor.train()) > 1:
-                # 计算特征差异
+            if features.size(0) > 1:  # 如果批次大小大于1，才能比较特征差异
                 feature_diff = torch.mean(torch.abs(features[0] - features[1])).item()
                 self.logger.info(f"特征差异: {feature_diff:.4f}")
             
@@ -987,7 +984,40 @@ class EnhancedTargetSearchEnvironment:
         
         return new_state, reward, done, detection_results
   
-  
+    def calculate_reward(self, detection_results, last_center_distance, action_taken, last_area):
+        """
+        计算综合奖励 - 需要补充完整实现
+        """
+        # 目标检测奖励
+        target_reward = self._calculate_target_presence_reward(detection_results)
+        
+        # 进展奖励
+        progress_reward = self._calculate_progress_reward(detection_results)
+        
+        # 卡死惩罚
+        stuck_penalty = self._calculate_stuck_penalty()
+        
+        # 重复动作惩罚
+        repetition_penalty = self._calculate_repetition_penalty(action_taken)
+        
+        # 视觉变化奖励
+        visual_change_reward = self._calculate_visual_change_reward(action_taken)
+        
+        # 动作一致性奖励
+        consistency_reward = self._calculate_action_consistency_reward(action_taken)
+        
+        # 探索奖励
+        exploration_reward = self._calculate_exploration_reward()
+        
+        # 总奖励
+        total_reward = (target_reward + progress_reward + stuck_penalty + 
+                    repetition_penalty + visual_change_reward + 
+                    consistency_reward + exploration_reward)
+        
+        # 计算新区域面积
+        new_area = self._get_max_detection_area(detection_results) if detection_results else 0
+        
+        return total_reward, new_area
     def reset(self):
         """
         重置环境
@@ -1008,6 +1038,7 @@ class EnhancedTargetSearchEnvironment:
         return initial_state
 
 
+# 在 EnhancedGRUPPOAgent 类的 __init__ 方法中添加：
 class EnhancedGRUPPOAgent:
     """
     增强版基于GRU的PPO智能体 - 增加收敛监控，改进卡死检测
@@ -1022,6 +1053,9 @@ class EnhancedGRUPPOAgent:
         self.eps_clip = config['EPS_CLIP']
         self.sequence_length = config['SEQUENCE_LENGTH']
         self.hidden_size = config['HIDDEN_SIZE']
+        
+        # 添加logger
+        self.logger = setup_logging()
         
         # Create policy networks
         self.policy = EnhancedGRUPolicyNetwork(
@@ -1429,7 +1463,7 @@ class EnhancedGRUPPOAgent:
             'optimizer_state_dict': optimizer_state_dict or self.optimizer.state_dict(),
         }
         torch.save(checkpoint, filepath)
-        self.logger.info( f"模型检查点已保存: {filepath}")
+        self.logger.info(f"模型检查点已保存: {filepath}")
 
     def load_checkpoint(self, filepath):
         """
@@ -1441,8 +1475,8 @@ class EnhancedGRUPPOAgent:
             self.policy_old.load_state_dict(checkpoint['policy_old_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_episode = checkpoint.get('episode', 0)
-            self.logger.info( f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
+            self.logger.info(f"模型检查点已加载，从第 {start_episode} 轮开始继续训练")
             return start_episode + 1
         else:
-            self.logger.info( f"检查点文件不存在: {filepath}")
+            self.logger.info(f"检查点文件不存在: {filepath}")
             return 0

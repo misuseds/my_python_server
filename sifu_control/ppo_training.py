@@ -17,7 +17,7 @@ def load_config():
     config_path = Path(__file__).parent / "ppo_config.json"
     with open(config_path, 'r', encoding='utf-8') as f:
         config = json.load(f)
-    return config['config']
+    return config 
 
 CONFIG = load_config()
 
@@ -242,7 +242,7 @@ def get_deterministic_action(ppo_agent, state):
 # 在 perform_training_loop 函数中添加状态多样性监控
 def perform_training_loop(env, ppo_agent, start_episode, total_episodes):
     """
-    执行训练循环 - 增加状态多样性监控
+    执行训练循环 - 增加状态多样性监控和检查点保存
     """
     scores = deque(maxlen=50)
     total_rewards = deque(maxlen=50)
@@ -266,7 +266,7 @@ def perform_training_loop(env, ppo_agent, start_episode, total_episodes):
         episode_states = []
         episode_actions = []
         
-        print_debug = (episode % 50 == 0)  # 每50轮打印一次详细信息
+        print_debug = episode % 50 == 0  # 每50轮打印一次详细信息
         result = run_episode(env, ppo_agent, episode, total_episodes, training_mode=True, print_debug=print_debug)
         
         # 更新统计数据
@@ -281,6 +281,12 @@ def perform_training_loop(env, ppo_agent, start_episode, total_episodes):
         # 使用收敛监控
         convergence_info = ppo_agent.check_convergence_status(
             result['total_reward'], result['step_count'], result['success_flag'])
+        
+        # 每10轮保存一次检查点
+        if (episode + 1) % 10 == 0:
+            checkpoint_path = f"{CONFIG['MODEL_PATH'].rsplit('.', 1)[0]}_checkpoint_ep_{episode + 1}.pth"
+            ppo_agent.save_checkpoint(checkpoint_path, episode + 1)
+            print(f"检查点已保存: {checkpoint_path}")
         
         # 每25轮打印一次收敛报告
         if episode % 25 == 0:
@@ -306,7 +312,6 @@ def perform_training_loop(env, ppo_agent, start_episode, total_episodes):
             break
     
     return training_stats
-
 def continue_training_gru_ppo_agent(model_path=None):
     """
     基于现有GRU模型继续训练 - 使用全局配置，带收敛监控
@@ -426,7 +431,7 @@ def evaluate_trained_gru_ppo_agent(model_path=None):
     
     for episode in range(evaluation_episodes):
         # 每隔几轮打印一次调试信息
-        print_debug = (episode % 2 == 0)  # 每2轮打印一次调试信息
+        print_debug =True  # 每2轮打印一次调试信息
         result = run_episode(env, ppo_agent, episode, evaluation_episodes, training_mode=False, print_debug=print_debug)
         
         scores.append(result['step_count'])
