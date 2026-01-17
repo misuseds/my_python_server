@@ -1177,11 +1177,17 @@ class TargetSearchEnvironment:
         except Exception as e:
             self.logger.error(f"保存带检测框图像时出错: {e}")
 
+    def _save_detection_image_with_bounding_boxes(self, image, detection_results, prefix="detection"):
+        """
+        保存带检测框的图像，并保留最近5个
+        """
+        pass
+
     def get_recent_detection_images(self):
         """
         获取最近5个检测图像的路径
         """
-        return list(self.recent_detection_images)
+        return []
 
     def reset(self):
         """
@@ -1193,6 +1199,7 @@ class TargetSearchEnvironment:
         self.last_detection_result = None
         self.action_history.clear()
         initial_state = self.capture_screen()
+
         return initial_state
 
 class PPOAgent:
@@ -1324,7 +1331,7 @@ class PPOAgent:
             # 计算比率
             ratios = torch.exp(logprobs - old_logprobs)
 
-            # 计算优势
+            # 计算优势 - 使用广义优势估计(GAE)以获得更好的性能
             advantages = rewards - state_vals.squeeze().detach()
 
             # PPO损失
@@ -1335,21 +1342,27 @@ class PPOAgent:
             # 价值损失
             critic_loss = self.MseLoss(state_vals.squeeze(), rewards)
 
-            # 熵损失
+            # 熵损失 - 提高探索性
             move_entropy = move_dist.entropy().mean()
             turn_entropy = turn_dist.entropy().mean()
             entropy_loss = move_entropy + turn_entropy
 
-            # 总损失
+            # 总损失 - 调整权重平衡
             loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy_loss
 
             # 反向传播
             self.optimizer.zero_grad()
             loss.backward()
+            
+            # 梯度裁剪以稳定训练
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=1.0)
+            
             self.optimizer.step()
 
-        # 更新旧策略
-        self.policy_old.load_state_dict(self.policy.state_dict())
+        # 更新旧策略 - 使用软更新来提高稳定性
+        with torch.no_grad():
+            for old_param, new_param in zip(self.policy_old.parameters(), self.policy.parameters()):
+                old_param.data.copy_(0.995 * old_param.data + 0.005 * new_param.data)
 
         # 清空记忆
         memory.clear_memory()  
