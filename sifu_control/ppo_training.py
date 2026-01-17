@@ -266,7 +266,7 @@ def perform_training_loop(env, ppo_agent, start_episode, total_episodes):
         episode_states = []
         episode_actions = []
         
-        print_debug = episode % 50 == 0  # 每50轮打印一次详细信息
+        print_debug = True  # 每50轮打印一次详细信息
         result = run_episode(env, ppo_agent, episode, total_episodes, training_mode=True, print_debug=print_debug)
         
         # 更新统计数据
@@ -289,7 +289,7 @@ def perform_training_loop(env, ppo_agent, start_episode, total_episodes):
             print(f"检查点已保存: {checkpoint_path}")
         
         # 每25轮打印一次收敛报告
-        if episode % 25 == 0:
+        if episode %10 == 0:
             current_time = time.time()
             elapsed_time = current_time - loop_start_time
             

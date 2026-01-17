@@ -861,61 +861,35 @@ class EnhancedTargetSearchEnvironment:
             self.logger.error(f"YOLO检测过程中出错: {e}")
             return []
 
-    def _save_detection_image_with_bounding_boxes(self, image, detections, prefix="detection"):
+    def _check_climb_conditions(self, detection_results, confidence_threshold=0.9):
         """
-        保存带检测框的图片
+        检查climb检测结果是否满足条件
+        参数:
+            detection_results: YOLO检测结果列表
+            confidence_threshold: 置信度阈值，默认0.9
+        返回:
+            bool: 如果满足条件（单个检测且置信度>0.9，或者多个检测中至少一个置信度>0.9）则返回True
         """
-        try:
-            # 复制图像以避免修改原始图像
-            img_with_boxes = image.copy()
-            
-            # 绘制检测框
-            for detection in detections:
-                bbox = detection['bbox']
-                label = detection['label']
-                score = detection['score']
-                
-                # 转换边界框坐标为整数
-                x1, y1, x2, y2 = map(int, bbox)
-                
-                # 绘制矩形框
-                color = (0, 255, 0)  # 绿色框
-                thickness = 2
-                cv2.rectangle(img_with_boxes, (x1, y1), (x2, y2), color, thickness)
-                
-                # 添加标签文本
-                label_text = f"{label}: {score:.2f}"
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.5
-                text_color = (255, 255, 255)  # 白色文字
-                text_thickness = 1
-                
-                # 计算文本框大小
-                (text_width, text_height), baseline = cv2.getTextSize(label_text, font, font_scale, text_thickness)
-                
-                # 绘制文本背景
-                cv2.rectangle(img_with_boxes, (x1, y1 - text_height - 10), (x1 + text_width, y1), color, -1)
-                
-                # 添加文本
-                cv2.putText(img_with_boxes, label_text, (x1, y1 - 5), font, font_scale, text_color, text_thickness)
-            
-            # 生成文件名
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            filename = f"{prefix}_step_{self.step_count}_{timestamp}.png"
-            
-            # 确定保存目录
-            save_dir = os.path.join(Path(__file__).parent, "detection_images")
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
-            
-            # 保存图片
-            save_path = os.path.join(save_dir, filename)
-            cv2.imwrite(save_path, img_with_boxes)
-            
-            self.logger.info(f"检测图像已保存: {save_path}")
-            
-        except Exception as e:
-            self.logger.error(f"保存检测图像时出错: {e}")
+        if not detection_results:
+            return False
+        
+        # 筛选出所有climb检测结果
+        climb_detections = [
+            detection for detection in detection_results
+            if (
+                detection['label'].lower() == 'climb' or 'climb' in detection['label'].lower()
+            )
+        ]
+        
+        if not climb_detections:
+            return False
+        
+        # 如果只有一个climb检测，要求其置信度超过阈值
+        if len(climb_detections) == 1:
+            return climb_detections[0]['score'] > confidence_threshold
+        # 如果有多个climb检测，要求至少有一个置信度超过阈值
+        else:
+            return any(detection['score'] > confidence_threshold for detection in climb_detections)
 
     def step(self, move_action, turn_action, move_forward_step=2, turn_angle=30):
         """
@@ -930,14 +904,11 @@ class EnhancedTargetSearchEnvironment:
         pre_action_state = self.capture_screen()
         pre_action_detections = self.detect_target(pre_action_state)
         
-        # 检查当前状态是否有climb类别
-        pre_climb_detected = any(
-            detection['label'].lower() == 'climb' or 'climb' in detection['label'].lower()
-            for detection in pre_action_detections
-        )
+        # 检查当前状态是否有符合条件的climb类别
+        pre_climb_detected = self._check_climb_conditions(pre_action_detections)
         
         if pre_climb_detected:
-            self.logger.info(f"动作执行前已检测到climb类别，立即终止")
+            self.logger.info(f"动作执行前已检测到符合条件的climb类别，立即终止")
             
             # 保存带识别框的图片
             self._save_detection_image_with_bounding_boxes(pre_action_state, pre_action_detections, prefix="pre_action_climb_detected")
@@ -985,11 +956,8 @@ class EnhancedTargetSearchEnvironment:
         # 检测目标
         detection_results = self.detect_target(new_state)
         
-        # 检查执行动作后是否检测到climb类别
-        post_climb_detected = any(
-            detection['label'].lower() == 'climb' or 'climb' in detection['label'].lower()
-            for detection in detection_results
-        )
+        # 检查执行动作后是否检测到符合条件的climb类别
+        post_climb_detected = self._check_climb_conditions(detection_results)
         
         if post_climb_detected:
             # 保存带识别框的图片
@@ -1010,15 +978,12 @@ class EnhancedTargetSearchEnvironment:
         # 更新步数
         self.step_count += 1
         
-        # 检查是否检测到climb类别
-        climb_detected = any(
-            detection['label'].lower() == 'climb' or 'climb' in detection['label'].lower()
-            for detection in detection_results
-        )
+        # 检查是否检测到符合条件的climb类别
+        climb_detected = self._check_climb_conditions(detection_results)
 
         done = climb_detected or self.step_count >= self.max_steps
         
-        # 如果检测到climb，给予额外奖励
+        # 如果检测到符合条件的climb，给予额外奖励
         if climb_detected:
             # 保存带识别框的图片
             self._save_detection_image_with_bounding_boxes(new_state, detection_results, prefix="final_climb_detected")
@@ -1033,7 +998,7 @@ class EnhancedTargetSearchEnvironment:
             # 总奖励
             total_completion_bonus = base_completion_reward + quick_completion_bonus
             reward += total_completion_bonus
-            self.logger.info(f"检测到climb类别！步骤: {self.step_count}, 基础奖励: {base_completion_reward:.2f}, "
+            self.logger.info(f"检测到符合条件的climb类别！步骤: {self.step_count}, 基础奖励: {base_completion_reward:.2f}, "
                             f"快速完成奖励: {quick_completion_bonus:.2f}, 总奖励: {total_completion_bonus:.2f}")
             
             # 关键：执行游戏重置操作
@@ -1054,7 +1019,7 @@ class EnhancedTargetSearchEnvironment:
             # 在episode结束时重置游戏环境
             self.reset_to_origin()
         
-        return new_state, reward, done, detection_results
+        return new_state, reward, done, detection_results 
     def calculate_reward(self, detection_results, last_center_distance, action_taken, last_area):
         """
         计算综合奖励 - 需要补充完整实现
