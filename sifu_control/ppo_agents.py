@@ -872,7 +872,13 @@ class PPOAgent:
         # 修改这一行：将logprobs转换为tensor
         old_logprobs = torch.tensor(memory.logprobs, dtype=torch.float32).detach()
         
-        old_values = torch.cat(memory.action_params).detach() if memory.action_params else None
+        # 修改这一行：正确处理action_params
+        if memory.action_params:
+            # 将列表转换为tensor
+            action_params_tensor = torch.tensor(memory.action_params, dtype=torch.float32)
+            old_values = action_params_tensor.detach()
+        else:
+            old_values = None
 
         # PPO更新
         for _ in range(self.K_epochs):
@@ -916,7 +922,8 @@ class PPOAgent:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
         # 清空记忆
-        memory.clear_memory()
+        memory.clear_memory()  
+    
     def _preprocess_state(self, state):
         """
         预处理状态（图像）
