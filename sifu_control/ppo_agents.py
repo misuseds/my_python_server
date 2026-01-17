@@ -415,15 +415,17 @@ class TargetSearchEnvironment:
                         'height': height
                     })
             
-            # 保存本次检测的带框图像
-            self._save_detection_image_with_bounding_boxes(image, detections, "recent_detection")
+            # 只在特定条件下保存检测图像，例如每N步保存一次，或者只在重要事件时保存
+            if len(self.recent_detection_images) < 5:  # 只在队列未满时保存
+                self._save_detection_image_with_bounding_boxes(image, detections, "recent_detection")
+            elif random.random() < 0.1:  # 或者随机保存一部分（例如10%）
+                self._save_detection_image_with_bounding_boxes(image, detections, "recent_detection")
             
             self.logger.debug(f"YOLO检测到 {len(detections)} 个目标")
             return detections
         except Exception as e:
             self.logger.error(f"YOLO检测过程中出错: {e}")
             return []
-
     def _check_climb_conditions(self, detection_results):
         """
         检查climb检测结果是否满足条件
