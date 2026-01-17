@@ -23,7 +23,8 @@
     "MOVE_STEP_MAX": 1.0,
     "TURN_ANGLE_MIN": 15.0,
     "TURN_ANGLE_MAX": 45.0,
-    
+      "CLIMB_CONFIDENCE_THRESHOLD": 0.85,
+   "SAVE_DETECTION_IMAGES": true,
   
     "MODEL_PATH": "./model/gate_finder_ppo_enhanced.pth",
     "TARGET_DESCRIPTION": "gate",

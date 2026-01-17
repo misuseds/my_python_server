@@ -310,6 +310,9 @@ class TargetSearchEnvironment:
         # 动作历史记录
         self.action_history = deque(maxlen=10)
         
+        # 添加存储最近检测图像的队列
+        self.recent_detection_images = deque(maxlen=5)
+        
     def _load_yolo_model(self):
         """
         加载YOLO模型
@@ -412,16 +415,20 @@ class TargetSearchEnvironment:
                         'height': height
                     })
             
+            # 保存本次检测的带框图像
+            self._save_detection_image_with_bounding_boxes(image, detections, "recent_detection")
+            
             self.logger.debug(f"YOLO检测到 {len(detections)} 个目标")
             return detections
         except Exception as e:
             self.logger.error(f"YOLO检测过程中出错: {e}")
             return []
 
-    def _check_climb_conditions(self, detection_results, confidence_threshold=0.9):
+    def _check_climb_conditions(self, detection_results):
         """
         检查climb检测结果是否满足条件
         """
+        confidence_threshold = CONFIG.get('CLIMB_CONFIDENCE_THRESHOLD', 0.85)
         if not detection_results:
             return False
         
@@ -566,7 +573,7 @@ class TargetSearchEnvironment:
             self.logger.info(f"动作执行前已检测到符合条件的climb类别，立即终止")
             
             # 保存带识别框的图片
-            self._save_detection_image_with_bounding_boxes(pre_action_state, pre_action_detections, prefix="pre_action_climb_detected")
+           
             
             # 完成奖励
             base_completion_reward = CONFIG.get('BASE_COMPLETION_REWARD', 250)
@@ -631,7 +638,7 @@ class TargetSearchEnvironment:
         # 如果检测到符合条件的climb，给予额外奖励
         if climb_detected:
             # 保存带识别框的图片
-            self._save_detection_image_with_bounding_boxes(new_state, detection_results, prefix="final_climb_detected")
+            
             
             # 基础完成奖励
             base_completion_reward = CONFIG.get('BASE_COMPLETION_REWARD', 250)
@@ -686,7 +693,7 @@ class TargetSearchEnvironment:
 
     def _save_detection_image_with_bounding_boxes(self, image, detection_results, prefix="detection"):
         """
-        保存带检测框的图像
+        保存带检测框的图像，并保留最近5个
         """
         try:
             # 复制图像以避免修改原始图像
@@ -740,11 +747,20 @@ class TargetSearchEnvironment:
             
             if success:
                 self.logger.info(f"检测结果图像已保存: {filepath}")
+                
+                # 将文件路径添加到最近检测图像队列
+                self.recent_detection_images.append(str(filepath))
             else:
                 self.logger.error(f"保存检测结果图像失败: {filepath}")
                 
         except Exception as e:
             self.logger.error(f"保存带检测框图像时出错: {e}")
+
+    def get_recent_detection_images(self):
+        """
+        获取最近5个检测图像的路径
+        """
+        return list(self.recent_detection_images)
 
     def reset(self):
         """
@@ -757,7 +773,6 @@ class TargetSearchEnvironment:
         self.action_history.clear()
         initial_state = self.capture_screen()
         return initial_state
-
 
 class PPOAgent:
     """

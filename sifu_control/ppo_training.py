@@ -181,6 +181,9 @@ def run_episode(env, ppo_agent, episode_num, total_episodes, training_mode=True,
         # 更新智能体
         ppo_agent.update(episode_memory)
     
+    # 获取最近的检测图像（如果需要的话）
+    recent_detection_images = getattr(env, 'get_recent_detection_images', lambda: [])()
+    
     # 确保在episode结束时重置环境
     # 注意：env.reset()已经在env.step()中被调用了，所以这里不需要再次调用
     # env.reset()
@@ -190,9 +193,9 @@ def run_episode(env, ppo_agent, episode_num, total_episodes, training_mode=True,
         'step_count': step_count,
         'final_area': final_area,
         'success_flag': success_flag,
-        'detection_results': detection_results
+        'detection_results': detection_results,
+        'recent_detection_images': recent_detection_images
     }
-
 def get_deterministic_action(ppo_agent, state):
     """
     在评估模式下获取确定性动作
@@ -399,6 +402,7 @@ def evaluate_trained_ppo_agent(model_path=None):
     scores = []
     total_rewards = []
     success_count = 0
+    all_recent_detection_images = []  # 收集所有episode的检测图像
     
     print(f"开始评估，共 {evaluation_episodes} 个episode")
     
@@ -413,6 +417,9 @@ def evaluate_trained_ppo_agent(model_path=None):
         if result['success_flag']:
             success_count += 1
         
+        # 收集最近检测图像
+        all_recent_detection_images.extend(result['recent_detection_images'])
+        
         print(f"Eval Ep: {episode+1}/{evaluation_episodes}, Steps: {result['step_count']}, "
               f"Reward: {result['total_reward']:.3f}, Success: {result['success_flag']}")
     
@@ -426,7 +433,8 @@ def evaluate_trained_ppo_agent(model_path=None):
         'avg_reward': avg_reward,
         'success_rate': success_rate,
         'total_evaluated_episodes': evaluation_episodes,
-        'success_count': success_count
+        'success_count': success_count,
+        'recent_detection_images': all_recent_detection_images[-5:]  # 只保留最后5个检测图像
     }
     
     # 结束计时
@@ -448,7 +456,6 @@ def evaluate_trained_ppo_agent(model_path=None):
         "evaluation_result": evaluation_result,
         "evaluation_duration": evaluation_duration
     }
-
 
 def execute_ppo_tool(tool_name, *args):
     """
