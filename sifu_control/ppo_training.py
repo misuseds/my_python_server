@@ -1312,10 +1312,10 @@ class TargetSearchEnvironment:
 
     def _calculate_target_presence_reward(self, detection_results):
         """
-        基于目标检测的奖励
+        基于目标检测的奖励 - 优化版本
         """
         if not detection_results:
-            return -0.05  # 未检测到任何目标的惩罚
+            return 0.0  # 未检测到目标不给惩罚，避免过于消极
         
         # 检测到gate给予较高奖励
         gate_detected = any(
@@ -1324,36 +1324,37 @@ class TargetSearchEnvironment:
         )
         
         if gate_detected:
-            return 0.1
+            return 0.15  # 增加gate检测奖励
         
         # 检测到其他目标的奖励
-        return 0.02
+        return 0.05  # 增加其他目标检测奖励
 
     def _calculate_progress_reward(self, detection_results):
         """
-        基于目标检测进展的奖励
+        基于目标检测进展的奖励 - 优化版本
         """
         if not detection_results:
-            return -0.02
+            return 0.0  # 无目标不给负奖励
         else:
-            return 0.02
+            return 0.03  # 检测到目标给予小奖励
 
     def _calculate_repetition_penalty(self, action_taken):
         """
-        重复动作惩罚
+        重复动作惩罚 - 优化版本
         """
-        if not action_taken or len(self.action_history) < 3:
+        if not action_taken or len(self.action_history) < 4:
             return 0.0
         
-        recent_actions = list(self.action_history)[-3:]
+        recent_actions = list(self.action_history)[-4:]
         same_action_count = sum(1 for act in recent_actions if act == action_taken)
         
-        if same_action_count >= 2:
-            return -0.1
-        elif same_action_count >= 1:
-            return -0.05
-            
-        return 0.0
+        # 只在连续重复超过3次才惩罚
+        if same_action_count >= 3:
+            return -0.05  # 减轻惩罚
+        elif same_action_count >= 2:
+            return -0.02  # 轻微惩罚
+        else:
+            return 0.0  # 不惩罚
 
     def _get_max_detection_area(self, detection_results):
         """
@@ -1534,21 +1535,24 @@ class TargetSearchEnvironment:
         """
         计算综合奖励
         """
+        # 基础奖励 - 鼓励探索
+        base_reward = 0.01  # 小的正奖励，避免所有情况都是负奖励
+
         # 目标检测奖励
         target_reward = self._calculate_target_presence_reward(detection_results)
-        
+
         # 进展奖励
         progress_reward = self._calculate_progress_reward(detection_results)
-        
+
         # 重复动作惩罚
         repetition_penalty = self._calculate_repetition_penalty(action_taken)
-        
+
         # 总奖励
-        total_reward = target_reward + progress_reward + repetition_penalty
-        
+        total_reward = base_reward + target_reward + progress_reward + repetition_penalty
+
         # 计算新区域面积
         new_area = self._get_max_detection_area(detection_results) if detection_results else 0
-        
+
         return total_reward, new_area
 
     def _save_detection_image_with_bounding_boxes(self, image, detection_results, ground_sam_features=None, prefix="detection"):
@@ -1714,26 +1718,39 @@ class PPOAgent:
     def act(self, state, memory, return_debug_info=False):
         # 预处理状态
         state_tensor = self._preprocess_state(state)
-        
+
         # 使用旧策略获取动作概率
         with torch.no_grad():
             if return_debug_info:
                 move_probs, turn_probs, action_params, state_val, debug_info = self.policy_old(state_tensor.unsqueeze(0), return_debug_info=True)
             else:
                 move_probs, turn_probs, action_params, state_val = self.policy_old(state_tensor.unsqueeze(0))
-                
+
+            # 检测策略崩溃：如果所有动作概率都接近0或1
+            move_probs_squeezed = move_probs.squeeze()
+            turn_probs_squeezed = turn_probs.squeeze()
+
+            # 检查是否策略崩溃（概率过于极端）
+            move_max_prob = move_probs_squeezed.max().item()
+            turn_max_prob = turn_probs_squeezed.max().item()
+
+            # 如果策略崩溃，重置策略
+            if move_max_prob > 0.99 or turn_max_prob > 0.99:
+                self.logger.warning(f"检测到策略崩溃！Move最大概率: {move_max_prob:.4f}, Turn最大概率: {turn_max_prob:.4f}，重置策略")
+                self.reset_policy()
+
             move_dist = Categorical(move_probs)
             turn_dist = Categorical(turn_probs)
-            
+
             # 采样动作
             move_action = move_dist.sample()
             turn_action = turn_dist.sample()
-            
+
             # 计算对数概率
             move_logprob = move_dist.log_prob(move_action)
             turn_logprob = turn_dist.log_prob(turn_action)
             logprob = move_logprob + turn_logprob
-        
+
         # 处理动作参数
         # 确保 action_params 的形状正确
         action_params_flat = action_params.flatten()
@@ -1746,17 +1763,17 @@ class PPOAgent:
             logger.warning(f"action_params 维度异常: {action_params.shape}, 使用默认值")
             move_forward_step_raw = 0.0
             turn_angle_raw = 0.0
-        
+
         # 使用配置文件中的参数范围
         MOVE_STEP_MIN = CONFIG.get('MOVE_STEP_MIN', 0.0)
         MOVE_STEP_MAX = CONFIG.get('MOVE_STEP_MAX', 1.0)
         TURN_ANGLE_MIN = CONFIG.get('TURN_ANGLE_MIN', 5.0)
         TURN_ANGLE_MAX = CONFIG.get('TURN_ANGLE_MAX', 60.0)
-        
+
         # 将 [-1, 1] 映射到实际范围
         move_forward_step = ((move_forward_step_raw + 1.0) / 2.0) * (MOVE_STEP_MAX - MOVE_STEP_MIN) + MOVE_STEP_MIN
         turn_angle = ((turn_angle_raw + 1.0) / 2.0) * (TURN_ANGLE_MAX - TURN_ANGLE_MIN) + TURN_ANGLE_MIN
-        
+
         # 存储到记忆中
         memory.append(
             state_tensor,
@@ -1767,11 +1784,54 @@ class PPOAgent:
             False,  # 是否结束稍后更新
             [move_forward_step, turn_angle]  # 存储参数
         )
-        
+
         if return_debug_info:
             return move_action.item(), turn_action.item(), move_forward_step, turn_angle, debug_info
         else:
             return move_action.item(), turn_action.item(), move_forward_step, turn_angle
+
+    def reset_policy(self):
+        """
+        重置策略网络以防止策略崩溃
+        """
+        self.logger.warning("重置策略网络...")
+
+        # 从PPOAgent的__init__中保存的参数
+        move_action_dim = self.policy.move_actor[-1].out_features
+        turn_action_dim = self.policy.turn_actor[-1].out_features
+        use_ground_sam = self.use_ground_sam
+
+        # 创建新的策略网络（使用默认state_dim）
+        state_dim = (3, CONFIG.get('IMAGE_HEIGHT', 480), CONFIG.get('IMAGE_WIDTH', 640))
+        self.policy = PolicyNetwork(
+            state_dim, move_action_dim, turn_action_dim, use_ground_sam=use_ground_sam
+        )
+
+        # 重新设置优化器
+        if use_ground_sam and hasattr(self.policy, 'sam_feature_encoder'):
+            trainable_params = []
+            trainable_params.extend(self.policy.sam_feature_encoder.parameters())
+            trainable_params.extend(self.policy.move_actor.parameters())
+            trainable_params.extend(self.policy.turn_actor.parameters())
+            trainable_params.extend(self.policy.action_param_head.parameters())
+            trainable_params.extend(self.policy.critic.parameters())
+
+            self.optimizer = torch.optim.Adam(
+                trainable_params,
+                lr=self.lr,
+                betas=self.betas
+            )
+        else:
+            self.optimizer = torch.optim.Adam(
+                self.policy.parameters(),
+                lr=self.lr,
+                betas=self.betas
+            )
+
+        # 更新旧策略
+        self.policy_old.load_state_dict(self.policy.state_dict())
+
+        self.logger.warning("策略网络已重置")
 
     def update(self, memory):
         # 计算折扣奖励
@@ -1820,23 +1880,11 @@ class PPOAgent:
             # 计算优势 - 使用广义优势估计(GAE)以获得更好的性能
             advantages = rewards - state_vals.squeeze().detach()
             
-            # 添加重要性采样比率的裁剪，但对负优势使用不同的处理方式
+            # 简化损失函数，避免策略崩溃
+            # 标准的PPO clip损失
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
-            
-            # 对于负优势（即表现低于基线的情况），我们不希望过度惩罚
-            # 使用不同的裁剪策略来避免过度降低好的行为的概率
-            positive_advantages = torch.where(advantages >= 0, surr1, surr2)
-            negative_advantages = torch.where(advantages < 0, surr1, surr2)  # 不对负优势进行裁剪
-            
-            # 合并正负优势的处理
-            actor_loss = -torch.min(positive_advantages, surr2).mean()
-            
-            # 对于负优势，我们仍然需要考虑它，但不应用裁剪
-            actor_loss_negative = -negative_advantages.mean()
-            
-            # 组合损失，对负优势的影响进行平衡
-            actor_loss = actor_loss + 0.5 * actor_loss_negative
+            actor_loss = -torch.min(surr1, surr2).mean()
 
             # 价值损失
             critic_loss = self.MseLoss(state_vals.squeeze(), rewards)
@@ -1846,8 +1894,8 @@ class PPOAgent:
             turn_entropy = turn_dist.entropy().mean()
             entropy_loss = move_entropy + turn_entropy
 
-            # 总损失 - 调整权重平衡
-            loss = actor_loss + 0.5 * critic_loss - 0.01 * entropy_loss
+            # 总损失 - 增加熵权重以提高探索性
+            loss = actor_loss + 0.5 * critic_loss - 0.02 * entropy_loss
 
             # 反向传播
 
@@ -1874,10 +1922,10 @@ class PPOAgent:
             
             self.optimizer.step()
 
-        # 更新旧策略 - 使用软更新来提高稳定性
+        # 更新旧策略 - 使用更保守的软更新
         with torch.no_grad():
             for old_param, new_param in zip(self.policy_old.parameters(), self.policy.parameters()):
-                old_param.data.copy_(0.995 * old_param.data + 0.005 * new_param.data)
+                old_param.data.copy_(0.998 * old_param.data + 0.002 * new_param.data)
 
         # 清空记忆
         memory.clear_memory()  
