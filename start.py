@@ -15,7 +15,7 @@ def main():
     python_executable = r"e:\code\my_python_server\micromambavenv\python.exe"
     
     # 脚本路径
-    script_path = r"E:\code\my_python_server\llm_server\vlmwindow.py"
+    script_path = r"E:\code\my_python_server\mcp_cline\mcp_ai_caller.py"
     
     try:
         # 执行Python脚本
