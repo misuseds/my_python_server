@@ -7,6 +7,9 @@ import json
 import shutil
 from pathlib import Path
 
+from mcp.server.fastmcp import FastMCP
+ 
+mcp = FastMCP("ue_tool")
 def activate_ue_window():
     """
     激活ue窗口（精确匹配窗口标题），如果没有运行则启动ue
@@ -395,6 +398,75 @@ print(f"共移动 {moved_count} 个纹理资产到 {textures_folder}。")
 """
     return send_python_code_request(code)
 
+@mcp.tool()
+def import_fbx():
+    """
+    执行完整的FBX导入工作流并返回每个步骤的结果
+    """
+    results = []
+    
+    # 步骤1: 发送Python代码请求
+    step_result = send_python_code_request()
+    results.append({"step": "send_python_code_request", "result": step_result})
+    
+    # 步骤2: 发送FBX导入请求
+    step_result = send_fbx_import_request()
+    results.append({"step": "send_fbx_import_request", "result": step_result})
+    
+    # 步骤3: 删除材质
+    step_result = delete_materials_in_folder()
+    results.append({"step": "delete_materials_in_folder", "result": step_result})
+    
+    # 步骤4: 移动纹理
+    step_result = move_textures_to_folder()
+    results.append({"step": "move_textures_to_folder", "result": step_result})
+    
+    # 步骤5: 移动并重命名骨骼
+    step_result = move_and_rename_skeleton()
+    results.append({"step": "move_and_rename_skeleton", "result": step_result})
+    
+    # 步骤6: 创建材质实例
+    step_result = create_material_instances_from_textures()
+    results.append({"step": "create_material_instances_from_textures", "result": step_result})
+    
+    # 返回所有结果
+    return {
+        "status": "success",
+        "workflow": "import_fbx",
+        "steps_completed": len(results),
+        "results": results
+    }
+
+@mcp.tool()
+def start_ue():
+    """
+    启动ue（在后台进程启动，不阻塞当前线程）
+    """
+    ue_path = r"D:\UE_4.26\Engine\Binaries\Win64\UE4Editor.exe"
+    
+    if not os.path.exists(ue_path):
+        print(f"错误: 找不到ue可执行文件: {ue_path}")
+        return False
+    
+    try:
+        # 使用CREATE_NEW_CONSOLE标志启动ue，使其在独立的进程中运行
+        subprocess.Popen([ue_path], 
+                        creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS)
+        print(f"ue已在后台启动: {ue_path}")
+        
+        time.sleep(2)  # 短暂延迟确保进程已开始启动
+        return True
+    except Exception as e:
+        print(f"启动ue时出错: {e}")
+        return False
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+@mcp.tool()
 def build_sifu_mod():
     """
     执行Sifu MOD构建流程
@@ -526,112 +598,5 @@ def build_sifu_mod():
     
     return {"status": "success", "result": "MOD build completed and game launched"}
 
-def import_fbx():
-    """
-    执行完整的FBX导入工作流并返回每个步骤的结果
-    """
-    results = []
-    
-    # 步骤1: 发送Python代码请求
-    step_result = send_python_code_request()
-    results.append({"step": "send_python_code_request", "result": step_result})
-    
-    # 步骤2: 发送FBX导入请求
-    step_result = send_fbx_import_request()
-    results.append({"step": "send_fbx_import_request", "result": step_result})
-    
-    # 步骤3: 删除材质
-    step_result = delete_materials_in_folder()
-    results.append({"step": "delete_materials_in_folder", "result": step_result})
-    
-    # 步骤4: 移动纹理
-    step_result = move_textures_to_folder()
-    results.append({"step": "move_textures_to_folder", "result": step_result})
-    
-    # 步骤5: 移动并重命名骨骼
-    step_result = move_and_rename_skeleton()
-    results.append({"step": "move_and_rename_skeleton", "result": step_result})
-    
-    # 步骤6: 创建材质实例
-    step_result = create_material_instances_from_textures()
-    results.append({"step": "create_material_instances_from_textures", "result": step_result})
-    
-    # 返回所有结果
-    return {
-        "status": "success",
-        "workflow": "import_fbx",
-        "steps_completed": len(results),
-        "results": results
-    }
-
-def execute_tool(tool_name, *args):
-    """
-    根据工具名称执行对应的ue操作
-    
-    Args:
-        tool_name (str): 工具名称
-        *args: 工具参数
-        
-    Returns:
-        dict: API响应结果
-    """
-    tool_functions = {
-        "activate_ue": activate_ue_window,
-        "import_fbx": import_fbx,
-        "build_sifu_mod": build_sifu_mod,
-    }
-    
-    if tool_name in tool_functions:
-        if tool_name == "activate_ue":
-            # 特殊处理：激活ue窗口不需要API调用
-            result = tool_functions[tool_name]()
-            return {"status": "success", "result": result} if result else {"status": "error", "message": "Failed to activate ue"}
-      
-        elif tool_name in ["delete_objects_by_name"] and args:
-            # 处理带参数的删除功能
-            return tool_functions[tool_name](args[0])
-        else:
-            # 其他工具调用API
-            return tool_functions[tool_name]()
-    else:
-        print(f"错误: 未知的ue工具 '{tool_name}'")
-        return {"status": "error", "message": f"未知的ue工具 '{tool_name}'"}
-
-def start_ue():
-    """
-    启动ue（在后台进程启动，不阻塞当前线程）
-    """
-    ue_path = r"D:\UE_4.26\Engine\Binaries\Win64\UE4Editor.exe"
-    
-    if not os.path.exists(ue_path):
-        print(f"错误: 找不到ue可执行文件: {ue_path}")
-        return False
-    
-    try:
-        # 使用CREATE_NEW_CONSOLE标志启动ue，使其在独立的进程中运行
-        subprocess.Popen([ue_path], 
-                        creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS)
-        print(f"ue已在后台启动: {ue_path}")
-        
-        time.sleep(2)  # 短暂延迟确保进程已开始启动
-        return True
-    except Exception as e:
-        print(f"启动ue时出错: {e}")
-        return False
-
-def main():
-    # delete_objects_by_name("ObjectName")
-    # return 
-    tool_name = sys.argv[1]  
-    
-    # 检查是否有额外参数传递给工具
-    args = sys.argv[2:]  # 获取工具名称之后的所有参数
-    
-    # 执行对应的工具
-    response = execute_tool(tool_name, *args)
-    
-    if response:
-        print(json.dumps(response))
-
 if __name__ == "__main__":
-    main()
+     mcp.run()
