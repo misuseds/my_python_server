@@ -6,6 +6,10 @@ import subprocess
 import platform
 
 
+from mcp.server.fastmcp import FastMCP
+ 
+mcp = FastMCP("blender_tool")
+
 def call_blender_api(endpoint, code):
     """
     调用Blender API执行代码
@@ -22,8 +26,29 @@ def call_blender_api(endpoint, code):
     except requests.exceptions.RequestException as e:
         print(f"请求错误: {e}")
         return None
+def start_blender():
+    """
+    在命令提示符中启动Blender
+    """
+    blender_path = r"D:\blender\blender.exe"
+    
+    if not os.path.exists(blender_path):
+        print(f"错误: 找不到Blender可执行文件: {blender_path}")
+        return False
+    
+    try:
+        # 在新的命令提示符窗口中启动Blender
+        subprocess.Popen(['start', 'cmd', '/k', blender_path], shell=True)
+        print(f"Blender已在新终端中启动: {blender_path}")
+        
+        import time
+        time.sleep(5)
+        return True
+    except Exception as e:
+        print(f"启动Blender时出错: {e}")
+        return False
 
-
+@mcp.tool()
 def activate_blender_window():
     """
     激活Blender窗口（精确匹配窗口标题），如果没有运行则启动Blender
@@ -82,6 +107,9 @@ def activate_blender_window():
         print(f"激活Blender窗口时出错: {e}")
         return False
 
+
+
+@mcp.tool()
 def fix_model():
     """执行 Fix Model 操作"""
     code = '''
@@ -91,28 +119,9 @@ import bpy
 bpy.ops.cats_armature.fix()
 '''
     return call_blender_api('/api/exec', code)
-def start_blender():
-    """
-    在命令提示符中启动Blender
-    """
-    blender_path = r"D:\blender\blender.exe"
-    
-    if not os.path.exists(blender_path):
-        print(f"错误: 找不到Blender可执行文件: {blender_path}")
-        return False
-    
-    try:
-        # 在新的命令提示符窗口中启动Blender
-        subprocess.Popen(['start', 'cmd', '/k', blender_path], shell=True)
-        print(f"Blender已在新终端中启动: {blender_path}")
-        
-        import time
-        time.sleep(5)
-        return True
-    except Exception as e:
-        print(f"启动Blender时出错: {e}")
-        return False
 
+
+@mcp.tool()
 def import_pmx_file():
     """导入PMX文件"""
     code = '''
@@ -128,7 +137,7 @@ open_pmx_file_selector()
     '''
     return call_blender_api('/api/exec', code)
 
-
+@mcp.tool()
 def delete_all_objects():
     """删除所有对象和集合"""
     code = '''
@@ -155,6 +164,7 @@ for collection in collections_to_remove:
 print("所有对象和集合已删除")
 '''
     return call_blender_api('/api/exec', code)
+@mcp.tool()
 def parent_object_to_armature():
     """
     将选中的对象设置为骨骼绑定父级
@@ -171,7 +181,7 @@ else:
     print("错误: 请先选择要绑定的对象")
 '''
     return call_blender_api('/api/exec', code)
-
+@mcp.tool()
 def set_blender_scale_settings():
     """
     设置Blender场景的单位比例和当前对象的缩放
@@ -204,6 +214,7 @@ except Exception as e:
 print("Blender缩放设置已应用")
 '''
     return call_blender_api('/api/exec', code)
+@mcp.tool()
 def delete_objects_by_name(name_pattern):
     """
     删除名称包含指定模式的物体
@@ -230,6 +241,7 @@ for obj in objects_to_delete:
 print("已删除 "+str(deleted_count)+f"个包含 '{name_pattern}' 的物体")
 '''
     return call_blender_api('/api/exec', code)
+@mcp.tool()
 def clear_parent_keep_transform():
     """
     清除选中对象的父级关系，但保持变换（位置、旋转、缩放）
@@ -246,6 +258,7 @@ else:
     print("错误: 请先选择要清除父级的对象")
 '''
     return call_blender_api('/api/exec', code)
+@mcp.tool()
 def apply_armature_pose():
     """
     切换到姿态模式并应用选中的骨架
@@ -284,6 +297,7 @@ else:
     bpy.ops.object.posemode_toggle()
 '''
     return call_blender_api('/api/exec', code)
+@mcp.tool()
 def scale_objects_to_match_height():
     """
     将所有不包含"ObjectName"的物体缩放到与ObjectName物体相同的高度（三轴等比例缩放）
@@ -385,18 +399,13 @@ else:
     print(f"所有物体已缩放至与ObjectName物体相同的尺寸比例: {round(target_max_dimension, 6)}")
 '''
     return call_blender_api('/api/exec', code)
+@mcp.tool()
 def import_psk_file():
     """导入PSK文件（外部选择文件路径）"""
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except ImportError:
-        try:
-            import Tkinter as tk
-            from tkFileDialog import askopenfilename
-        except ImportError:
-            print("错误: 无法导入tkinter模块")
-            return None
+   
+    import tkinter as tk
+    from tkinter import filedialog
+
 
     # 创建一个隐藏的tkinter根窗口
     root = tk.Tk()
@@ -434,6 +443,7 @@ result = import_psk(psk, bpy.context, options)
     else:
         print("未选择有效的PSK文件")
         return {"status": "error", "message": "未选择有效的PSK文件"}
+@mcp.tool()
 def parent_object_to_bone():
     """
     将选中的对象设置为骨骼父级
@@ -450,6 +460,7 @@ else:
     print("错误: 请先选择要绑定的对象并确保有一个活动对象")
 '''
     return call_blender_api('/api/exec', code)
+@mcp.tool()
 def add_data_transfer_modifier():
     """
     添加数据传输修改器并配置顶点组权重传输
@@ -477,82 +488,6 @@ else:
 '''
     return call_blender_api('/api/exec', code)
 
-def print_response_result(tool_name, response):
-    """
-    打印API响应结果
-    
-    Args:
-        tool_name (str): 工具名称
-        response (dict): API响应
-    """
-    if response:
-        if response['status'] == 'success':
-            print(f"{tool_name} 执行成功!")
-            print(f"返回结果: {response['result']}")
-        else:
-            print(f"{tool_name} 执行失败: {response['message']}")
-    else:
-        print("无法连接到Blender服务器")
-
-def execute_tool(tool_name, *args):
-    """
-    根据工具名称执行对应的Blender操作
-    
-    Args:
-        tool_name (str): 工具名称
-        *args: 工具参数
-        
-    Returns:
-        dict: API响应结果
-    """
-    tool_functions = {
-        "import_pmx_file": import_pmx_file,
-        "import_psk_file": import_psk_file,
-        "scale_objects_to_match_height": scale_objects_to_match_height,
-        "delete_all_objects": delete_all_objects,
-        "activate_blender": activate_blender_window,
-        "set_blender_scale": set_blender_scale_settings,
-        "delete_objects_by_name": delete_objects_by_name,
-        "fix_model": fix_model,
-        "parent_object_to_armature": parent_object_to_armature,
-        "apply_armature_pose": apply_armature_pose,
-        "clear_parent_keep_transform": clear_parent_keep_transform,
-        "parent_object_to_bone": parent_object_to_bone,  # 新增这一行
-    }
-    
-    
-    if tool_name in tool_functions:
-        if tool_name == "activate_blender":
-            # 特殊处理：激活Blender窗口不需要API调用
-            result = tool_functions[tool_name]()
-            return {"status": "success", "result": result} if result else {"status": "error", "message": "Failed to activate Blender"}
-        elif tool_name in ["delete_objects_by_name"] and args:
-            # 处理带参数的删除功能
-            return tool_functions[tool_name](args[0])
-        else:
-            # 其他工具调用API
-            return tool_functions[tool_name]()
-    else:
-        print(f"错误: 未知的Blender工具 '{tool_name}'")
-        return None
-
-
-
-def main():
-    # delete_objects_by_name("ObjectName")
-    # return 
-    tool_name = sys.argv[1]  
-    
-    # 检查是否有额外参数传递给工具
-    args = sys.argv[2:]  # 获取工具名称之后的所有参数
-    
-    # 执行对应的工具
-    response = execute_tool(tool_name, *args)
-    
-    # 如果不是激活窗口操作，则打印响应结果
-    if tool_name != "activate_blender":
-        print_response_result(tool_name, response)
-
 
 if __name__ == "__main__":
-    main()
+     mcp.run()
