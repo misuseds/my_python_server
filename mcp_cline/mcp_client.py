@@ -19,35 +19,38 @@ class MCPClient:
     """MCP客户端类，用于连接和调用MCP服务器工具"""
 
     def __init__(self):
+        # 获取项目根目录的绝对路径
+        project_root = "E:\code"
+        
         self.servers = {
             'blender-tool': {
                 'command': sys.executable,
-                'args': [os.path.join('my_python_server', 'blender_cline', 'blender_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'blender_cline', 'blender_api_tool.py')],
                 'description': 'Blender工具服务器'
             },
             'ue-tool': {
                 'command': sys.executable,
-                'args': [os.path.join('my_python_server', 'ue_cline', 'ue_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'ue_cline', 'ue_api_tool.py')],
                 'description': 'Unreal Engine工具服务器'
             },
             'browser-tool': {
                 'command': sys.executable,
-                'args': [os.path.join('my_python_server', 'browser_cline', 'browser_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'browser_cline', 'browser_api_tool.py')],
                 'description': '浏览器工具服务器'
             },
             'computer-tool': {
                 'command': sys.executable,
-                'args': [os.path.join('my_python_server', 'computer_cline', 'computer_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'computer_cline', 'computer_api_tool.py')],
                 'description': '计算机控制工具服务器'
             },
             'ocr-tool': {
                 'command': sys.executable,
-                'args': [os.path.join('my_python_server', 'ocr', 'ocr.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'ocr', 'ocr.py')],
                 'description': 'OCR工具服务器'
             },
             'likefavarite-tools': {
                 'command': sys.executable,
-                'args': [os.path.join('my_python_server', 'yolo', 'detect_like_favorite.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'yolo', 'detect_like_favorite.py')],
                 'description': '点赞收藏检测工具服务器'
             }
         }
@@ -59,6 +62,13 @@ class MCPClient:
             return []
 
         server_config = self.servers[server_name]
+        
+        # 检查脚本文件是否存在
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), *server_config['args'])
+        if not os.path.exists(script_path):
+            print(f"错误：找不到服务器脚本 '{script_path}'")
+            return []
+
         server_params = StdioServerParameters(
             command=server_config['command'],
             args=server_config['args'],
@@ -83,6 +93,8 @@ class MCPClient:
 
         except Exception as e:
             print(f"连接到 {server_name} 时出错: {e}")
+            import traceback
+            print(f"详细错误信息: {traceback.format_exc()}")
             return []
 
     async def call_tool(self, server_name, tool_name, arguments=None):
@@ -95,6 +107,13 @@ class MCPClient:
             arguments = {}
 
         server_config = self.servers[server_name]
+        
+        # 检查脚本文件是否存在
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), *server_config['args'])
+        if not os.path.exists(script_path):
+            print(f"错误：找不到服务器脚本 '{script_path}'")
+            return None
+
         server_params = StdioServerParameters(
             command=server_config['command'],
             args=server_config['args'],
@@ -121,6 +140,6 @@ class MCPClient:
 
         except Exception as e:
             print(f"调用 {server_name} 的 {tool_name} 时出错: {e}")
+            import traceback
+            print(f"详细错误信息: {traceback.format_exc()}")
             return None
-
-

@@ -1,561 +1,648 @@
-import tkinter as tk
-from tkinter import scrolledtext, messagebox
-import asyncio
 import sys
+import asyncio
 import os
 import json
 import threading
+import queue
 import re
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTextEdit, QLineEdit, QVBoxLayout, QWidget, QLabel, QDialog, QScrollArea, QGridLayout, QMessageBox
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
+from PyQt6.QtGui import QFont, QColor, QPalette, QKeySequence, QShortcut
+import importlib.util
+from PyQt6 import sip
 
-class MCPAICaller:
-    def __init__(self, root):
-        self.root = root
-        # 去除窗口标题栏和边框
-        self.root.overrideredirect(True)
+
+def extract_content_from_response(data):
+    """从 LLM 响应中安全提取纯文本内容，兼容 DeepSeek/OpenAI 格式"""
+    if isinstance(data, str):
+        return data.strip()
+    if isinstance(data, dict):
+        choices = data.get("choices")
+        if isinstance(choices, list) and len(choices) > 0:
+            first_choice = choices[0]
+            message = first_choice.get("message")
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str):
+                    return content.strip()
+                elif content is None:
+                    return ""
+            delta = first_choice.get("delta")
+            if isinstance(delta, dict):
+                content = delta.get("content")
+                if isinstance(content, str):
+                    return content.strip()
+            if "finish_reason" in first_choice:
+                return ""
+        content = data.get("content")
+        if isinstance(content, str):
+            return content.strip()
+    return ""
+
+
+class ToolsDialog(QDialog):
+    def __init__(self, tools_by_server, all_tools_mapping=None, parent=None):
+        super().__init__(parent)
+        self.all_tools_mapping = all_tools_mapping or {}
+        self.tools_by_server = tools_by_server
+        self.setWindowTitle("可用的MCP工具")
+        self.setGeometry(300, 300, 800, 600)
         
-        # 设置窗口位置和大小 - 改为更小的窗口
-        self.root.geometry("600x400+100+100")
-        
-        # 设置更高的透明度 (从0.95改为0.98)
-        self.root.attributes('-alpha', 0.98)
-        
-        # 动态导入LLM和VLM服务
-        import importlib.util
+        layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("QScrollArea { border: 1px solid #555; background-color: #222; }")
+        content_widget = QWidget()
+        scroll_layout = QVBoxLayout(content_widget)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(10)
+
+        for server_name, tools in tools_by_server.items():
+            server_title = QLabel(f"<b>{server_name}</b>")
+            server_title.setStyleSheet("""
+                QLabel {
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #00ff41;
+                    margin-top: 10px;
+                    margin-bottom: 10px;
+                    padding: 5px;
+                    border-bottom: 1px solid #555;
+                }
+            """)
+            scroll_layout.addWidget(server_title)
+            tools_vbox = QVBoxLayout()
+            tools_vbox.setSpacing(8)
+            tools_vbox.setContentsMargins(10, 0, 0, 0)
+            for tool_name, tool_desc in tools.items():
+                tool_number = self.find_tool_number(tool_name, server_name)
+                if tool_number:
+                    name_label = QLabel(f"• [{tool_number}] {tool_name}:")
+                else:
+                    name_label = QLabel(f"• {tool_name}:")
+                name_label.setStyleSheet("QLabel { font-weight: bold; color: #ffffff; margin-left: 10px; }")
+                desc_label = QLabel(tool_desc)
+                desc_label.setWordWrap(True)
+                desc_label.setStyleSheet("QLabel { color: #cccccc; margin-left: 25px; margin-bottom: 8px; }")
+                tools_vbox.addWidget(name_label)
+                tools_vbox.addWidget(desc_label)
+            scroll_layout.addLayout(tools_vbox)
+        scroll_layout.addStretch()
+        scroll_area.setWidget(content_widget)
+        layout.addWidget(scroll_area)
+        self.setLayout(layout)
+
+    def find_tool_number(self, tool_name, display_server_name):
+        original_server_name = self.get_original_server_name(display_server_name)
+        for num, info in self.all_tools_mapping.items():
+            if info['name'] == tool_name and (info['server'] == original_server_name or self.format_server_name(info['server']) == display_server_name):
+                return num
+        return None
+
+    def get_original_server_name(self, display_server_name):
+        if display_server_name.endswith(" 工具服务器"):
+            formatted_name = display_server_name[:-5].strip()
+            original = formatted_name.replace(' ', '-').lower()
+            for candidate in [original, original + "-tool"]:
+                for _, info in self.all_tools_mapping.items():
+                    if info['server'] == candidate:
+                        return candidate
+            return original
+        return display_server_name
+
+    def format_server_name(self, original_server_name):
+        display_name = original_server_name.replace('-tool', '').replace('-', ' ').title()
+        display_name += " 工具服务器"
+        return display_name
+
+
+class StreamWorker(QObject):
+    stream_signal = pyqtSignal(str)
+    finished_signal = pyqtSignal()
+    error_signal = pyqtSignal(str)
+
+    def __init__(self, llm_service, messages, parent_window, tools_schema=None):
+        super().__init__()
+        self.llm_service = llm_service
+        self.messages = messages
+        self.parent_window = parent_window
+        self.tools_schema = tools_schema
+        self._is_stopped = False
+
+    def stop(self):
+        self._is_stopped = True
+
+    def run_stream(self):
+        try:
+            for chunk in self.generate_stream():
+                if self._is_stopped:
+                    break
+                self.stream_signal.emit(chunk)
+            self.finished_signal.emit()
+        except Exception as e:
+            if not self._is_stopped:
+                self.error_signal.emit(f"错误: {str(e)}")
+            self.finished_signal.emit()
+
+    def generate_stream(self):
+        response = self.llm_service.create_stream(self.messages, tools=self.tools_schema)
+        for chunk in response:
+            if self._is_stopped:
+                break
+            content = extract_content_from_response(chunk)
+            if content:
+                yield content
+
+
+class ToolLoader(QObject):
+    tools_loaded = pyqtSignal(object)
+    loading_failed = pyqtSignal(str)
+
+    def __init__(self, mcp_client):
+        super().__init__()
+        self.mcp_client = mcp_client
+
+    def load_tools(self):
+        try:
+            tools_by_server = {}
+            all_tools_mapping = {}
+            tool_counter = 1
+
+            for server_name in self.mcp_client.servers.keys():
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        tools = loop.run_until_complete(self.mcp_client.list_tools(server_name))
+                        if tools:
+                            server_tools = {}
+                            for tool in tools:
+                                server_tools[tool.name] = tool.description
+                                all_tools_mapping[str(tool_counter)] = {
+                                    'name': tool.name,
+                                    'description': tool.description,
+                                    'server': server_name,
+                                    'input_schema': getattr(tool, 'inputSchema', {"type": "object", "properties": {}, "required": []}),
+                                }
+                                tool_counter += 1
+                            display_server_name = server_name.replace('-tool', '').replace('-', ' ').title() + " 工具服务器"
+                            tools_by_server[display_server_name] = server_tools
+                        else:
+                            display_server_name = server_name.replace('-tool', '').replace('-', ' ').title() + " 工具服务器"
+                            tools_by_server[display_server_name] = {server_name: self.mcp_client.servers[server_name]['description']}
+                            all_tools_mapping[str(tool_counter)] = {
+                                'name': server_name,
+                                'description': self.mcp_client.servers[server_name]['description'],
+                                'server': server_name,
+                                'input_schema': {"type": "object", "properties": {}, "required": []},
+                            }
+                            tool_counter += 1
+                    finally:
+                        loop.close()
+                except Exception as e:
+                    print(f"获取服务器 {server_name} 的工具列表失败: {str(e)}")
+                    continue
+
+            self.tools_loaded.emit((all_tools_mapping, tools_by_server))
+        except Exception as e:
+            self.loading_failed.emit(f"加载工具列表失败: {str(e)}")
+
+
+class MCPAICaller(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.output_buffer = ""
+        self.worker_thread = None
+        self.worker = None
+        self.tool_loader_thread = None
+        self.tool_loader = None
+        self.is_loading_tools = False
+        self.all_tools_mapping = {}
+        self.tools_by_server = {}
+        self.loading_dialog = None
+        self.pending_show_tools = False
+
+        self.setup_window()
+        self.initialize_services()
+        self.initialize_clients()
+        self.setup_ui()
+        self.setup_shortcuts()
+
+    def setup_window(self):
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setGeometry(200, 200, 400, 200)
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, QColor(0, 0, 0, 0))
+        self.setPalette(palette)
+
+    def initialize_services(self):
         llm_spec = importlib.util.spec_from_file_location(
-            "llm_class", 
+            "llm_class",
             os.path.join(os.path.dirname(os.path.dirname(__file__)), "llm_server", "llm_class.py")
         )
         llm_module = importlib.util.module_from_spec(llm_spec)
         llm_spec.loader.exec_module(llm_module)
-        
         self.LLMService = llm_module.LLMService
-        self.VLMService = llm_module.VLMService
-        
-        # 实例化LLM和VLM服务
         self.llm_service = self.LLMService()
-        self.vlm_service = self.VLMService()
-        
-        # 实例化MCP客户端
-        from mcp_cline.mcp_client import MCPClient
-        self.mcp_client = MCPClient()
 
-        # 延迟加载MCP工具列表 - 初始化为None表示尚未加载
-        self.available_tools = None
-        self.method_map = self.generate_method_map()
+    def initialize_clients(self):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        mcp_client_path = os.path.join(current_dir, "mcp_client.py")
+        spec = importlib.util.spec_from_file_location("mcp_client", mcp_client_path)
+        mcp_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mcp_module)
+        self.mcp_client = mcp_module.MCPClient()
 
-        self.setup_ui()
-        
-    def load_mcp_tools_on_demand(self):
-        """
-        首次需要工具列表时才加载（懒加载）
-        """
-        if self.available_tools is not None:
-            return  # 已经加载过了，无需重复加载
-        
-        try:
-            all_tools = {}
-            
-            # 遍历MCPClient中所有的服务器
-            for server_name in self.mcp_client.servers.keys():
-                try:
-                    # 为每个服务器异步获取工具列表
-                    tools = asyncio.run(self.mcp_client.list_tools(server_name))
-                    # 将Tool对象转换为字典格式以便于使用
-                    if tools:
-                        tool_dict = {}
-                        for tool in tools:
-                            tool_dict[tool.name] = {
-                                'name': tool.name,
-                                'description': tool.description
-                            }
-                        all_tools[server_name] = tool_dict
-                    else:
-                        all_tools[server_name] = {}
-                except Exception as e:
-                    print(f"获取服务器 {server_name} 的工具列表失败: {str(e)}")
-                    continue
-            
-            self.available_tools = all_tools
-            print(f"已按需加载MCP工具列表: {list(all_tools.keys())}")
-        except Exception as e:
-            print(f"按需加载MCP工具列表失败: {str(e)}")
-            self.available_tools = {}
+        self.tool_loader = ToolLoader(self.mcp_client)
+        self.tool_loader.tools_loaded.connect(self.on_tools_loaded)
+        self.tool_loader.loading_failed.connect(self.on_tools_loading_failed)
+        self.async_refresh_tools_list()
 
-    def generate_method_map(self):
-        """
-        生成方法编号映射
-        """
-        method_map = {}
-        idx = 1
-        
-        # 查看帮助
-        method_map[idx] = {"name": "查看帮助", "description": "输入 /h 可查看所有MCP工具"}
-        idx += 1
-        
-        # MCP工具调用
-        method_map[idx] = {"name": "MCP工具调用", "description": "AI可根据上下文自动调用MCP工具"}
-        idx += 1
-        
-        # 添加MCP工具 - 仅当工具已加载时才添加
-        if self.available_tools is not None and self.available_tools:
-            for server_name, tools in self.available_tools.items():
-                if tools:
-                    for tool_name, tool_info in tools.items():
-                        method_map[idx] = {
-                            "name": f"调用{tool_name}",
-                            "description": f"{tool_info['description']} (服务器: {server_name})"
-                        }
-                        idx += 1
-        
-        return method_map
+    def on_tools_loaded(self, data_tuple):
+        all_tools_mapping, tools_by_server = data_tuple
+        self.all_tools_mapping = all_tools_mapping
+        self.tools_by_server = tools_by_server
+        self.is_loading_tools = False
+        if self.loading_dialog:
+            self.loading_dialog.accept()
+            self.loading_dialog = None
+        if self.pending_show_tools:
+            self.pending_show_tools = False
+            self._show_tools_dialog_now()
+
+    def on_tools_loading_failed(self, error_msg):
+        self.is_loading_tools = False
+        if self.loading_dialog:
+            self.loading_dialog.reject()
+            self.loading_dialog = None
+        error_dialog = QMessageBox(self)
+        error_dialog.setWindowTitle("错误")
+        error_dialog.setText(f"加载工具列表失败: {error_msg}")
+        error_dialog.setIcon(QMessageBox.Icon.Warning)
+        error_dialog.exec()
+        self.pending_show_tools = False
+
+    def async_refresh_tools_list(self):
+        if self.is_loading_tools and self.tool_loader_thread and self.tool_loader_thread.isRunning():
+            return
+        self.is_loading_tools = True
+        if self.tool_loader_thread and self.tool_loader_thread.isRunning():
+            self.tool_loader_thread.quit()
+            self.tool_loader_thread.wait(2000)
+        self.tool_loader_thread = QThread()
+        self.tool_loader.moveToThread(self.tool_loader_thread)
+        self.tool_loader_thread.started.connect(self.tool_loader.load_tools)
+        self.tool_loader_thread.finished.connect(self.tool_loader_thread.deleteLater)
+        self.tool_loader_thread.start()
 
     def setup_ui(self):
-        # 主框架 - 半透明背景
-        main_frame = tk.Frame(self.root, bg='#f0f0f0', bd=0, highlightthickness=0)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # 对话框容器
-        dialog_container = tk.Frame(main_frame, bg='#f0f0f0', bd=0, highlightthickness=0)
-        dialog_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        dialog_container.columnconfigure(0, weight=1)
-        dialog_container.rowconfigure(0, weight=1)  # 输出区域
-        dialog_container.rowconfigure(1, weight=0)  # 输入区域
-        dialog_container.rowconfigure(2, weight=0)  # 按钮区域
-        
-        # 输出区域 - 半透明背景，黑色文字
-        self.output_text = scrolledtext.ScrolledText(
-            dialog_container, 
-            height=12,  # 减少高度
-            bg='#ffffff',         # 白色背景
-            fg='#333333',         # 深灰色文字
-            bd=0,                 # 无边框
-            highlightthickness=0, # 无高亮边框
-            wrap=tk.WORD,
-            font=('Arial', 10),   # 减小字体
-            state=tk.NORMAL
-        )
-        self.output_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
-        
-        # 输入区域 - 明确的输入框，白色背景，黑色文字
-        self.input_text = scrolledtext.ScrolledText(
-            dialog_container, 
-            height=3,             # 减少高度
-            bg='#ffffff',         # 白色背景，清晰可见
-            fg='#000000',         # 黑色文字
-            bd=2,                 # 明确边框
-            relief=tk.SUNKEN,     # 凹陷效果，明确输入区域
-            highlightthickness=1, # 轻微高亮
-            highlightbackground='#cccccc',
-            wrap=tk.WORD,
-            font=('Arial', 11)    # 减小字体
-        )
-        self.input_text.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
-        
-        # 发送按钮
-        send_button = tk.Button(
-            dialog_container, 
-            text="发送", 
-            command=self.send_message,
-            bg='#4a86e8',
-            fg='white',
-            relief=tk.FLAT,
-            font=('Arial', 10, 'bold'),
-            padx=20,
-            pady=5
-        )
-        send_button.grid(row=2, column=0, sticky=tk.E)
-        
-        # 绑定回车键发送消息
-        self.input_text.bind('<Return>', self.on_enter_pressed)
-        
-        # 添加拖拽窗口的功能
-        self.root.bind("<Button-1>", self.start_move)
-        self.root.bind("<B1-Motion>", self.do_move)
-        
-    def start_move(self, event):
-        self.x = event.x
-        self.y = event.y
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(3)
 
-    def do_move(self, event):
-        deltax = event.x - self.x
-        deltay = event.y - self.y
-        x = self.root.winfo_x() + deltax
-        y = self.root.winfo_y() + deltay
-        self.root.geometry(f"+{x}+{y}")
+        self.caption_text = QTextEdit()
+        self.caption_text.setReadOnly(True)
+        self.caption_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(0, 0, 0, 0);
+                color: #00ff41;
+                border: none;
+                font-family: Consolas, monospace;
+                font-size: 16px;
+                font-weight: bold;
+            }
+        """)
+        self.caption_text.setMaximumHeight(120)
+        layout.addWidget(self.caption_text)
 
-    def on_enter_pressed(self, event):
-        # 如果按下Shift+Enter，则换行；否则发送消息
-        if event.state & 0x1:  # Shift键被按下
-            return  # 让文本框正常换行
-        else:
-            self.send_message()
-            return "break"  # 阻止文本框换行
+        self.input_text = QLineEdit()
+        self.input_text.setPlaceholderText("输入消息...")
+        self.input_text.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(60, 60, 60, 180);
+                color: white;
+                border: 1px solid #555;
+                border-radius: 3px;
+                padding: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QLineEdit:focus {
+                border: 1px solid #00ff41;
+            }
+        """)
+        self.input_text.returnPressed.connect(self.send_message)
+        layout.addWidget(self.input_text)
+        self.input_text.setFocus()
+        self.drag_position = None
 
-    def get_mcp_tool_list(self):
-        """
-        获取MCP服务器的可用工具列表（按需加载）
-        """
-        self.load_mcp_tools_on_demand()  # 确保工具列表已加载
-        return self.available_tools or {}  # 返回已加载的数据或空字典
+    def setup_shortcuts(self):
+        esc_shortcut = QShortcut(QKeySequence('Escape'), self)
+        esc_shortcut.activated.connect(self.close)
+        quit_shortcut = QShortcut(QKeySequence('Ctrl+Q'), self)
+        quit_shortcut.activated.connect(self.close)
 
-    def show_all_methods(self):
-        """
-        显示所有可用的MCP工具
-        """
-        # 确保工具列表已加载
-        available_tools = self.get_mcp_tool_list()
-        
-        all_methods = "所有可用的MCP工具:\n\n"
-        
-        if available_tools:
-            for server_name, tools in available_tools.items():
-                if tools:
-                    all_methods += f"服务器: {server_name}\n"
-                    for tool_name, tool_info in tools.items():
-                        all_methods += f"  - {tool_name}: {tool_info['description']}\n"
-                    all_methods += "\n"
-                else:
-                    all_methods += f"服务器: {server_name} - 无可用工具\n\n"
-        else:
-            all_methods += "当前无可用的MCP工具\n"
-                
-        return all_methods
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.drag_position = event.globalPos() - self.pos()
+            event.accept()
 
-    def show_scrollable_help(self):
-        """
-        显示可滚动的帮助信息弹窗
-        """
-        help_text = self.show_all_methods()
-        
-        # 创建一个新的顶级窗口作为弹窗
-        help_window = tk.Toplevel(self.root)
-        help_window.title("帮助 - MCP工具列表")
-        help_window.geometry("500x400")
-        help_window.resizable(True, True)
-        
-        # 设置弹窗始终在主窗口之上
-        help_window.transient(self.root)
-        help_window.grab_set()
-        
-        # 创建带滚动条的文本框
-        text_frame = tk.Frame(help_window)
-        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        scroll_text = scrolledtext.ScrolledText(
-            text_frame,
-            wrap=tk.WORD,
-            font=('Arial', 10),
-            state=tk.NORMAL
-        )
-        scroll_text.pack(fill=tk.BOTH, expand=True)
-        
-        # 插入帮助文本
-        scroll_text.insert(tk.END, help_text)
-        scroll_text.config(state=tk.DISABLED)  # 设置为只读
-        
-        # 添加关闭按钮
-        close_button = tk.Button(
-            help_window,
-            text="关闭",
-            command=help_window.destroy,
-            bg='#4a86e8',
-            fg='white',
-            font=('Arial', 10, 'bold')
-        )
-        close_button.pack(pady=10)
+    def mouseMoveEvent(self, event):
+        if event.buttons() == Qt.MouseButton.LeftButton and self.drag_position is not None:
+            self.move(event.globalPos() - self.drag_position)
+            event.accept()
 
-    def handle_run_command(self, method_number):
-        """
-        处理运行指定编号的方法
-        """
-        try:
-            method_num = int(method_number.strip())
-            if method_num in self.method_map:
-                method_info = self.method_map[method_num]
-                # 根据方法类型生成相应的AI请求
-                if method_info['name'].startswith('调用'):
-                    # 这是一个MCP工具调用方法
-                    tool_name = method_info['name'][2:]  # 去掉'调用'前缀
-                    return f"请调用{tool_name}方法"
-                else:
-                    # 返回方法的描述
-                    return f"执行{method_info['name']}: {method_info['description']}"
-            else:
-                return f"错误：方法编号 {method_num} 不存在"
-        except ValueError:
-            return f"错误：无效的方法编号 '{method_number}'"
+    def mouseReleaseEvent(self, event):
+        self.drag_position = None
 
-    def enhance_prompt_with_tools(self, user_input):
-        """
-        将可用的MCP工具列表添加到用户输入中，增强提示词
-        """
-        # 获取可用的工具列表（这会触发首次加载）
-        available_tools = self.get_mcp_tool_list()
-        
-        if available_tools:
-            tool_description = "可用的MCP工具列表:\n"
-            for server_name, tools in available_tools.items():
-                if tools:
-                    tool_names = [f"{name}({details['description']})" for name, details in tools.items()]
-                    tool_description += f"- {server_name}: {', '.join(tool_names)}\n"
-                else:
-                    tool_description += f"- {server_name}: 无可用工具\n"
-            
-            enhanced_prompt = f"""
-{tool_description}
+    def clear_captions(self):
+        self.caption_text.clear()
 
-如果您需要调用MCP工具，请严格按照以下格式响应：
-[MCPCALL]server_name|tool_name|{{"param1": "value1", "param2": "value2"}}[/MCPCALL]
-
-其中：
-- server_name: 服务器名称
-- tool_name: 工具名称  
-- 参数部分必须是有效的JSON格式
-
-如果不需要调用MCP工具，请正常回答。
-
-用户请求: {user_input}
-            """
-            return enhanced_prompt, True
-        else:
-            return user_input, False
-
-    def parse_ai_response_for_mcp(self, ai_response):
-        """
-        解析AI响应，查找MCP工具调用指令
-        """
-        import re
-        
-        # 匹配 [MCPCALL]server_name|tool_name|{"params": "values"}[/MCPCALL] 格式
-        pattern = r'\[MCPCALL\](.*?)\|(.*?)\|({.*?})\[/MCPCALL\]'
-        matches = re.findall(pattern, ai_response, re.DOTALL)
-        
-        if matches:
-            server_name, tool_name, params_str = matches[0]
-            try:
-                arguments = json.loads(params_str)
-                return True, server_name.strip(), tool_name.strip(), arguments
-            except json.JSONDecodeError:
-                print(f"参数解析失败: {params_str}")
-                return False, None, None, None
-        
-        return False, None, None, None
+    def add_caption_line(self, text):
+        if not isinstance(text, str):
+            text = str(text)
+        text = text.strip()
+        if not text:
+            return
+        current = self.caption_text.toPlainText()
+        new = current + "\n" + text if current else text
+        lines = new.split('\n')[-20:]
+        self.caption_text.setPlainText('\n'.join(lines))
+        self.caption_text.moveCursor(self.caption_text.textCursor().MoveOperation.End)
+        QTimer.singleShot(30000, self.clear_captions)
 
     def send_message(self):
-        # 获取输入内容
-        user_input = self.input_text.get(1.0, tk.END).strip()
+        user_input = self.input_text.text().strip()
         if not user_input:
             return
-            
-        # 检查是否为特殊命令
+        self.input_text.clear()
+
         if user_input == '/h':
-            # 显示可滚动的帮助信息弹窗
-            self.show_scrollable_help()
-            self.input_text.delete(1.0, tk.END)
+            self.show_tools_dialog()
             return
-        
-        # 检查是否为运行命令 (/r + 数字或普通文本)
+
         if user_input.startswith('/r ') and len(user_input) > 3:
-            command_part = user_input[3:].strip()  # 获取/r后面的部分
-            
-            # 检查后面是否是纯数字
-            if command_part.isdigit():
-                # 是数字，按编号调用
-                ai_request = self.handle_run_command(command_part)
-                # 显示用户输入
-                self.output_text.insert(tk.END, f">> {user_input}\n")
-                # 处理AI请求 - 使用增强的提示词（带工具信息）
-                thread = threading.Thread(target=self.process_message_with_tools, args=(ai_request,))
-                thread.start()
-                self.input_text.delete(1.0, tk.END)
-                return
+            cmd = user_input[3:].strip()
+            if cmd.isdigit():
+                self.handle_run_command_by_index(int(cmd))
             else:
-                # 不是数字，作为普通消息发送，但使用增强的提示词（带工具信息）
-                self.output_text.insert(tk.END, f">> {user_input}\n")
-                thread = threading.Thread(target=self.process_message_with_tools, args=(user_input,))
-                thread.start()
-                self.input_text.delete(1.0, tk.END)
-                return
-            
-        # 显示用户输入（普通消息）
-        self.output_text.insert(tk.END, f">> {user_input}\n")
-        self.input_text.delete(1.0, tk.END)
-        
-        # 在新线程中处理普通消息（不带工具信息）
-        thread = threading.Thread(target=self.process_message, args=(user_input,))
-        thread.start()
-        
-    def process_message(self, user_input):
-        """处理普通消息（不添加工具信息到prompt）"""
-        try:
-            # 直接使用原始用户输入，不添加工具信息
-            messages = [{"role": "user", "content": user_input}]
-            
-            result = self.llm_service.create(messages)
-            
-            # 获取AI响应文本
-            response_text = json.dumps(result, indent=2, ensure_ascii=False) if isinstance(result, dict) else str(result)
-            
-            # 尝试解析AI响应中的MCP调用指令
-            is_mcp_call, server_name, tool_name, arguments = self.parse_ai_response_for_mcp(response_text)
-            
-            if is_mcp_call:
-                # 执行MCP调用
-                self.root.after(0, lambda: self.output_text.insert(tk.END, f"正在调用 {server_name} 的 {tool_name} 工具...\n"))
-                
-                try:
-                    result = asyncio.run(self.mcp_client.call_tool(server_name, tool_name, arguments))
-                    
-                    if result:
-                        # 处理MCP结果
-                        result_content = []
-                        for content in result.content:
-                            if hasattr(content, 'text'):
-                                result_content.append(content.text)
-                            elif hasattr(content, 'type'):
-                                result_content.append(f"[{content.type}]: {content}")
-                        
-                        result_text = "\n".join(result_content) if result_content else "无返回内容"
-                        
-                        # 将MCP结果展示在输出区域
-                        self.root.after(0, lambda: self.output_text.insert(tk.END, f"MCP结果: {result_text}\n"))
-                        
-                        # 将MCP结果反馈给LLM进行进一步处理
-                        feedback_prompt = f"用户请求: {user_input}\nMCP调用结果: {result_text}\n请根据这个结果向用户提供适当的回应。"
-                        llm_messages = [{"role": "user", "content": feedback_prompt}]
-                        
-                        llm_result = self.llm_service.create(llm_messages)
-                        # 提取并显示LLM响应中的content部分
-                        llm_response = self.extract_content_from_response(llm_result)
-                        
-                        self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
-                    else:
-                        self.root.after(0, lambda: self.output_text.insert(tk.END, "MCP调用未返回结果\n\n"))
-                        
-                except Exception as e:
-                    error_msg = f"MCP调用失败: {str(e)}"
-                    self.root.after(0, lambda: self.output_text.insert(tk.END, f"{error_msg}\n\n"))
-            else:
-                # 如果AI响应不包含MCP调用，直接显示结果
-                # 提取并显示LLM响应中的content部分
-                llm_response = self.extract_content_from_response(result)
-                
-                # 检查原响应中是否包含用户输入的原始内容，避免重复显示
-                if "[MCPCALL]" not in response_text:
-                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
-                else:
-                    # 如果AI响应包含MCP调用格式但解析失败，也显示结果
-                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
-                
-        except Exception as e:
-            self.root.after(0, lambda: self.output_text.insert(tk.END, f"错误: {str(e)}\n"))
+                self.process_message_with_function_call(cmd)
+            return
 
-    def process_message_with_tools(self, user_input):
-        """处理消息（添加工具信息到prompt）"""
-        try:
-            # 使用增强的提示词获取AI响应（添加工具信息）
-            enhanced_prompt, has_tools = self.enhance_prompt_with_tools(user_input)
-            
-            if has_tools:
-                # 将工具列表信息提供给AI
-                messages = [{"role": "user", "content": enhanced_prompt}]
-            else:
-                messages = [{"role": "user", "content": user_input}]
-            
-            result = self.llm_service.create(messages)
-            
-            # 获取AI响应文本
-            response_text = json.dumps(result, indent=2, ensure_ascii=False) if isinstance(result, dict) else str(result)
-            
-            # 尝试解析AI响应中的MCP调用指令
-            is_mcp_call, server_name, tool_name, arguments = self.parse_ai_response_for_mcp(response_text)
-            
-            if is_mcp_call:
-                # 执行MCP调用
-                self.root.after(0, lambda: self.output_text.insert(tk.END, f"正在调用 {server_name} 的 {tool_name} 工具...\n"))
-                
-                try:
-                    result = asyncio.run(self.mcp_client.call_tool(server_name, tool_name, arguments))
-                    
-                    if result:
-                        # 处理MCP结果
-                        result_content = []
-                        for content in result.content:
-                            if hasattr(content, 'text'):
-                                result_content.append(content.text)
-                            elif hasattr(content, 'type'):
-                                result_content.append(f"[{content.type}]: {content}")
-                        
-                        result_text = "\n".join(result_content) if result_content else "无返回内容"
-                        
-                        # 将MCP结果展示在输出区域
-                        self.root.after(0, lambda: self.output_text.insert(tk.END, f"MCP结果: {result_text}\n"))
-                        
-                        # 将MCP结果反馈给LLM进行进一步处理
-                        feedback_prompt = f"用户请求: {user_input}\nMCP调用结果: {result_text}\n请根据这个结果向用户提供适当的回应。"
-                        llm_messages = [{"role": "user", "content": feedback_prompt}]
-                        
-                        llm_result = self.llm_service.create(llm_messages)
-                        # 提取并显示LLM响应中的content部分
-                        llm_response = self.extract_content_from_response(llm_result)
-                        
-                        self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
-                    else:
-                        self.root.after(0, lambda: self.output_text.insert(tk.END, "MCP调用未返回结果\n\n"))
-                        
-                except Exception as e:
-                    error_msg = f"MCP调用失败: {str(e)}"
-                    self.root.after(0, lambda: self.output_text.insert(tk.END, f"{error_msg}\n\n"))
-            else:
-                # 如果AI响应不包含MCP调用，直接显示结果
-                # 提取并显示LLM响应中的content部分
-                llm_response = self.extract_content_from_response(result)
-                
-                # 检查原响应中是否包含用户输入的原始内容，避免重复显示
-                if "[MCPCALL]" not in response_text:
-                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
-                else:
-                    # 如果AI响应包含MCP调用格式但解析失败，也显示结果
-                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
-                
-        except Exception as e:
-            self.root.after(0, lambda: self.output_text.insert(tk.END, f"错误: {str(e)}\n"))
+        self.process_message_with_function_call(user_input)
 
-    def extract_content_from_response(self, response):
-        """
-        从LLM响应中提取content部分
-        """
-        if isinstance(response, dict):
-            # 如果response是字典，尝试从中提取content
-            choices = response.get('choices', [])
-            if choices and len(choices) > 0:
-                message = choices[0].get('message', {})
-                content = message.get('content', '')
-                if content:
-                    return content
-            # 如果没有找到content，返回整个响应的字符串表示
-            return json.dumps(response, indent=2, ensure_ascii=False)
+    def get_mcp_tools_schema(self):
+        if not self.all_tools_mapping:
+            return []
+        tools = []
+        for tool_id, tool_info in self.all_tools_mapping.items():
+            tool_schema = {
+                "type": "function",
+                "function": {
+                    "name": tool_info['name'],
+                    "description": tool_info['description'],
+                    "parameters": tool_info.get('input_schema', {"type": "object", "properties": {}, "required": []})
+                }
+            }
+            tools.append(tool_schema)
+        return tools
+
+    def handle_run_command_by_index(self, index):
+        if str(index) not in self.all_tools_mapping:
+            self.add_caption_line(f"错误：没有找到编号为 {index} 的工具")
+            return
+
+        tool_info = self.all_tools_mapping[str(index)]
+        tools_schema = self.get_mcp_tools_schema()
+        messages = [{"role": "user", "content": f"请立即调用工具 '{tool_info['name']}'。"}]
+
+        try:
+            result = self.llm_service.create(messages, tools=tools_schema)
+            self.process_function_call_response(result, messages)
+        except Exception as e:
+            self.add_caption_line(f"调用失败: {str(e)}")
+
+    def process_function_call_response(self, result, original_messages):
+        try:
+
+            if 'choices' in result and len(result['choices']) > 0:
+                choice = result['choices'][0]
+                tool_calls = choice.get('message', {}).get('tool_calls', [])
+                if tool_calls:
+                    for tool_call in tool_calls:
+                        function_name = tool_call['function']['name']
+                        arguments = json.loads(tool_call['function']['arguments'])
+
+                        server_name = None
+                        for tool_id, info in self.all_tools_mapping.items():
+                            if info['name'] == function_name:
+                                server_name = info['server']
+                                break
+
+                        if not server_name:
+                            self.add_caption_line(f"错误：找不到工具 {function_name} 对应的服务器")
+                            continue
+
+                        self.add_caption_line(f"[调用工具] {function_name}")
+                        print(f"【MCP CALL】Calling {server_name}.{function_name} with args: {arguments}")
+
+                        # 执行 MCP 调用（现在能获取真实结果！）
+                        mcp_result = self.execute_mcp_call_sync(server_name, function_name, arguments)
+                        print(f"【MCP RESULT】{mcp_result}")
+
+                        # 显示错误（如果存在）
+                        if isinstance(mcp_result, dict) and "error" in mcp_result:
+                            self.add_caption_line(f"[错误] {mcp_result['error']}")
+
+                        # 构造 tool response 消息
+                        updated_messages = original_messages.copy()
+                        updated_messages.append({
+                            "role": "assistant",
+                            "tool_calls": [tool_call]
+                        })
+                        updated_messages.append({
+                            "role": "tool",
+                            "content": json.dumps(mcp_result, ensure_ascii=False),
+                            "tool_call_id": tool_call.get('id', '')
+                        })
+
+                        # 获取最终自然语言回复
+                        final_result = self.llm_service.create(updated_messages)
+                        final_content = extract_content_from_response(final_result)
+                        self.add_caption_line(final_content if final_content else "[AI未返回内容]")
+                else:
+                    content = extract_content_from_response(result)
+                    self.add_caption_line(content if content else "[AI未返回内容]")
+            else:
+                content = extract_content_from_response(result)
+                self.add_caption_line(content if content else "[AI未返回内容]")
+        except Exception as e:
+            import traceback
+            error_msg = f"处理函数调用时出错: {str(e)}\n{traceback.format_exc()}"
+            print(error_msg)
+            self.add_caption_line(f"处理函数调用时出错: {str(e)}")
+
+    def show_tools_dialog(self):
+        if self.tools_by_server:
+            self._show_tools_dialog_now()
         else:
-            # 如果response不是字典，直接返回字符串形式
-            return str(response)
+            self.pending_show_tools = True
+            if not self.is_loading_tools:
+                self.async_refresh_tools_list()
+            if not self.loading_dialog:
+                self.loading_dialog = QMessageBox(self)
+                self.loading_dialog.setWindowTitle("加载中")
+                self.loading_dialog.setText("正在加载MCP工具列表，请稍候...")
+                self.loading_dialog.setStandardButtons(QMessageBox.StandardButton.NoButton)
+                self.loading_dialog.show()
 
-    def display_result(self, result):
+    def _show_tools_dialog_now(self):
+        if self.tools_by_server:
+            dialog = ToolsDialog(self.tools_by_server, self.all_tools_mapping, self)
+            dialog.exec()
+        else:
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("提示")
+            msg_box.setText("暂无可用的MCP工具")
+            msg_box.setIcon(QMessageBox.Icon.Information)
+            msg_box.exec()
+
+    def _cleanup_worker_thread(self):
+        if self.worker_thread and self.worker_thread.isRunning():
+            if self.worker and hasattr(self.worker, 'stop'):
+                self.worker.stop()
+            self.worker_thread.quit()
+            if not self.worker_thread.wait(5000):
+                print("警告: 流式传输线程未能在规定时间内退出")
+        if self.worker:
+            self.worker.deleteLater()
+            self.worker = None
+        if self.worker_thread:
+            self.worker_thread.deleteLater()
+            self.worker_thread = None
+
+    def process_message_with_function_call(self, user_input):
+        messages = [{"role": "user", "content": user_input}]
+        tools_schema = self.get_mcp_tools_schema() if self.tools_by_server else None
+
         try:
-            response_text = self.extract_content_from_response(result)
-            self.output_text.insert(tk.END, f"<< {response_text}\n\n")
-            self.output_text.see(tk.END)  # 滚动到底部
+            result = self.llm_service.create(messages, tools=tools_schema)
+            choices = result.get("choices", [])
+            if choices and "tool_calls" in choices[0].get("message", {}):
+                self.process_function_call_response(result, messages)
+            else:
+                content = extract_content_from_response(result)
+                if content:
+                    self.add_caption_line(content)
         except Exception as e:
-            self.output_text.insert(tk.END, f"<< 处理结果时出错: {str(e)}\n\n")
+            self.add_caption_line(f"处理消息时出错: {str(e)}")
+
+    def update_output_buffer(self, content_chunk):
+        if not isinstance(content_chunk, str):
+            return
+        self.output_buffer += content_chunk
+        if any(c in self.output_buffer for c in '.!?\n。！？') or len(self.output_buffer) >= 50:
+            sentences = re.split(r'([.!?。！？\n]+)', self.output_buffer)
+            display_parts = []
+            i = 0
+            while i < len(sentences):
+                part = sentences[i]
+                if i + 1 < len(sentences):
+                    part += sentences[i + 1]
+                    i += 2
+                else:
+                    i += 1
+                if part.strip():
+                    display_parts.append(part)
+            if display_parts:
+                self.add_caption_line(''.join(display_parts))
+                self.output_buffer = ''
+
+    def on_stream_finished(self):
+        if self.output_buffer.strip():
+            try:
+                full_response = json.loads(self.output_buffer)
+                self.process_function_call_response(full_response, [{"role": "user", "content": "dummy"}])
+            except json.JSONDecodeError:
+                self.add_caption_line(self.output_buffer)
+        self.output_buffer = ""
+
+    def on_stream_error(self, error_msg):
+        self.add_caption_line(error_msg)
+        self.output_buffer = ""
+
+    # ==============================
+    # 🔧 关键修复：正确同步执行 MCP 调用
+    # ==============================
+    def execute_mcp_call_sync(self, server_name, tool_name, arguments):
+        """同步执行 MCP 调用，使用 Queue 获取子线程结果"""
+        result_queue = queue.Queue()
+        exception_queue = queue.Queue()
+
+        def run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    self.mcp_client.call_tool(server_name, tool_name, arguments)
+                )
+                result_queue.put(result)
+            except Exception as e:
+                exception_queue.put(e)
+            finally:
+                loop.close()
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        thread.join(timeout=15)  # 给 Blender 等慢启动工具留足时间
+
+        if thread.is_alive():
+            return {"error": "MCP 调用超时（15秒）"}
+
+        if not exception_queue.empty():
+            exc = exception_queue.get()
+            return {"error": f"MCP 执行异常: {str(exc)}"}
+
+        if not result_queue.empty():
+            result = result_queue.get()
+            # 尝试从 MCP Result 提取文本内容
+            try:
+                texts = []
+                for item in getattr(result, 'content', []):
+                    if hasattr(item, 'text') and isinstance(item.text, str):
+                        texts.append(item.text.strip())
+                if texts:
+                    return {"result": "\n".join(texts)}
+                else:
+                    return {"result": str(result)}
+            except Exception as parse_err:
+                return {"result": str(result), "warning": f"解析结果时出错: {parse_err}"}
+        else:
+            return {"error": "MCP 调用无返回结果"}
+
+    def closeEvent(self, event):
+        if self.loading_dialog:
+            self.loading_dialog.close()
+            self.loading_dialog = None
+        self._cleanup_worker_thread()
+        if self.tool_loader_thread and self.tool_loader_thread.isRunning():
+            self.tool_loader_thread.quit()
+            self.tool_loader_thread.wait(3000)
+        self.is_loading_tools = False
+        event.accept()
 
 
 def main():
-    root = tk.Tk()
-    # 设置窗口属性
-    root.wm_attributes("-topmost", 1)  # 置顶
-    root.attributes('-alpha', 0.98)    # 设置更高透明度
-    app = MCPAICaller(root)
-    root.mainloop()
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')
+    app.setStyleSheet("QMainWindow { background-color: transparent; }")
+    window = MCPAICaller()
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":
