@@ -15,6 +15,8 @@ import os
 from datetime import datetime
 import win32gui  # 添加这个导入
 import win32con  # 添加这个导入
+from mcp.server.fastmcp import FastMCP
+mcp = FastMCP("ocr_tools")
 
 def get_window_rect_by_title(window_title_part: str):
     """根据窗口标题的一部分获取窗口矩形"""
@@ -83,7 +85,7 @@ def save_ocr_image_with_boxes(image: Image.Image, results: List, image_path: str
     cv2.imwrite(output_path, img_cv)
     
     return output_path
-
+@mcp.tool()
 def find_text_coordinates(text_to_find: str, image_path: str = None):
     """
     从指定图片或全屏截图中查找指定文字的中心点坐标，并保存带识别框的图片
@@ -195,33 +197,5 @@ def get_all_text(image_path: str = None):
     except Exception as e:
         return f"获取所有文本失败: {str(e)}"
 
-def main():
-    """主函数，处理命令行参数以适配executor.py."""
-
-    
-    tool_name = sys.argv[1]
-    
-    try:
-        
-           
-        if tool_name == "ocr_detect":
-            if len(sys.argv) < 3:
-                result = "错误: find_text_coordinates 需要指定要查找的文字"
-            else:
-                text_to_find = sys.argv[2]
-                # 如果提供了图片路径参数
-                image_path = sys.argv[3] if len(sys.argv) > 3 else None
-                result = find_text_coordinates(text_to_find, image_path)
-        elif tool_name == "get_all_text":
-            # 如果提供了图片路径参数
-            image_path = sys.argv[2] if len(sys.argv) > 2 else None
-            result = get_all_text(image_path)
-        else:
-            result = f"错误: 未找到工具 '{tool_name}'"
-    except Exception as e:
-        result = f"执行工具时出错: {str(e)}"
-    
-    print(result)
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    mcp.run()

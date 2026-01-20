@@ -5,7 +5,10 @@ import numpy as np
 from ultralytics import YOLO
 from pathlib import Path
 from PIL import ImageGrab
+from mcp.server.fastmcp import FastMCP
+mcp = FastMCP("likefavarite_tools")
 
+@mcp.tool()
 def detect_like_favorite():
     """
     检测点赞和收藏按钮
@@ -97,15 +100,6 @@ def detect_like_favorite():
     except Exception as e:
         return f"检测过程中出错: {str(e)}"
 
-def main():
-    """
-    主执行函数，用于命令行调用
-    """
-    import sys
-    
-    # 忽略可能的工具名参数，直接执行检测
-    result = detect_like_favorite()
-    print(result)
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    mcp.run()

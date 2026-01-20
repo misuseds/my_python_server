@@ -6,7 +6,11 @@
 import sys
 import webbrowser
 import time
-def normalize_url(url):
+from mcp.server.fastmcp import FastMCP
+ 
+mcp = FastMCP("blender_tools")
+@mcp.tool()
+def openURL(url):
     """
     标准化URL格式，处理可能的错误格式
     """
@@ -23,22 +27,9 @@ def normalize_url(url):
     # 如果URL没有协议，添加https://
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
+    webbrowser.open(url)
     
-    return url
+    return print(f"成功 打开网页: {url}") 
 
-def main():
-
-    
-    raw_url = sys.argv[2]
-    url = normalize_url(raw_url)
-    
-    try:
-        webbrowser.open(url)
-        print(f"成功 打开网页: {url}")
-        time.sleep(2)
-    except Exception as e:
-        print(f"打开网页失败: {str(e)}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    mcp.run()

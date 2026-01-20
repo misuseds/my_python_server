@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "blender-tool": {
+      "command": "E:/code/my_python_server/micromambavenv/python.exe",
+      "args": [
+        "E:/code/my_python_server/blender_cline/blender_api_tool.py"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }, "ue-tool": {
+      "command": "E:/code/my_python_server/micromambavenv/python.exe",
+      "args": [
+        "E:\\code\\my_python_server\\ue_cline\\ue_api_tool.py"
+      ],
+      "disabled": false,
+      "autoApprove": []
+    }, "browser-tool": {
+      
+      "command": "E:/code/my_python_server/micromambavenv/python.exe",
+        "args": [
+          "E:\\code\\my_python_server\\browser_cline\\browser_api_tool.py"
+        ],
+        "disabled": false,
+        "autoApprove": []
+        
+    }, "computer-tool": {
+      "command": "E:/code/my_python_server/micromambavenv/python.exe",
+      "args": [
+        "E:\\code\\my_python_server\\computer_cline\\computer_api_tool.py"
+      ],
+      "disabled": false,
+      "autoApprove": []
+  }}
+}
