@@ -5,7 +5,7 @@ import json
 import threading
 import queue
 import re
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTextEdit, QLineEdit, QVBoxLayout, QWidget, QLabel, QDialog, QScrollArea, QGridLayout, QMessageBox
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTextEdit, QLineEdit, QVBoxLayout, QWidget, QLabel, QDialog, QScrollArea, QGridLayout, QMessageBox, QPushButton, QHBoxLayout
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread
 from PyQt6.QtGui import QFont, QColor, QPalette, QKeySequence, QShortcut
 import importlib.util
@@ -47,7 +47,8 @@ class ToolsDialog(QDialog):
         self.tools_by_server = tools_by_server
         self.setWindowTitle("可用的MCP工具")
         self.setGeometry(300, 300, 800, 600)
-        
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
+
         layout = QVBoxLayout()
         layout.setContentsMargins(10, 10, 10, 10)
         scroll_area = QScrollArea()
@@ -64,7 +65,7 @@ class ToolsDialog(QDialog):
                 QLabel {
                     font-size: 16px;
                     font-weight: bold;
-                    color: #00ff41;
+                    color: black;
                     margin-top: 10px;
                     margin-bottom: 10px;
                     padding: 5px;
@@ -81,10 +82,10 @@ class ToolsDialog(QDialog):
                     name_label = QLabel(f"• [{tool_number}] {tool_name}:")
                 else:
                     name_label = QLabel(f"• {tool_name}:")
-                name_label.setStyleSheet("QLabel { font-weight: bold; color: #ffffff; margin-left: 10px; }")
+                name_label.setStyleSheet("QLabel { font-weight: bold; color: black; margin-left: 10px; }")
                 desc_label = QLabel(tool_desc)
                 desc_label.setWordWrap(True)
-                desc_label.setStyleSheet("QLabel { color: #cccccc; margin-left: 25px; margin-bottom: 8px; }")
+                desc_label.setStyleSheet("QLabel { color: black; margin-left: 25px; margin-bottom: 8px; }")
                 tools_vbox.addWidget(name_label)
                 tools_vbox.addWidget(desc_label)
             scroll_layout.addLayout(tools_vbox)
@@ -503,13 +504,13 @@ class MCPAICaller(QMainWindow):
     def _show_tools_dialog_now(self):
         if self.tools_by_server:
             dialog = ToolsDialog(self.tools_by_server, self.all_tools_mapping, self)
-            dialog.exec()
+            dialog.show()  # 使用 show() 替代 exec()，不阻塞主线程
         else:
             msg_box = QMessageBox(self)
             msg_box.setWindowTitle("提示")
             msg_box.setText("暂无可用的MCP工具")
             msg_box.setIcon(QMessageBox.Icon.Information)
-            msg_box.exec()
+            msg_box.show()  # 使用 show() 替代 exec()，不阻塞主线程
 
     def _cleanup_worker_thread(self):
         if self.worker_thread and self.worker_thread.isRunning():
@@ -594,7 +595,21 @@ class MCPAICaller(QMainWindow):
             except Exception as e:
                 exception_queue.put(e)
             finally:
-                loop.close()
+                # 安全关闭事件循环，避免管道关闭异常
+                try:
+                    pending = asyncio.all_tasks(loop)
+                    for task in pending:
+                        task.cancel()
+                    if pending:
+                        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                except Exception:
+                    pass
+                finally:
+                    try:
+                        loop.close()
+                    except Exception:
+                        pass
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()

@@ -31,18 +31,16 @@ def start_blender():
     在命令提示符中启动Blender
     """
     blender_path = r"D:\blender\blender.exe"
-    
+
     if not os.path.exists(blender_path):
         print(f"错误: 找不到Blender可执行文件: {blender_path}")
         return False
-    
+
     try:
         # 在新的命令提示符窗口中启动Blender
         subprocess.Popen(['start', 'cmd', '/k', blender_path], shell=True)
         print(f"Blender已在新终端中启动: {blender_path}")
-        
-       
-     
+
         return True
     except Exception as e:
         print(f"启动Blender时出错: {e}")
