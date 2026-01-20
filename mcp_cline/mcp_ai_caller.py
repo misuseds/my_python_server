@@ -1,6 +1,5 @@
-# mcp_ai_caller.py
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, messagebox
 import asyncio
 import sys
 import os
@@ -15,8 +14,11 @@ class MCPAICaller:
         # 去除窗口标题栏和边框
         self.root.overrideredirect(True)
         
-        # 设置窗口位置和大小
-        self.root.geometry("800x600+100+100")
+        # 设置窗口位置和大小 - 改为更小的窗口
+        self.root.geometry("600x400+100+100")
+        
+        # 设置更高的透明度 (从0.95改为0.98)
+        self.root.attributes('-alpha', 0.98)
         
         # 动态导入LLM和VLM服务
         import importlib.util
@@ -38,8 +40,76 @@ class MCPAICaller:
         from mcp_cline.mcp_client import MCPClient
         self.mcp_client = MCPClient()
 
+        # 延迟加载MCP工具列表 - 初始化为None表示尚未加载
+        self.available_tools = None
+        self.method_map = self.generate_method_map()
+
         self.setup_ui()
         
+    def load_mcp_tools_on_demand(self):
+        """
+        首次需要工具列表时才加载（懒加载）
+        """
+        if self.available_tools is not None:
+            return  # 已经加载过了，无需重复加载
+        
+        try:
+            all_tools = {}
+            
+            # 遍历MCPClient中所有的服务器
+            for server_name in self.mcp_client.servers.keys():
+                try:
+                    # 为每个服务器异步获取工具列表
+                    tools = asyncio.run(self.mcp_client.list_tools(server_name))
+                    # 将Tool对象转换为字典格式以便于使用
+                    if tools:
+                        tool_dict = {}
+                        for tool in tools:
+                            tool_dict[tool.name] = {
+                                'name': tool.name,
+                                'description': tool.description
+                            }
+                        all_tools[server_name] = tool_dict
+                    else:
+                        all_tools[server_name] = {}
+                except Exception as e:
+                    print(f"获取服务器 {server_name} 的工具列表失败: {str(e)}")
+                    continue
+            
+            self.available_tools = all_tools
+            print(f"已按需加载MCP工具列表: {list(all_tools.keys())}")
+        except Exception as e:
+            print(f"按需加载MCP工具列表失败: {str(e)}")
+            self.available_tools = {}
+
+    def generate_method_map(self):
+        """
+        生成方法编号映射
+        """
+        method_map = {}
+        idx = 1
+        
+        # 查看帮助
+        method_map[idx] = {"name": "查看帮助", "description": "输入 /h 可查看所有MCP工具"}
+        idx += 1
+        
+        # MCP工具调用
+        method_map[idx] = {"name": "MCP工具调用", "description": "AI可根据上下文自动调用MCP工具"}
+        idx += 1
+        
+        # 添加MCP工具 - 仅当工具已加载时才添加
+        if self.available_tools is not None and self.available_tools:
+            for server_name, tools in self.available_tools.items():
+                if tools:
+                    for tool_name, tool_info in tools.items():
+                        method_map[idx] = {
+                            "name": f"调用{tool_name}",
+                            "description": f"{tool_info['description']} (服务器: {server_name})"
+                        }
+                        idx += 1
+        
+        return method_map
+
     def setup_ui(self):
         # 主框架 - 半透明背景
         main_frame = tk.Frame(self.root, bg='#f0f0f0', bd=0, highlightthickness=0)
@@ -56,13 +126,13 @@ class MCPAICaller:
         # 输出区域 - 半透明背景，黑色文字
         self.output_text = scrolledtext.ScrolledText(
             dialog_container, 
-            height=20,
+            height=12,  # 减少高度
             bg='#ffffff',         # 白色背景
             fg='#333333',         # 深灰色文字
             bd=0,                 # 无边框
             highlightthickness=0, # 无高亮边框
             wrap=tk.WORD,
-            font=('Arial', 11),
+            font=('Arial', 10),   # 减小字体
             state=tk.NORMAL
         )
         self.output_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
@@ -70,7 +140,7 @@ class MCPAICaller:
         # 输入区域 - 明确的输入框，白色背景，黑色文字
         self.input_text = scrolledtext.ScrolledText(
             dialog_container, 
-            height=5,
+            height=3,             # 减少高度
             bg='#ffffff',         # 白色背景，清晰可见
             fg='#000000',         # 黑色文字
             bd=2,                 # 明确边框
@@ -78,7 +148,7 @@ class MCPAICaller:
             highlightthickness=1, # 轻微高亮
             highlightbackground='#cccccc',
             wrap=tk.WORD,
-            font=('Arial', 12)
+            font=('Arial', 11)    # 减小字体
         )
         self.input_text.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         
@@ -124,42 +194,103 @@ class MCPAICaller:
 
     def get_mcp_tool_list(self):
         """
-        获取MCP服务器的可用工具列表
+        获取MCP服务器的可用工具列表（按需加载）
+        """
+        self.load_mcp_tools_on_demand()  # 确保工具列表已加载
+        return self.available_tools or {}  # 返回已加载的数据或空字典
+
+    def show_all_methods(self):
+        """
+        显示所有可用的MCP工具
+        """
+        # 确保工具列表已加载
+        available_tools = self.get_mcp_tool_list()
+        
+        all_methods = "所有可用的MCP工具:\n\n"
+        
+        if available_tools:
+            for server_name, tools in available_tools.items():
+                if tools:
+                    all_methods += f"服务器: {server_name}\n"
+                    for tool_name, tool_info in tools.items():
+                        all_methods += f"  - {tool_name}: {tool_info['description']}\n"
+                    all_methods += "\n"
+                else:
+                    all_methods += f"服务器: {server_name} - 无可用工具\n\n"
+        else:
+            all_methods += "当前无可用的MCP工具\n"
+                
+        return all_methods
+
+    def show_scrollable_help(self):
+        """
+        显示可滚动的帮助信息弹窗
+        """
+        help_text = self.show_all_methods()
+        
+        # 创建一个新的顶级窗口作为弹窗
+        help_window = tk.Toplevel(self.root)
+        help_window.title("帮助 - MCP工具列表")
+        help_window.geometry("500x400")
+        help_window.resizable(True, True)
+        
+        # 设置弹窗始终在主窗口之上
+        help_window.transient(self.root)
+        help_window.grab_set()
+        
+        # 创建带滚动条的文本框
+        text_frame = tk.Frame(help_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        scroll_text = scrolledtext.ScrolledText(
+            text_frame,
+            wrap=tk.WORD,
+            font=('Arial', 10),
+            state=tk.NORMAL
+        )
+        scroll_text.pack(fill=tk.BOTH, expand=True)
+        
+        # 插入帮助文本
+        scroll_text.insert(tk.END, help_text)
+        scroll_text.config(state=tk.DISABLED)  # 设置为只读
+        
+        # 添加关闭按钮
+        close_button = tk.Button(
+            help_window,
+            text="关闭",
+            command=help_window.destroy,
+            bg='#4a86e8',
+            fg='white',
+            font=('Arial', 10, 'bold')
+        )
+        close_button.pack(pady=10)
+
+    def handle_run_command(self, method_number):
+        """
+        处理运行指定编号的方法
         """
         try:
-            # 获取MCPClient中定义的所有服务器名称
-            all_tools = {}
-            
-            # 遍历MCPClient中所有的服务器
-            for server_name in self.mcp_client.servers.keys():
-                try:
-                    # 为每个服务器异步获取工具列表
-                    tools = asyncio.run(self.mcp_client.list_tools(server_name))
-                    # 将Tool对象转换为字典格式以便于使用
-                    if tools:
-                        tool_dict = {}
-                        for tool in tools:
-                            tool_dict[tool.name] = {
-                                'name': tool.name,
-                                'description': tool.description
-                            }
-                        all_tools[server_name] = tool_dict
-                    else:
-                        all_tools[server_name] = {}
-                except Exception as e:
-                    print(f"获取服务器 {server_name} 的工具列表失败: {str(e)}")
-                    continue
-            
-            return all_tools
-        except Exception as e:
-            print(f"获取MCP工具列表失败: {str(e)}")
-            return {}
+            method_num = int(method_number.strip())
+            if method_num in self.method_map:
+                method_info = self.method_map[method_num]
+                # 根据方法类型生成相应的AI请求
+                if method_info['name'].startswith('调用'):
+                    # 这是一个MCP工具调用方法
+                    tool_name = method_info['name'][2:]  # 去掉'调用'前缀
+                    return f"请调用{tool_name}方法"
+                else:
+                    # 返回方法的描述
+                    return f"执行{method_info['name']}: {method_info['description']}"
+            else:
+                return f"错误：方法编号 {method_num} 不存在"
+        except ValueError:
+            return f"错误：无效的方法编号 '{method_number}'"
 
     def enhance_prompt_with_tools(self, user_input):
         """
         将可用的MCP工具列表添加到用户输入中，增强提示词
         """
-        # 获取可用的工具列表
+        # 获取可用的工具列表（这会触发首次加载）
         available_tools = self.get_mcp_tool_list()
         
         if available_tools:
@@ -167,7 +298,7 @@ class MCPAICaller:
             for server_name, tools in available_tools.items():
                 if tools:
                     tool_names = [f"{name}({details['description']})" for name, details in tools.items()]
-                    tool_description += f"- {server_name}: {tool_names}\n"
+                    tool_description += f"- {server_name}: {', '.join(tool_names)}\n"
                 else:
                     tool_description += f"- {server_name}: 无可用工具\n"
             
@@ -217,17 +348,113 @@ class MCPAICaller:
         if not user_input:
             return
             
-        # 显示用户输入
+        # 检查是否为特殊命令
+        if user_input == '/h':
+            # 显示可滚动的帮助信息弹窗
+            self.show_scrollable_help()
+            self.input_text.delete(1.0, tk.END)
+            return
+        
+        # 检查是否为运行命令 (/r + 数字或普通文本)
+        if user_input.startswith('/r ') and len(user_input) > 3:
+            command_part = user_input[3:].strip()  # 获取/r后面的部分
+            
+            # 检查后面是否是纯数字
+            if command_part.isdigit():
+                # 是数字，按编号调用
+                ai_request = self.handle_run_command(command_part)
+                # 显示用户输入
+                self.output_text.insert(tk.END, f">> {user_input}\n")
+                # 处理AI请求 - 使用增强的提示词（带工具信息）
+                thread = threading.Thread(target=self.process_message_with_tools, args=(ai_request,))
+                thread.start()
+                self.input_text.delete(1.0, tk.END)
+                return
+            else:
+                # 不是数字，作为普通消息发送，但使用增强的提示词（带工具信息）
+                self.output_text.insert(tk.END, f">> {user_input}\n")
+                thread = threading.Thread(target=self.process_message_with_tools, args=(user_input,))
+                thread.start()
+                self.input_text.delete(1.0, tk.END)
+                return
+            
+        # 显示用户输入（普通消息）
         self.output_text.insert(tk.END, f">> {user_input}\n")
         self.input_text.delete(1.0, tk.END)
         
-        # 在新线程中处理消息
+        # 在新线程中处理普通消息（不带工具信息）
         thread = threading.Thread(target=self.process_message, args=(user_input,))
         thread.start()
         
     def process_message(self, user_input):
+        """处理普通消息（不添加工具信息到prompt）"""
         try:
-            # 使用增强的提示词获取AI响应
+            # 直接使用原始用户输入，不添加工具信息
+            messages = [{"role": "user", "content": user_input}]
+            
+            result = self.llm_service.create(messages)
+            
+            # 获取AI响应文本
+            response_text = json.dumps(result, indent=2, ensure_ascii=False) if isinstance(result, dict) else str(result)
+            
+            # 尝试解析AI响应中的MCP调用指令
+            is_mcp_call, server_name, tool_name, arguments = self.parse_ai_response_for_mcp(response_text)
+            
+            if is_mcp_call:
+                # 执行MCP调用
+                self.root.after(0, lambda: self.output_text.insert(tk.END, f"正在调用 {server_name} 的 {tool_name} 工具...\n"))
+                
+                try:
+                    result = asyncio.run(self.mcp_client.call_tool(server_name, tool_name, arguments))
+                    
+                    if result:
+                        # 处理MCP结果
+                        result_content = []
+                        for content in result.content:
+                            if hasattr(content, 'text'):
+                                result_content.append(content.text)
+                            elif hasattr(content, 'type'):
+                                result_content.append(f"[{content.type}]: {content}")
+                        
+                        result_text = "\n".join(result_content) if result_content else "无返回内容"
+                        
+                        # 将MCP结果展示在输出区域
+                        self.root.after(0, lambda: self.output_text.insert(tk.END, f"MCP结果: {result_text}\n"))
+                        
+                        # 将MCP结果反馈给LLM进行进一步处理
+                        feedback_prompt = f"用户请求: {user_input}\nMCP调用结果: {result_text}\n请根据这个结果向用户提供适当的回应。"
+                        llm_messages = [{"role": "user", "content": feedback_prompt}]
+                        
+                        llm_result = self.llm_service.create(llm_messages)
+                        # 提取并显示LLM响应中的content部分
+                        llm_response = self.extract_content_from_response(llm_result)
+                        
+                        self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
+                    else:
+                        self.root.after(0, lambda: self.output_text.insert(tk.END, "MCP调用未返回结果\n\n"))
+                        
+                except Exception as e:
+                    error_msg = f"MCP调用失败: {str(e)}"
+                    self.root.after(0, lambda: self.output_text.insert(tk.END, f"{error_msg}\n\n"))
+            else:
+                # 如果AI响应不包含MCP调用，直接显示结果
+                # 提取并显示LLM响应中的content部分
+                llm_response = self.extract_content_from_response(result)
+                
+                # 检查原响应中是否包含用户输入的原始内容，避免重复显示
+                if "[MCPCALL]" not in response_text:
+                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
+                else:
+                    # 如果AI响应包含MCP调用格式但解析失败，也显示结果
+                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
+                
+        except Exception as e:
+            self.root.after(0, lambda: self.output_text.insert(tk.END, f"错误: {str(e)}\n"))
+
+    def process_message_with_tools(self, user_input):
+        """处理消息（添加工具信息到prompt）"""
+        try:
+            # 使用增强的提示词获取AI响应（添加工具信息）
             enhanced_prompt, has_tools = self.enhance_prompt_with_tools(user_input)
             
             if has_tools:
@@ -270,9 +497,10 @@ class MCPAICaller:
                         llm_messages = [{"role": "user", "content": feedback_prompt}]
                         
                         llm_result = self.llm_service.create(llm_messages)
-                        llm_response = json.dumps(llm_result, indent=2, ensure_ascii=False) if isinstance(llm_result, dict) else str(llm_result)
+                        # 提取并显示LLM响应中的content部分
+                        llm_response = self.extract_content_from_response(llm_result)
                         
-                        self.root.after(0, lambda: self.output_text.insert(tk.END, f"<< {llm_response}\n\n"))
+                        self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
                     else:
                         self.root.after(0, lambda: self.output_text.insert(tk.END, "MCP调用未返回结果\n\n"))
                         
@@ -281,19 +509,40 @@ class MCPAICaller:
                     self.root.after(0, lambda: self.output_text.insert(tk.END, f"{error_msg}\n\n"))
             else:
                 # 如果AI响应不包含MCP调用，直接显示结果
+                # 提取并显示LLM响应中的content部分
+                llm_response = self.extract_content_from_response(result)
+                
                 # 检查原响应中是否包含用户输入的原始内容，避免重复显示
                 if "[MCPCALL]" not in response_text:
-                    self.root.after(0, lambda r=result: self.display_result(r))
+                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
                 else:
                     # 如果AI响应包含MCP调用格式但解析失败，也显示结果
-                    self.root.after(0, lambda r=result: self.display_result(r))
+                    self.root.after(0, lambda r=llm_response: self.output_text.insert(tk.END, f"<< {r}\n\n"))
                 
         except Exception as e:
             self.root.after(0, lambda: self.output_text.insert(tk.END, f"错误: {str(e)}\n"))
 
+    def extract_content_from_response(self, response):
+        """
+        从LLM响应中提取content部分
+        """
+        if isinstance(response, dict):
+            # 如果response是字典，尝试从中提取content
+            choices = response.get('choices', [])
+            if choices and len(choices) > 0:
+                message = choices[0].get('message', {})
+                content = message.get('content', '')
+                if content:
+                    return content
+            # 如果没有找到content，返回整个响应的字符串表示
+            return json.dumps(response, indent=2, ensure_ascii=False)
+        else:
+            # 如果response不是字典，直接返回字符串形式
+            return str(response)
+
     def display_result(self, result):
         try:
-            response_text = json.dumps(result, indent=2, ensure_ascii=False) if isinstance(result, dict) else str(result)
+            response_text = self.extract_content_from_response(result)
             self.output_text.insert(tk.END, f"<< {response_text}\n\n")
             self.output_text.see(tk.END)  # 滚动到底部
         except Exception as e:
@@ -304,7 +553,7 @@ def main():
     root = tk.Tk()
     # 设置窗口属性
     root.wm_attributes("-topmost", 1)  # 置顶
-    root.attributes('-alpha', 0.95)    # 设置透明度
+    root.attributes('-alpha', 0.98)    # 设置更高透明度
     app = MCPAICaller(root)
     root.mainloop()
 

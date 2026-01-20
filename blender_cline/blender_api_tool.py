@@ -41,8 +41,8 @@ def start_blender():
         subprocess.Popen(['start', 'cmd', '/k', blender_path], shell=True)
         print(f"Blender已在新终端中启动: {blender_path}")
         
-        import time
-        time.sleep(5)
+       
+     
         return True
     except Exception as e:
         print(f"启动Blender时出错: {e}")
