@@ -589,11 +589,10 @@ def build_sifu_mod():
     target_mod_dir = Path(r"G:\Sifu\Sifu\Content\Paks\~mods")
     target_pak = target_mod_dir / f"{pak_folder.name}.pak"
 
-    # 确保 ~mods 目录存在
-    if not target_mod_dir.exists():
-        log(" 错误：MOD 目录不存在！请确认游戏路径正确。")
-        log(f"  {target_mod_dir}")
-        return {"status": "error", "message": f"MOD 目录不存在: {target_mod_dir}"}
+    # 如果 ~mods 目录不存在，则创建它
+    target_mod_dir.mkdir(parents=True, exist_ok=True)
+    log(" MOD 目录已准备：")
+    log(f"  {target_mod_dir}")
 
     try:
         shutil.copy2(pak_file, target_pak)
@@ -602,16 +601,32 @@ def build_sifu_mod():
     except Exception as e:
         log(f" 复制 MOD 文件失败：{e}")
         return {"status": "error", "message": f"复制 MOD 文件失败: {e}"}
+    try:
+        shutil.copy2(pak_file, target_pak)
+        log(" 已替换 MOD 文件到：")
+        log(f"  {target_pak}")
+    except Exception as e:
+        log(f" 复制 MOD 文件失败：{e}")
+        return {"status": "error", "message": f"复制 MOD 文件失败: {e}"}
 
-    log()
+    # ================ 第五步：处理签名文件 ================
+    sig_filename = f"{pak_folder.name}.sig"
+    target_sig_path = target_mod_dir / sig_filename
+    source_sig_path = Path(r"G:\Sifu\Sifu\Content\Paks\pakchunk0-WindowsNoEditor.sig")
 
-
-
-    log()
-    log("=" * 32)
-    log(" 所有操作已完成！游戏已启动。")
-    log("=" * 32)
-    log()
+    if not target_sig_path.exists():
+        if source_sig_path.exists():
+            try:
+                shutil.copy2(source_sig_path, target_sig_path)
+                log(" 已复制签名文件到：")
+                log(f"  {target_sig_path}")
+            except Exception as e:
+                log(f" 复制签名文件失败：{e}")
+                # 这里不返回错误，因为签名文件可能不是必需的
+        else:
+            log(f" 源签名文件不存在：{source_sig_path}")
+    else:
+        log(f" 签名文件已存在：{target_sig_path}")
 
     return {"status": "success", "result": "MOD build completed and game launched"}
 
