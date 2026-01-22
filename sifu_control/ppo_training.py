@@ -20,6 +20,175 @@ import os
 from PIL import Image
 from control_api_tool import ImprovedMovementController  # 导入移动控制器
 
+# 导入Qt库
+try:
+    from PyQt5.QtWidgets import QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton
+    from PyQt5.QtGui import QImage, QPixmap, QPainter, QPen, QFont, QColor
+    from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
+    QT_AVAILABLE = True
+except ImportError:
+    QT_AVAILABLE = False
+    print("PyQt5 not available. Visualization will be disabled.")
+
+class Visualizer:
+    """
+    Qt可视化类
+    """
+    def __init__(self, env):
+        if not QT_AVAILABLE:
+            return
+            
+        self.app = QApplication.instance()
+        if self.app is None:
+            self.app = QApplication([])
+        
+        self.window = YOLOVisualizerWindow(env)
+        self.env = env
+        self.running = False
+        
+    def start(self):
+        if not QT_AVAILABLE:
+            print("Qt not available. Cannot start visualization.")
+            return
+        self.running = True
+        self.window.show()
+        self.app.exec_()
+        
+    def stop(self):
+        if not QT_AVAILABLE:
+            return
+        self.running = False
+        self.window.close()
+
+class YOLOVisualizerWindow(QMainWindow):
+    """
+    YOLO检测结果可视化窗口
+    """
+    def __init__(self, env):
+        super().__init__()
+        self.env = env
+        self.setWindowTitle("YOLO Detection Visualization")
+        self.setGeometry(100, 100, 800, 600)
+        
+        # 创建中央部件
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # 创建布局
+        layout = QVBoxLayout(central_widget)
+        
+        # 创建图像显示组件
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.image_label)
+        
+        # 创建控制按钮
+        self.control_button = QPushButton("Start/Stop Detection Display")
+        self.control_button.clicked.connect(self.toggle_detection_display)
+        layout.addWidget(self.control_button)
+        
+        # 设置透明背景
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # 定时器更新图像
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_frame)
+        self.detection_display_active = False
+        
+        # 初始化显示
+        self.blank_image = np.zeros((CONFIG['IMAGE_HEIGHT'], CONFIG['IMAGE_WIDTH'], 3), dtype=np.uint8)
+        self.display_image = self.blank_image.copy()
+        self.update_display()
+        
+    def toggle_detection_display(self):
+        """
+        切换检测显示状态
+        """
+        self.detection_display_active = not self.detection_display_active
+        if self.detection_display_active:
+            self.timer.start(50)  # 每50ms更新一次，约20FPS
+            self.control_button.setText("Stop Detection Display")
+        else:
+            self.timer.stop()
+            self.control_button.setText("Start Detection Display")
+    
+    def update_frame(self):
+        """
+        更新当前帧
+        """
+        # 获取当前屏幕截图
+        current_image = self.env.capture_screen()
+        
+        # 运行YOLO检测
+        detections = self.env.detect_target(current_image)
+        
+        # 更新显示
+        self.display_image_with_detections(current_image, detections)
+    
+    def display_image_with_detections(self, image, detections):
+        """
+        在图像上绘制检测结果并显示
+        """
+        # 将OpenCV BGR图像转换为RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # 创建QImage
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        
+        # 创建QPixmap
+        pixmap = QPixmap.fromImage(qt_image)
+        
+        # 创建画家对象绘制检测框
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # 设置画笔和字体
+        red_pen = QPen(Qt.red, 2)
+        font = QFont('Arial', 10, QFont.Bold)
+        painter.setPen(red_pen)
+        painter.setFont(font)
+        
+        # 绘制检测框和标签
+        for detection in detections:
+            bbox = detection['bbox']  # [x1, y1, x2, y2]
+            label = detection['label']
+            score = detection['score']
+            
+            x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+            
+            # 绘制边界框
+            painter.drawRect(x1, y1, x2-x1, y2-y1)
+            
+            # 绘制标签和置信度
+            text = f"{label}: {score:.2f}"
+            text_rect = painter.boundingRect(x1, y1-20, 100, 20, Qt.AlignLeft, text)
+            # 创建半透明黑色背景
+            painter.fillRect(text_rect, QColor(0, 0, 0, 180))  # 透明度180/255
+            painter.setPen(Qt.white)
+            painter.drawText(text_rect, Qt.AlignCenter, text)
+            painter.setPen(red_pen)  # 重置画笔颜色
+        
+        painter.end()
+        
+        # 设置pixmap到标签
+        self.image_label.setPixmap(pixmap.scaled(
+            self.image_label.width(), 
+            self.image_label.height(),
+            Qt.KeepAspectRatio
+        ))
+    
+    def update_display(self):
+        """
+        更新显示
+        """
+        h, w, ch = self.blank_image.shape
+        bytes_per_line = ch * w
+        qt_image = QImage(self.blank_image.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(qt_image)
+        self.image_label.setPixmap(pixmap)
+
 # 配置日志
 def setup_logging():
     """设置日志配置"""
@@ -138,6 +307,10 @@ class TargetSearchEnvironment:
 
         # 动作历史记录
         self.action_history = deque(maxlen=10)
+
+        # 可视化相关
+        self.visualizer = None
+        self.visualizer_thread = None
 
     def _load_yolo_model(self):
         """
@@ -584,6 +757,23 @@ class TargetSearchEnvironment:
         """
         return list(self.recent_detection_images)
 
+    def start_visualizer(self):
+        """
+        启动可视化
+        """
+        if not QT_AVAILABLE:
+            print("Qt not available. Cannot start visualization.")
+            return
+            
+        if self.visualizer is None:
+            self.visualizer = Visualizer(self)
+        
+        if self.visualizer_thread is None:
+            self.visualizer_thread = threading.Thread(target=self.visualizer.start, daemon=True)
+            self.visualizer_thread.start()
+        else:
+            self.visualizer.start()
+
 class PolicyNetwork(nn.Module):
     """
     策略网络 - 修改版，只输出转头动作
@@ -863,9 +1053,9 @@ class PPOAgent:
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.logger.info(f"模型检查点已加载: {checkpoint_path}")
 
-def run_episode(env, ppo_agent, episode_num, total_episodes, training_mode=True, print_debug=False):
+def run_episode(env, ppo_agent, episode_num, total_episodes, training_mode=True, print_debug=False, visualizer=None):
     """
-    运行一个episode - 移除可视化
+    运行一个episode - 添加可视化支持
     """
     state = env.reset()
     episode_memory = Memory()
@@ -938,12 +1128,16 @@ def run_episode(env, ppo_agent, episode_num, total_episodes, training_mode=True,
         'recent_detection_images': recent_detection_images
     }
 
-def evaluate_trained_ppo_agent(model_path, evaluation_episodes=10):
+def evaluate_trained_ppo_agent(model_path, evaluation_episodes=10, show_visualization=False):
     """
-    评估训练好的PPO模型 - 移除可视化
+    评估训练好的PPO模型 - 添加可视化支持
     """
     # 创建环境和智能体
     env = TargetSearchEnvironment(CONFIG['TARGET_DESCRIPTION'])
+    
+    # 启动可视化（如果需要）
+    if show_visualization and QT_AVAILABLE:
+        env.start_visualizer()
     
     turn_action_dim = 2  # turn_left, turn_right
 
@@ -971,7 +1165,6 @@ def evaluate_trained_ppo_agent(model_path, evaluation_episodes=10):
     for episode in range(evaluation_episodes):
         # 每隔几轮打印一次调试信息
         print_debug = True  # 每2轮打印一次调试信息
-        # 移除visualizer参数
         result = run_episode(env, ppo_agent, episode, evaluation_episodes, training_mode=False, print_debug=print_debug)
         
         scores.append(result['step_count'])
@@ -1008,12 +1201,16 @@ def evaluate_trained_ppo_agent(model_path, evaluation_episodes=10):
     
     return evaluation_result
 
-def continue_training_ppo_agent(model_path='ppo_model_checkpoint.pth', load_existing=True):
+def continue_training_ppo_agent(model_path='ppo_model_checkpoint.pth', load_existing=True, show_visualization=False):
     """
-    继续训练PPO智能体 - 移除可视化
+    继续训练PPO智能体 - 添加可视化支持
     """
     # 创建环境和智能体
     env = TargetSearchEnvironment(CONFIG['TARGET_DESCRIPTION'])
+    
+    # 启动可视化（如果需要）
+    if show_visualization and QT_AVAILABLE:
+        env.start_visualizer()
     
     turn_action_dim = 2  # turn_left, turn_right
 
@@ -1123,7 +1320,7 @@ def find_latest_checkpoint(model_path):
 
 def create_environment_and_agent():
     """
-    创建环境和智能体 - 移除可视化
+    创建环境和智能体 - 添加可视化支持
     """
     # 创建环境
     env = TargetSearchEnvironment(CONFIG['TARGET_DESCRIPTION'])
@@ -1144,12 +1341,13 @@ def main():
     import sys
     if len(sys.argv) < 2:
         print("默认运行继续训练...")
-        continue_training_ppo_agent()
+        continue_training_ppo_agent(show_visualization=False)
         print("导入成功！")
         print("\n可用的功能:")
         print("1. 训练门搜索智能体: python ppo_training.py train_new_ppo_agent [model_path]")
-        print("2. 继续训练门搜索智能体: python ppo_training.py continue_train_ppo_agent [model_path]")
-        print("3. 评估已训练模型: python ppo_training.py evaluate_trained_ppo_agent [model_path]")
+        print("2. 继续训练门搜索智能体: python ppo_training.py continue_train_ppo_agent [model_path] [show_viz]")
+        print("3. 评估已训练模型: python ppo_training.py evaluate_trained_ppo_agent [model_path] [show_viz]")
+        print("4. 启动可视化窗口: python ppo_training.py visualize")
         
         return
 
@@ -1157,20 +1355,28 @@ def main():
     
     if command == "train_new_ppo_agent":
         model_path = sys.argv[2] if len(sys.argv) > 2 else 'ppo_model_new.pth'
-        continue_training_ppo_agent(model_path, load_existing=False)
+        show_viz = sys.argv[3].lower() == 'true' if len(sys.argv) > 3 else False
+        continue_training_ppo_agent(model_path, load_existing=False, show_visualization=show_viz)
     elif command == "continue_train_ppo_agent":
         model_path = sys.argv[2] if len(sys.argv) > 2 else 'ppo_model_checkpoint.pth'
-        continue_training_ppo_agent(model_path, load_existing=True)
+        show_viz = sys.argv[3].lower() == 'true' if len(sys.argv) > 3 else False
+        continue_training_ppo_agent(model_path, load_existing=True, show_visualization=show_viz)
     elif command == "evaluate_trained_ppo_agent":
         model_path = sys.argv[2] if len(sys.argv) > 2 else 'ppo_model_checkpoint.pth'
-        evaluation_episodes = int(sys.argv[3]) if len(sys.argv) > 3 else 10
-        evaluate_trained_ppo_agent(model_path, evaluation_episodes)
+        show_viz = sys.argv[3].lower() == 'true' if len(sys.argv) > 3 else False
+        evaluation_episodes = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+        evaluate_trained_ppo_agent(model_path, evaluation_episodes, show_visualization=show_viz)
+    elif command == "visualize":
+        # 启动可视化窗口
+        env = TargetSearchEnvironment(CONFIG['TARGET_DESCRIPTION'])
+        env.start_visualizer()
     else:
         print(f"未知命令: {command}")
         print("可用命令:")
-        print("1. train_new_ppo_agent [model_path]")
-        print("2. continue_train_ppo_agent [model_path]")
-        print("3. evaluate_trained_ppo_agent [model_path] [evaluation_episodes]")
+        print("1. train_new_ppo_agent [model_path] [show_viz]")
+        print("2. continue_train_ppo_agent [model_path] [show_viz]")
+        print("3. evaluate_trained_ppo_agent [model_path] [show_viz] [evaluation_episodes]")
+        print("4. visualize")
 
 if __name__ == "__main__":
     main()
