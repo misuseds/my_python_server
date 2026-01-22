@@ -781,8 +781,8 @@ class MCPAICaller(QMainWindow):
         self.show_tools_dialog()
 
     def _handle_run_command(self, command: str):
-        """处理运行命令
-        
+        """处理运行命令 - 通过LLM调用function call
+
         Args:
             command: 运行命令参数
         """
@@ -793,11 +793,34 @@ class MCPAICaller(QMainWindow):
             # 等待工具加载完成
             while self.is_loading_tools:
                 QApplication.processEvents()
-        
-        if command.isdigit():
-            self.handle_run_command_by_index(int(command))
-        else:
-            self.process_message_with_function_call(command)
+
+        # 构建提示词，让LLM理解用户意图并调用相应工具
+        tools_info = ""
+        for tool_id, tool_info in self.all_tools_mapping.items():
+            tools_info += f"\n[{tool_id}] {tool_info['name']}: {tool_info['description']}"
+
+        enhanced_prompt = f"""请执行以下任务，从可用工具中选择合适的工具并调用：
+
+可用工具：
+{tools_info}
+
+用户请求：{command}
+
+要求：
+1. 理解用户意图，选择最合适的工具
+2. 根据用户请求确定工具参数
+3. 直接调用工具，不要询问用户
+4. 如果用户只提供了工具编号或名称，请根据上下文推断参数
+"""
+
+        messages = [{"role": "user", "content": enhanced_prompt}]
+        tools_schema = self.get_mcp_tools_schema()
+
+        try:
+            result = self.llm_service.create(messages, tools=tools_schema)
+            self.process_function_call_response(result, messages)
+        except Exception as e:
+            self.add_caption_line(f"调用失败: {str(e)}")
 
     def get_mcp_tools_schema(self) -> List[Dict[str, Any]]:
         """
@@ -825,27 +848,6 @@ class MCPAICaller(QMainWindow):
             }
             tools.append(tool_schema)
         return tools
-
-    def handle_run_command_by_index(self, index: int):
-        """
-        通过索引号处理运行命令
-        
-        Args:
-            index: 工具索引号
-        """
-        if str(index) not in self.all_tools_mapping:
-            self.add_caption_line(f"错误：没有找到编号为 {index} 的工具")
-            return
-
-        tool_info = self.all_tools_mapping[str(index)]
-        tools_schema = self.get_mcp_tools_schema()
-        messages = [{"role": "user", "content": f"请立即调用工具 '{tool_info['name']}'。"}]
-
-        try:
-            result = self.llm_service.create(messages, tools=tools_schema)
-            self.process_function_call_response(result, messages)
-        except Exception as e:
-            self.add_caption_line(f"调用失败: {str(e)}")
 
     def process_function_call_response(self, result: Dict[str, Any], original_messages: List[Dict[str, str]]):
         """

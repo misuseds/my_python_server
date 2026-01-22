@@ -11,8 +11,6 @@ import urllib3
 from datetime import datetime
 from PIL import Image
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 # 禁用 SSL 警告（仅开发环境）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -43,38 +41,9 @@ class LLMService:
 
     def _configure_dashscope_session(self):
         """配置 DashScope SDK 的 HTTP 会话，优化连接稳定性"""
-        try:
-            # 创建带重试机制的 session
-            session = requests.Session()
-
-            # 配置重试策略
-            retry_strategy = Retry(
-                total=3,  # 总重试次数
-                backoff_factor=1,  # 重试间隔因子（指数退避）
-                status_forcelist=[429, 500, 502, 503, 504],  # 需要重试的状态码
-                allowed_methods=["POST", "GET"]  # 允许重试的 HTTP 方法
-            )
-
-            # 创建适配器并挂载到 session
-            adapter = HTTPAdapter(
-                max_retries=retry_strategy,
-                pool_connections=10,  # 连接池大小
-                pool_maxsize=10
-            )
-
-            # 将适配器挂载到所有协议
-            session.mount("http://", adapter)
-            session.mount("https://", adapter)
-
-            # 配置 DashScope 使用这个 session
-            # DashScope SDK 会使用全局的 HTTP 配置
-            import dashscope
-            dashscope.http_connection.HTTPConnection.api_key = self.api_key
-
-            print("[LLM] HTTP会话已配置，启用重试机制")
-
-        except Exception as e:
-            print(f"[LLM警告] HTTP会话配置失败，使用默认配置: {e}")
+        # 注意：LLM服务使用 requests 直接调用 API，不需要配置 DashScope HTTP 会话
+        # 仅 VLM 服务使用 DashScope SDK
+        print("[LLM] 使用 requests 直接调用 API，跳过 DashScope HTTP 会话配置")
 
     def create(self, messages, tools=None):
         """非流式调用：返回完整响应"""
