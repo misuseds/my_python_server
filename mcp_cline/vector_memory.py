@@ -6,13 +6,57 @@ import os
 import time
 from datetime import datetime
 from typing import List, Dict, Optional
-import chromadb
-from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
+from dotenv import load_dotenv
+
+
+# 尝试导入完整版向量记忆系统
+FULL_MEMORY_AVAILABLE = False
+DASHSCOPE_AVAILABLE = False
+
+# 加载环境变量（使用与llm_server相同的方式）
+dotenv_path = r'E:\code\my_python_server\my_python_server_private\.env'
+load_dotenv(dotenv_path)
+
+# 尝试导入dashscope
+try:
+    import dashscope
+    from http import HTTPStatus
+    # 从环境变量获取API密钥
+    api_key = os.getenv('VLM_OPENAI_API_KEY')
+    if api_key:
+        dashscope.api_key = api_key
+        DASHSCOPE_AVAILABLE = True
+        print("[记忆系统] Dashscope库可用，API密钥已配置")
+    else:
+        print("[记忆系统] Dashscope库可用，但API密钥未配置")
+except ImportError:
+    print("[记忆系统] Dashscope库不可用, 将使用默认编码")
+except Exception as e:
+    print(f"[记忆系统] 初始化Dashscope失败: {e}, 将使用默认编码")
+
+# 尝试导入chromadb
+try:
+    import chromadb
+    from chromadb.config import Settings
+    FULL_MEMORY_AVAILABLE = True
+except ImportError:
+    print("[记忆系统] 完整版依赖未找到, 将使用简化版记忆系统")
+except Exception as e:
+    print(f"[记忆系统] 初始化完整版失败: {e}, 将使用简化版记忆系统")
+
+
+# 导入简化版记忆系统
+import os
+import sys
+
+# 添加当前目录到路径
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from simple_vector_memory import SimpleVectorMemory
 
 
 class VectorMemory:
-    """向量记忆系统 - 使用向量数据库存储和检索记忆"""
+    """向量记忆系统 - 自动选择完整版或简化版"""
 
     def __init__(self, persist_directory: str = None):
         """
@@ -21,6 +65,16 @@ class VectorMemory:
         Args:
             persist_directory: 向量数据库持久化存储路径
         """
+        # 选择使用哪个版本的记忆系统
+        if FULL_MEMORY_AVAILABLE:
+            print("[记忆系统] 使用完整版向量记忆系统")
+            self._init_full_memory(persist_directory)
+        else:
+            print("[记忆系统] 使用简化版向量记忆系统")
+            self._init_simple_memory(persist_directory)
+
+    def _init_full_memory(self, persist_directory: str):
+        """初始化完整版向量记忆系统"""
         # 设置默认持久化路径
         if persist_directory is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +83,7 @@ class VectorMemory:
         self.persist_directory = persist_directory
         os.makedirs(persist_directory, exist_ok=True)
 
-        # 初始化向量数据库客户端
+        # 初始化向量数据库客户端，禁用telemetry
         self.client = chromadb.PersistentClient(
             path=persist_directory,
             settings=Settings(
@@ -38,20 +92,67 @@ class VectorMemory:
             )
         )
 
-        # 获取或创建记忆集合
-        self.collection = self.client.get_or_create_collection(
-            name="agent_memory",
-            metadata={"hnsw:space": "cosine"}  # 使用余弦相似度
-        )
+        # 标记使用的是完整版
+        self._is_full_version = True
 
-        # 初始化编码器 (使用轻量级中文模型)
+        # 初始化编码器
         print("[记忆系统] 初始化编码器...")
-        self.encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-        print(f"[记忆系统] 编码器初始化完成, 模型: paraphrase-multilingual-MiniLM-L12-v2")
+        if DASHSCOPE_AVAILABLE:
+            print("[记忆系统] 使用Dashscope调用魔搭embedding服务 (text-embedding-v4)")
+            self.encoder_type = "dashscope"
+        else:
+            print("[记忆系统] Dashscope不可用, 将使用简单编码")
+            self.encoder_type = "simple"
+
+        # 检查是否需要重新创建集合
+        try:
+            # 尝试获取现有集合
+            existing_collection = self.client.get_collection(name="agent_memory")
+            # 检查现有集合的维度
+            # 注意：chromadb的API不直接提供获取集合维度的方法
+            # 我们通过尝试添加一个样本向量来检查
+            test_embedding = self.encode("test")
+            test_dim = len(test_embedding)
+            
+            # 尝试添加一个测试向量
+            try:
+                existing_collection.add(
+                    embeddings=[test_embedding],
+                    documents=["test"],
+                    ids=["test_id"]
+                )
+                # 删除测试向量
+                existing_collection.delete(ids=["test_id"])
+                # 维度匹配，使用现有集合
+                self.collection = existing_collection
+                print(f"[记忆系统] 使用现有集合，维度: {test_dim}")
+            except Exception as e:
+                # 维度不匹配，删除并重新创建集合
+                print(f"[记忆系统] 集合维度不匹配，重新创建: {e}")
+                self.client.delete_collection("agent_memory")
+                self.collection = self.client.create_collection(
+                    name="agent_memory",
+                    metadata={"hnsw:space": "cosine"}  # 使用余弦相似度
+                )
+                print(f"[记忆系统] 重新创建集合，维度: {test_dim}")
+        except Exception as e:
+            # 集合不存在，创建新集合
+            print(f"[记忆系统] 集合不存在，创建新集合: {e}")
+            self.collection = self.client.create_collection(
+                name="agent_memory",
+                metadata={"hnsw:space": "cosine"}  # 使用余弦相似度
+            )
 
         # 统计信息
         self.total_memories = self.collection.count()
         print(f"[记忆系统] 已加载 {self.total_memories} 条记忆")
+
+    def _init_simple_memory(self, persist_directory: str):
+        """初始化简化版向量记忆系统"""
+        # 使用简化版记忆系统
+        self.simple_memory = SimpleVectorMemory(persist_directory)
+        # 标记使用的是简化版
+        self._is_full_version = False
 
     def encode(self, text: str) -> List[float]:
         """
@@ -63,7 +164,67 @@ class VectorMemory:
         Returns:
             向量列表
         """
-        return self.encoder.encode(text, convert_to_numpy=False).tolist()
+        if self._is_full_version:
+            if DASHSCOPE_AVAILABLE:
+                # 使用dashscope调用魔搭的embedding服务
+                resp = dashscope.TextEmbedding.call(
+                    model="text-embedding-v4",
+                    input=text
+                )
+                if resp.status_code == HTTPStatus.OK:
+                    embedding = resp.output['embeddings'][0]['embedding']
+                    return embedding
+                else:
+                    raise Exception(f"[记忆系统] Dashscope服务调用失败: {resp.message}")
+            else:
+                raise Exception("[记忆系统] Dashscope不可用，无法编码文本")
+        else:
+            return self.simple_memory._simple_encode(text)
+    
+    def _simple_encode(self, text: str) -> List[float]:
+        """
+        简单编码方法，当dashscope不可用时使用
+
+        Args:
+            text: 要编码的文本
+
+        Returns:
+            向量列表
+        """
+        # 基本特征
+        features = []
+        
+        # 文本长度
+        features.append(min(len(text) / 1000, 1.0))
+        
+        # 字符频率特征（前26个字母 + 数字 + 空格）
+        chars = 'abcdefghijklmnopqrstuvwxyz0123456789 '
+        for char in chars:
+            freq = text.lower().count(char) / max(len(text), 1)
+            features.append(freq)
+        
+        # 标点符号频率
+        punctuation = ',.!?:;()[]{}'  # 中文标点符号
+        punctuation_freq = sum(text.count(p) for p in punctuation) / max(len(text), 1)
+        features.append(punctuation_freq)
+        
+        # 中文特征（简单判断）
+        chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+        chinese_ratio = chinese_chars / max(len(text), 1)
+        features.append(chinese_ratio)
+        
+        # 中文关键词特征
+        keywords = ['猫', '狗', '沙发', '地板', '代码', '用户', '睡觉', '跳', '写', '正在']
+        for keyword in keywords:
+            freq = text.count(keyword) / max(len(text), 1)
+            features.append(freq)
+        
+        # 文本复杂度特征
+        unique_chars = len(set(text))
+        complexity = unique_chars / max(len(text), 1)
+        features.append(complexity)
+        
+        return features
 
     def save_memory(
         self,
@@ -76,13 +237,28 @@ class VectorMemory:
         保存一条记忆
 
         Args:
-            vlm_analysis: VLM分析结果 (用于检索)
-            llm_commentary: LLM吐槽 (用于展示)
+            vlm_analysis: VLM分析结果
+            llm_commentary: LLM吐槽
             metadata: 额外的元数据
-            timestamp: 时间戳 (默认为当前时间)
+            timestamp: 时间戳
 
         Returns:
             记忆ID
+        """
+        if self._is_full_version:
+            return self._save_memory_full(vlm_analysis, llm_commentary, metadata, timestamp)
+        else:
+            return self.simple_memory.save_memory(vlm_analysis, llm_commentary, metadata, timestamp)
+
+    def _save_memory_full(
+        self,
+        vlm_analysis: str,
+        llm_commentary: str,
+        metadata: Dict = None,
+        timestamp: float = None
+    ) -> str:
+        """
+        保存一条记忆 (完整版)
         """
         if timestamp is None:
             timestamp = time.time()
@@ -90,7 +266,7 @@ class VectorMemory:
         # 生成唯一ID
         memory_id = f"mem_{timestamp}_{len(vlm_analysis) % 1000}"
 
-        # 编码VLM分析 (使用分析结果作为检索向量,更准确)
+        # 编码VLM分析
         embedding = self.encode(vlm_analysis)
 
         # 准备元数据
@@ -106,20 +282,12 @@ class VectorMemory:
         # 存储到数据库
         self.collection.add(
             embeddings=[embedding],
-            documents=[vlm_analysis],  # 存储VLM分析作为文档
+            documents=[vlm_analysis],
             metadatas=[metadata],
             ids=[memory_id]
         )
 
-        # 保存LLM吐槽到元数据 (单独存储,方便检索)
-        memory_info = {
-            "id": memory_id,
-            "vlm_analysis": vlm_analysis,
-            "llm_commentary": llm_commentary,
-            "metadata": metadata
-        }
-
-        # 将吐槽信息也存入数据库 (使用吐槽文本)
+        # 保存LLM吐槽到元数据
         commentary_id = f"roast_{timestamp}"
         commentary_embedding = self.encode(llm_commentary)
 
@@ -136,10 +304,31 @@ class VectorMemory:
             ids=[commentary_id]
         )
 
-        self.total_memories += 2
-        print(f"[记忆系统] 保存记忆: {memory_id}, 吐槽: {commentary_id}")
+        # 保存用户输入到数据库
+        user_inputs = metadata.get("user_inputs", [])
+        for idx, user_input in enumerate(user_inputs):
+            user_input_id = f"user_{timestamp}_{idx}"
+            user_input_embedding = self.encode(user_input)
+
+            metadata_user = metadata.copy()
+            metadata_user.update({
+                "type": "user_input",
+                "related_analysis_id": memory_id
+            })
+
+            self.collection.add(
+                embeddings=[user_input_embedding],
+                documents=[user_input],
+                metadatas=[metadata_user],
+                ids=[user_input_id]
+            )
+
+        self.total_memories += 2 + len(user_inputs)
+        print(f"[记忆系统] 保存记忆: {memory_id}, 吐槽: {commentary_id}, 用户输入: {len(user_inputs)}条")
         print(f"[记忆系统] VLM分析: {vlm_analysis[:50]}...")
         print(f"[记忆系统] LLM吐槽: {llm_commentary[:50]}...")
+        if user_inputs:
+            print(f"[记忆系统] 用户输入: {', '.join([ui[:30]+'...' for ui in user_inputs])}")
 
         return memory_id
 
@@ -155,10 +344,24 @@ class VectorMemory:
         Args:
             query_text: 查询文本
             top_k: 返回前k条最相关的记忆
-            memory_type: 记忆类型过滤 (None/VLM_analysis/commentary)
+            memory_type: 记忆类型过滤
 
         Returns:
-            相关记忆列表,每条记忆包含id、document、metadata等
+            相关记忆列表
+        """
+        if self._is_full_version:
+            return self._retrieve_memory_full(query_text, top_k, memory_type)
+        else:
+            return self.simple_memory.retrieve_memory(query_text, top_k, memory_type)
+
+    def _retrieve_memory_full(
+        self,
+        query_text: str,
+        top_k: int = 3,
+        memory_type: str = None
+    ) -> List[Dict]:
+        """
+        检索相关的记忆 (完整版)
         """
         if self.total_memories == 0:
             return []
@@ -199,13 +402,34 @@ class VectorMemory:
 
     def get_recent_memories(self, limit: int = 5) -> List[Dict]:
         """
-        获取最近的记忆 (按时间)
+        获取最近的记忆
 
         Args:
             limit: 返回数量
 
         Returns:
             最近记忆列表
+        """
+        if self._is_full_version:
+            return self._get_recent_memories_full(limit)
+        else:
+            return self.simple_memory.get_recent_memories(limit)
+
+    def get_all_memories(self) -> List[Dict]:
+        """
+        获取所有记忆
+
+        Returns:
+            所有记忆列表
+        """
+        if self._is_full_version:
+            return self._get_recent_memories_full(limit=1000)  # 设置一个较大的limit值
+        else:
+            return self.simple_memory.get_recent_memories(limit=1000)
+
+    def _get_recent_memories_full(self, limit: int = 5) -> List[Dict]:
+        """
+        获取最近的记忆 (完整版)
         """
         if self.total_memories == 0:
             return []
@@ -240,7 +464,7 @@ class VectorMemory:
 
     def format_memories_for_context(self, memories: List[Dict], max_count: int = 3) -> str:
         """
-        将记忆格式化为上下文字符串,用于LLM
+        将记忆格式化为上下文字符串
 
         Args:
             memories: 记忆列表
@@ -249,41 +473,56 @@ class VectorMemory:
         Returns:
             格式化后的上下文字符串
         """
-        if not memories:
-            return "暂无相关记忆"
+        if self._is_full_version:
+            if not memories:
+                return "暂无相关记忆"
 
-        context_parts = []
-        for i, memory in enumerate(memories[:max_count]):
-            memory_time = memory['metadata'].get('datetime', '未知时间')
-            memory_text = memory['document']
-            memory_type = memory['metadata'].get('type', 'unknown')
+            context_parts = []
+            for i, memory in enumerate(memories[:max_count]):
+                memory_time = memory['metadata'].get('datetime', '未知时间')
+                memory_text = memory['document']
+                memory_type = memory['metadata'].get('type', 'unknown')
 
-            context_parts.append(
-                f"{i+1}. [{memory_time}] ({memory_type}) {memory_text}"
-            )
+                context_parts.append(
+                    f"{i+1}. [{memory_time}] ({memory_type}) {memory_text}"
+                )
 
-        return "\n".join(context_parts)
+            return "\n".join(context_parts)
+        else:
+            return self.simple_memory.format_memories_for_context(memories, max_count)
 
     def clear_all(self):
         """清空所有记忆"""
-        try:
-            self.client.delete_collection("agent_memory")
-            self.collection = self.client.create_collection(
-                name="agent_memory",
-                metadata={"hnsw:space": "cosine"}
-            )
-            self.total_memories = 0
-            print("[记忆系统] 已清空所有记忆")
-        except Exception as e:
-            print(f"[记忆系统] 清空记忆失败: {e}")
+        if self._is_full_version:
+            try:
+                self.client.delete_collection("agent_memory")
+                self.collection = self.client.create_collection(
+                    name="agent_memory",
+                    metadata={"hnsw:space": "cosine"}
+                )
+                self.total_memories = 0
+                print("[记忆系统] 已清空所有记忆")
+            except Exception as e:
+                print(f"[记忆系统] 清空记忆失败: {e}")
+        else:
+            self.simple_memory.clear_all()
 
     def get_stats(self) -> Dict:
-        """获取记忆系统统计信息"""
-        return {
-            "total_memories": self.total_memories,
-            "persist_directory": self.persist_directory,
-            "model": "paraphrase-multilingual-MiniLM-L12-v2"
-        }
+        """
+        获取记忆系统统计信息
+        """
+        if self._is_full_version:
+            model_name = "text-embedding-v4 (dashscope)" if DASHSCOPE_AVAILABLE else "simple-encoder"
+            return {
+                "total_memories": self.total_memories,
+                "persist_directory": self.persist_directory,
+                "model": model_name,
+                "version": "full"
+            }
+        else:
+            stats = self.simple_memory.get_stats()
+            stats["version"] = "simple"
+            return stats
 
 
 # 测试代码

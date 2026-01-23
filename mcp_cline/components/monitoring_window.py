@@ -1,9 +1,13 @@
 from PyQt6.QtWidgets import QMainWindow, QTextEdit, QVBoxLayout, QWidget
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject
 
 
 class MonitoringWindow(QMainWindow):
     """监控显示窗口 - 用于显示VLM分析或吐槽内容"""
+
+    # 定义信号用于线程间通信
+    text_added = pyqtSignal(str)
+    window_shown = pyqtSignal()
 
     def __init__(self, title: str, window_type: str):
         """
@@ -17,6 +21,12 @@ class MonitoringWindow(QMainWindow):
         self.window_type = window_type
         self._setup_window(title)
         self._setup_ui()
+        self.hide_timer = QTimer()
+        self.hide_timer.timeout.connect(self.hide)
+        # 连接信号到槽
+        self.text_added.connect(self._add_text_safe)
+        self.window_shown.connect(self._show_safe)
+        self.hide()
 
     def _setup_window(self, title: str):
         """设置窗口属性"""
@@ -60,10 +70,10 @@ class MonitoringWindow(QMainWindow):
 
         # 根据窗口类型设置样式
         if self.window_type == 'analysis':
-            color = '#00aaff'  # VLM分析窗口用蓝色
+            color = '#ff0000'  # VLM分析窗口用红色
             bg_alpha = 0  # 完全透明背景
         else:
-            color = '#ffaa00'  # 吐槽窗口用橙色
+            color = '#ff0000'  # 吐槽窗口用红色
             bg_alpha = 0  # 完全透明背景
 
         # 使用字符串格式化，避免f-string中的语法错误
@@ -84,20 +94,38 @@ class MonitoringWindow(QMainWindow):
 
     def add_text(self, text: str):
         """
-        添加文本到窗口
+        添加文本到窗口（只显示最新一条，5秒后隐藏）
         """
-        # 使用文本光标在末尾添加新内容
-        cursor = self.text_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        cursor.insertText(text + "\n")
+        # 使用信号在主线程中添加文本
+        self.text_added.emit(text)
+
+    def _add_text_safe(self, text: str):
+        """
+        在主线程中安全地添加文本到窗口
+        """
+        # 清空旧内容，只显示最新一条
+        self.text_display.clear()
+        self.text_display.setPlainText(text.strip())
         
-        # 确保光标可见
-        self.text_display.ensureCursorVisible()
+        # 显示窗口
+        super().show()
         
-        # 强制滚动到底部
-        scrollbar = self.text_display.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        # 重置隐藏定时器（10秒后隐藏）
+        self.hide_timer.stop()
+        self.hide_timer.start(10000)
 
     def clear_text(self):
         """清空窗口内容"""
         self.text_display.clear()
+
+    def show(self):
+        """
+        安全地显示窗口（使用信号在主线程中调用）
+        """
+        self.window_shown.emit()
+
+    def _show_safe(self):
+        """
+        在主线程中安全地显示窗口
+        """
+        super().show()

@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QVBoxLayout,
     QWidget, QLabel, QPushButton
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, pyqtSignal, QObject, QTimer
 
 
 class MemorySignals(QObject):
@@ -18,10 +18,22 @@ class MemorySignals(QObject):
 class MemoryWindow(QMainWindow):
     """记忆系统显示窗口 - 只显示检索记录"""
 
+    # 定义信号用于线程间通信
+    window_shown = pyqtSignal()
+    monitoring_logged = pyqtSignal(str)
+    memory_retrieved = pyqtSignal(str, list)
+
     def __init__(self):
         super().__init__()
         self._setup_window()
         self._setup_ui()
+        self.hide_timer = QTimer()
+        self.hide_timer.timeout.connect(self.hide)
+        # 连接信号到槽
+        self.window_shown.connect(self._show_safe)
+        self.monitoring_logged.connect(self._log_monitoring_safe)
+        self.memory_retrieved.connect(self._log_retrieved_memory_safe)
+        self.hide()
 
     def _setup_window(self):
         """设置窗口属性"""
@@ -30,8 +42,8 @@ class MemoryWindow(QMainWindow):
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint
         )
-        # 不设置完全透明背景，使用半透明背景
-        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # 设置完全透明背景
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # 不设置窗口位置和大小，使用默认值，由外部调用者设置
 
@@ -53,7 +65,7 @@ class MemoryWindow(QMainWindow):
         self.retrieve_display.setStyleSheet("""
             QTextEdit {
                 background-color: rgba(0, 0, 0, 0);
-                color: #00aaff;
+                color: #ff0000;
                 border: none;
                 font-family: Consolas, monospace;
                 font-size: 18px;
@@ -61,34 +73,6 @@ class MemoryWindow(QMainWindow):
             }
         """)
         layout.addWidget(self.retrieve_display)
-
-    def log_monitoring(self, message: str):
-        """
-        记录监控信息
-
-        Args:
-            message: 监控消息文本
-        """
-        timestamp = __import__('datetime').datetime.now().strftime("%H:%M:%S")
-
-        log_text = f"[{timestamp}] {message}\n"
-        log_text += "-" * 50 + "\n"
-
-        # 滚动到顶部并插入
-        cursor = self.retrieve_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.Start)
-        cursor.insertText(log_text)
-
-        # 自动滚动到顶部
-        self.retrieve_display.verticalScrollBar().setValue(0)
-
-        # 保持最多50条记录
-        text = self.retrieve_display.toPlainText()
-        lines = text.split('\n')
-        if len(lines) > 200:
-            self.retrieve_display.setPlainText('\n'.join(lines[-200:]))
-            # 重新滚动到顶部
-            self.retrieve_display.verticalScrollBar().setValue(0)
 
     def clear_monitoring(self):
         """清空监控记录"""
@@ -105,37 +89,76 @@ class MemoryWindow(QMainWindow):
 
     def log_retrieved_memory(self, query_text: str, memories: List[Dict]):
         """
-        记录检索到的记忆
+        记录检索到的记忆（只显示检索结果，10秒后隐藏）
 
         Args:
             query_text: 查询文本
             memories: 检索到的记忆列表
         """
+        self.memory_retrieved.emit(query_text, memories)
+
+    def _log_retrieved_memory_safe(self, query_text: str, memories: List[Dict]):
+        """
+        在主线程中安全地记录检索到的记忆
+        """
         timestamp = __import__('datetime').datetime.now().strftime("%H:%M:%S")
 
-        log_text = f"[{timestamp}] 检索记忆: {query_text}\n"
         if memories:
-            for i, memory in enumerate(memories):
-                log_text += f"  记忆 {i+1}: {memory.get('vlm_analysis', '无分析')}\n"
+            # 有检索到记忆，显示检索内容
+            log_text = f"[{timestamp}] 检索到 {len(memories)} 条记忆"
         else:
-            log_text += "  无相关记忆\n"
-        log_text += "-" * 50 + "\n"
+            # 没有检索到记忆
+            log_text = f"[{timestamp}] 未找到相关记忆"
 
-        # 滚动到顶部并插入
-        cursor = self.retrieve_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.Start)
-        cursor.insertText(log_text)
+        # 清空旧内容，只显示最新一条
+        self.retrieve_display.clear()
+        self.retrieve_display.setPlainText(log_text)
 
-        # 自动滚动到顶部
-        self.retrieve_display.verticalScrollBar().setValue(0)
+        # 显示窗口
+        super().show()
 
-        # 保持最多50条记录
-        text = self.retrieve_display.toPlainText()
-        lines = text.split('\n')
-        if len(lines) > 200:
-            self.retrieve_display.setPlainText('\n'.join(lines[-200:]))
-            # 重新滚动到顶部
-            self.retrieve_display.verticalScrollBar().setValue(0)
+        # 重置隐藏定时器（10秒后隐藏）
+        self.hide_timer.stop()
+        self.hide_timer.start(10000)
+
+    def show(self):
+        """
+        安全地显示窗口（使用信号在主线程中调用）
+        """
+        self.window_shown.emit()
+
+    def _show_safe(self):
+        """
+        在主线程中安全地显示窗口
+        """
+        super().show()
+
+    def log_monitoring(self, message: str):
+        """
+        记录监控信息（只显示最新一条，10秒后隐藏）
+
+        Args:
+            message: 监控消息文本
+        """
+        self.monitoring_logged.emit(message)
+
+    def _log_monitoring_safe(self, message: str):
+        """
+        在主线程中安全地记录监控信息
+        """
+        timestamp = __import__('datetime').datetime.now().strftime("%H:%M:%S")
+        log_text = f"[{timestamp}] {message}"
+
+        # 清空旧内容，只显示最新一条
+        self.retrieve_display.clear()
+        self.retrieve_display.setPlainText(log_text)
+
+        # 显示窗口
+        super().show()
+
+        # 重置隐藏定时器（10秒后隐藏）
+        self.hide_timer.stop()
+        self.hide_timer.start(10000)
 
 
 # 测试代码

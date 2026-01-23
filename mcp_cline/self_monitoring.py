@@ -6,6 +6,8 @@ import os
 import sys
 import threading
 import time
+import requests
+import urllib3
 from datetime import datetime
 from typing import List, Optional
 from PIL import ImageGrab, Image
@@ -70,9 +72,9 @@ class SelfMonitoringThread(threading.Thread):
         self.paused = False
 
         # 监控参数
-        self.monitor_interval = 10  # 每10秒执行一次监控周期
+        self.monitor_interval = 5  # 每5秒执行一次监控周期
         self.screenshots_per_cycle = 5  # 每个周期截图5张
-        self.screenshot_interval = 2  # 每张截图间隔2秒
+        self.screenshot_interval = 1  # 每张截图间隔1秒
 
         # 截图清理参数
         self.max_screenshots = 50  # 最多保留最新的50张截图（约10分钟）
@@ -80,6 +82,7 @@ class SelfMonitoringThread(threading.Thread):
         # 吐槽阈值
         self.commentary_threshold = 3  # 每3个VLM分析就触发吐槽
         self.vlm_analysis_history = []  # VLM分析历史
+        self.user_input_history = []  # 用户输入历史
 
         # 截图目录
         self.screenshots_dir = os.path.join(
@@ -121,6 +124,40 @@ class SelfMonitoringThread(threading.Thread):
         """停止监控"""
         self.running = False
         self._log("[自我监控] 监控已停止")
+
+    def add_user_input(self, user_input):
+        """
+        添加用户输入到历史记录（作为VLM分析的一部分，一起触发吐槽）
+
+        Args:
+            user_input: 用户输入文本
+        """
+        # 添加到用户输入历史（用于上下文）
+        self.user_input_history.append({
+            'time': datetime.now().strftime('%H:%M:%S'),
+            'input': user_input
+        })
+
+        # 将用户输入也作为VLM分析添加到历史记录中，这样会触发吐槽
+        self.vlm_analysis_history.append({
+            'time': datetime.now().strftime('%H:%M:%S'),
+            'analysis': f"[用户输入] {user_input}"
+        })
+        self._log(f"[自我监控] 已添加用户输入到VLM历史记录: {user_input[:30]}...")
+
+        # 用户输入时也检索记忆
+        if self.vector_memory and self.enable_memory_retrieval:
+            try:
+                relevant_memories = self.vector_memory.retrieve_memory(
+                    query_text=user_input,
+                    top_k=3
+                )
+                if relevant_memories:
+                    self._log(f"[用户输入] 检索到 {len(relevant_memories)} 条相关记忆")
+                else:
+                    self._log("[用户输入] 未找到相关记忆")
+            except Exception as e:
+                print(f"[用户输入] 检索记忆失败: {e}")
 
     def pause_monitoring(self):
         """暂停监控"""
@@ -165,8 +202,11 @@ class SelfMonitoringThread(threading.Thread):
                                     relevant_memories = []
                                     if self.vector_memory and self.enable_memory_retrieval:
                                         try:
+                                            # 使用 VLM分析 + 用户输入 进行联合查找
+                                            user_inputs_str = " ".join([item['input'] for item in self.user_input_history])
+                                            combined_query = f"{vlm_analysis} {user_inputs_str}".strip()
                                             relevant_memories = self.vector_memory.retrieve_memory(
-                                                query_text=vlm_analysis,
+                                                query_text=combined_query,
                                                 top_k=3
                                             )
                                             if relevant_memories:
@@ -216,14 +256,24 @@ class SelfMonitoringThread(threading.Thread):
                                     except Exception as e:
                                         print(f"[自我监控] 吐槽回调失败: {e}")
 
-                                # 8. 保存记忆到向量数据库
+                                # 8. 保存记忆到向量数据库（包含用户输入、VLM分析、LLM吐槽）
                                 memory_id = None
                                 if self.vector_memory:
                                     try:
+                                        # 收集所有VLM分析历史
+                                        vlm_analyses = [item['analysis'] for item in self.vlm_analysis_history]
+
+                                        # 收集用户输入历史
+                                        user_inputs = [item['input'] for item in self.user_input_history] if self.user_input_history else []
+
                                         memory_id = self.vector_memory.save_memory(
                                             vlm_analysis=vlm_analysis,
                                             llm_commentary=commentary,
-                                            metadata={"timestamp": time.time()}
+                                            metadata={
+                                                "timestamp": time.time(),
+                                                "user_inputs": user_inputs,
+                                                "vlm_analyses": vlm_analyses
+                                            }
                                         )
                                         self._log("[自我监控] 已保存到向量记忆库")
 
@@ -238,8 +288,9 @@ class SelfMonitoringThread(threading.Thread):
 
                                 # 9. 清空历史记录
                                 self.vlm_analysis_history = []
-                    else:
-                        self._log("[自我监控] 截图失败，跳过本次周期")
+                                self.user_input_history = []  # 同时清空用户输入历史
+                            else:
+                                self._log("[自我监控] 截图失败，跳过本次周期")
 
                     self._log(f"[自我监控] 等待 {self.monitor_interval} 秒后开始下一个周期...")
 
@@ -365,6 +416,15 @@ class SelfMonitoringThread(threading.Thread):
 
         for i in range(self.screenshots_per_cycle):
             try:
+                # 截图前隐藏窗口
+                if self.callback_hide_windows:
+                    try:
+                        self.callback_hide_windows()
+                        # 等待窗口隐藏
+                        time.sleep(0.1)
+                    except Exception as e:
+                        print(f"[截图] 隐藏窗口失败: {e}")
+
                 # 使用PrintWindow API截取Endfield窗口
                 screenshot = self._capture_window_by_title(target_window)
 
@@ -374,6 +434,13 @@ class SelfMonitoringThread(threading.Thread):
                     # 如果无法截取窗口，截取整个屏幕
                     screenshot = ImageGrab.grab()
                     self._log(f"[截图] 未找到{target_window}窗口，截取整个屏幕")
+
+                # 截图后显示窗口
+                if self.callback_show_windows:
+                    try:
+                        self.callback_show_windows()
+                    except Exception as e:
+                        print(f"[截图] 显示窗口失败: {e}")
 
                 # 生成唯一文件名
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -392,9 +459,25 @@ class SelfMonitoringThread(threading.Thread):
 
             except ImportError:
                 # 如果没有安装win32gui模块，截取整个屏幕
+                # 截图前隐藏窗口
+                if self.callback_hide_windows:
+                    try:
+                        self.callback_hide_windows()
+                        # 等待窗口隐藏
+                        time.sleep(0.1)
+                    except Exception as e:
+                        print(f"[截图] 隐藏窗口失败: {e}")
+
                 screenshot = ImageGrab.grab()
                 self._log("[截图] 未安装win32gui模块，截取整个屏幕")
                 
+                # 截图后显示窗口
+                if self.callback_show_windows:
+                    try:
+                        self.callback_show_windows()
+                    except Exception as e:
+                        print(f"[截图] 显示窗口失败: {e}")
+
                 # 生成唯一文件名
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                 filename = f"self_monitor_{timestamp}.png"
@@ -416,7 +499,7 @@ class SelfMonitoringThread(threading.Thread):
 
     def _analyze_with_vlm(self, screenshots: List[str]) -> Optional[str]:
         """
-        使用VLM分析截图
+        使用VLM分析截图（带重试机制）
 
         Args:
             screenshots: 截图文件路径列表
@@ -427,9 +510,14 @@ class SelfMonitoringThread(threading.Thread):
         if not screenshots:
             return None
 
-        try:
-            # 构建VLM提示词 - 简短对话提取
-            prompt = """请简要分析这5张截图，只返回一个综合结果：
+        # 最大重试次数
+        max_retries = 3
+        retry_delay = 5  # 秒
+
+        for attempt in range(max_retries):
+            try:
+                # 构建VLM提示词 - 简短对话提取
+                prompt = """请简要分析这5张截图，只返回一个综合结果：
 
 如果是游戏/对话场景：
 - 如果有对话，提取对话（角色A：对话内容 / 角色B：对话内容）
@@ -449,24 +537,32 @@ class SelfMonitoringThread(threading.Thread):
 - 对话只提取文本，不添加任何描述
 - 不要多余的标点符号"""
 
-            # 调用VLM分析
-            vlm_messages = [{"role": "user", "content": prompt}]
+                # 调用VLM分析
+                vlm_messages = [{"role": "user", "content": prompt}]
 
-            # 尝试使用多图分析
-            try:
-                vlm_result = self.vlm_service.create_with_multiple_images(
-                    vlm_messages,
-                    image_sources=screenshots
-                )
+                # 尝试使用多图分析
+                try:
+                    if attempt > 0:
+                        self._log(f"[VLM] 第{attempt+1}次重试...")
 
-                # 提取分析结果
-                analysis_text = self._extract_content_from_vlm_result(vlm_result)
-                return analysis_text
+                    vlm_result = self.vlm_service.create_with_multiple_images(
+                        vlm_messages,
+                        image_sources=screenshots
+                    )
 
-            except AttributeError:
-                # 如果不支持多图分析，fallback到单图分析（使用最后一张）
-                self._log("[VLM] 不支持多图分析，使用最后一张截图分析")
-                single_prompt = """简要描述这个截图（20字以内）：
+                    # 提取分析结果
+                    analysis_text = self._extract_content_from_vlm_result(vlm_result)
+
+                    if analysis_text:
+                        self._log(f"[VLM] 分析成功 (第{attempt+1}次尝试)")
+                        return analysis_text
+                    else:
+                        raise ValueError("VLM返回空结果")
+
+                except AttributeError:
+                    # 如果不支持多图分析，fallback到单图分析（使用最后一张）
+                    self._log("[VLM] 不支持多图分析，使用最后一张截图分析")
+                    single_prompt = """简要描述这个截图（20字以内）：
 
 对话场景只提取对话内容，工作场景只说明在做什么
 
@@ -477,19 +573,36 @@ class SelfMonitoringThread(threading.Thread):
 - 严格控制在20字以内
 - 直接描述，不要多余的标点符号"""
 
-                vlm_result = self.vlm_service.create_with_image(
-                    [{"role": "user", "content": single_prompt}],
-                    image_source=screenshots[-1]
-                )
+                    vlm_result = self.vlm_service.create_with_image(
+                        [{"role": "user", "content": single_prompt}],
+                        image_source=screenshots[-1]
+                    )
 
-                analysis_text = self._extract_content_from_vlm_result(vlm_result)
-                return analysis_text
+                    analysis_text = self._extract_content_from_vlm_result(vlm_result)
 
-        except Exception as e:
-            print(f"[VLM] 分析失败: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+                    if analysis_text:
+                        self._log(f"[VLM] 分析成功 (第{attempt+1}次尝试)")
+                        return analysis_text
+                    else:
+                        raise ValueError("VLM返回空结果")
+
+            except (ConnectionError, ConnectionResetError, requests.exceptions.ConnectionError,
+                    requests.exceptions.SSLError, urllib3.exceptions.ProtocolError) as e:
+                if attempt < max_retries - 1:
+                    self._log(f"[VLM警告] 网络连接错误: {type(e).__name__}，{retry_delay}秒后重试...")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    self._log(f"[VLM错误] 网络连接失败，已达最大重试次数")
+                    return None
+
+            except Exception as e:
+                self._log(f"[VLM错误] 分析失败: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+
+        return None
 
     def _extract_content_from_vlm_result(self, result) -> Optional[str]:
         """
@@ -540,10 +653,19 @@ class SelfMonitoringThread(threading.Thread):
             return None
 
         try:
-            # 获取最近的VLM分析
-            latest_analysis = self.vlm_analysis_history[-1]['analysis']
+            # 构建分析历史摘要（包含用户输入和VLM分析）
+            analysis_summary = []
+            user_inputs = []
+            vlm_analyses = []
 
-            # 构建上下文,包含相关记忆
+            for item in self.vlm_analysis_history:
+                analysis = item['analysis']
+                if analysis.startswith('[用户输入]'):
+                    user_inputs.append(analysis.replace('[用户输入]', '').strip())
+                else:
+                    vlm_analyses.append(analysis)
+
+            # 构建上下文
             context_text = ""
             if relevant_memories and self.vector_memory:
                 memory_context = self.vector_memory.format_memories_for_context(relevant_memories, max_count=3)
@@ -554,10 +676,28 @@ class SelfMonitoringThread(threading.Thread):
 """
                 self._log("[吐槽] 已注入相关记忆到上下文")
 
-            # 构建吐槽提示词 - 包含记忆上下文
-            commentary_prompt = f"""{context_text}
-【当前场景分析】
-{latest_analysis}
+            # 添加用户输入到上下文
+            user_input_text = ""
+            if user_inputs:
+                user_input_text = f"""
+【用户输入】
+{chr(10).join(user_inputs)}
+
+"""
+                self._log("[吐槽] 已注入用户输入到上下文")
+
+            # 添加VLM分析到上下文
+            vlm_text = ""
+            if vlm_analyses:
+                vlm_text = f"""
+【VLM分析】
+{chr(10).join(vlm_analyses)}
+
+"""
+                self._log("[吐槽] 已注入VLM分析到上下文")
+
+            # 构建吐槽提示词
+            commentary_prompt = f"""{context_text}{user_input_text}{vlm_text}
 
 请基于以上信息给我一句话建议或吐槽。
 
