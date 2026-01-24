@@ -6,7 +6,6 @@ from PIL import Image
 import numpy as np
 import torch
 
-# 移除airllm导入，使用modelscope
 
 # 导入必要的库
 from huggingface_hub import snapshot_download
@@ -23,13 +22,13 @@ class LLMServiceLocal:
         """
         # 模型配置
         self.llm_model_name = "Qwen/Qwen2.5-0.5B"
-        self.vlm_model_name = "ZhipuAI/GLM-4.6V-Flash"  # 使用更小、更高效的模型
+        self.vlm_model_name = "OpenBMB/MiniCPM-V-2_6-int4"  # 使用 int4 量化版本，只需要约 7GB GPU 内存
 
         # 初始化模型
         self.llm_model = None
         self.llm_tokenizer = None
         self.vlm_model = None
-        self.vlm_processor = None
+        self.vlm_tokenizer = None
 
         # 只加载LLM模型，VLM模型在需要时才加载
         self._load_llm_model()
@@ -87,17 +86,19 @@ class LLMServiceLocal:
             # 使用ModelScope加载模型
             try:
                 print("正在使用内存优化参数加载VLM模型...")
-                # 从modelscope导入GLM相关的类
-                from modelscope import AutoProcessor, Glm4vForConditionalGeneration
+                # 从modelscope导入相关的类
+                from modelscope import AutoModel, AutoTokenizer
                 
-                self.vlm_model = Glm4vForConditionalGeneration.from_pretrained(
+                self.vlm_model = AutoModel.from_pretrained(
                     self.vlm_model_name,
-                    dtype="auto",
-                    device_map="auto",
-                    low_cpu_mem_usage=True,  # 减少CPU内存使用
                     trust_remote_code=True
                 )
-                self.vlm_processor = AutoProcessor.from_pretrained(self.vlm_model_name)
+                self.vlm_tokenizer = AutoTokenizer.from_pretrained(
+                    self.vlm_model_name,
+                    trust_remote_code=True
+                )
+                # 设置模型为评估模式
+                self.vlm_model.eval()
                 print(f"VLM模型加载成功: {self.vlm_model_name}")
             except Exception as e:
                 print(f"VLM模型加载失败: {e}")
@@ -115,10 +116,14 @@ class LLMServiceLocal:
         try:
             if hasattr(self, 'llm_model') and self.llm_model:
                 del self.llm_model
+                self.llm_model = None
+                self.llm_tokenizer = None
                 print("已释放LLM模型内存")
             
             if hasattr(self, 'vlm_model') and self.vlm_model:
                 del self.vlm_model
+                self.vlm_model = None
+                self.vlm_tokenizer = None
                 print("已释放VLM模型内存")
             
             # 清理GPU内存
@@ -156,6 +161,11 @@ class LLMServiceLocal:
         print("正在调用本地LLM服务...")
         
         try:
+            # 检查并加载LLM模型
+            if not self.llm_model or not self.llm_tokenizer:
+                print("LLM模型未加载，正在重新加载...")
+                self._load_llm_model()
+            
             # 生成响应
             start_time = time.time()
             response = self._generate_response(prompt)
@@ -456,55 +466,30 @@ class LLMServiceLocal:
             print(f"正在分析多个图像: {len(image_sources)}张")
             
             # 加载VLM模型（仅在需要时）
-            if not self.vlm_model or not self.vlm_processor:
+            if not self.vlm_model or not self.vlm_tokenizer:
                 print("正在加载VLM模型...")
                 self._load_vlm_model()
             
             # 构建消息
             if not messages:
                 # 如果没有消息，创建默认消息
-                vlm_messages = [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "请分析以下图像"}
-                        ]
-                    }
-                ]
+                prompt = "请分析以下图像"
             else:
-                # 使用提供的消息
-                vlm_messages = messages
-                
-                # 确保消息格式正确
-                if not isinstance(vlm_messages, list) or not vlm_messages:
-                    vlm_messages = [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": str(vlm_messages)}
-                            ]
-                        }
-                    ]
-                elif isinstance(vlm_messages[0], dict) and "content" in vlm_messages[0]:
-                    # 如果消息已经包含内容，确保格式正确
-                    if isinstance(vlm_messages[0]["content"], str):
-                        # 如果内容是字符串，转换为正确的格式
-                        vlm_messages[0]["content"] = [
-                            {"type": "text", "text": vlm_messages[0]["content"]}
-                        ]
+                # 提取提示文本
+                if isinstance(messages, list) and len(messages) > 0:
+                    if isinstance(messages[0], dict) and "content" in messages[0]:
+                        if isinstance(messages[0]["content"], str):
+                            prompt = messages[0]["content"]
+                        else:
+                            prompt = str(messages[0]["content"])
+                    else:
+                        prompt = str(messages)
                 else:
-                    # 其他情况，转换为正确的格式
-                    vlm_messages = [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": str(vlm_messages)}
-                            ]
-                        }
-                    ]
+                    prompt = str(messages)
             
             # 处理图像（调整大小以减少内存使用）
             max_size = 512  # 最大图像尺寸
+            images = []
             for i, image_path in enumerate(image_sources):
                 try:
                     # 读取图像
@@ -514,38 +499,35 @@ class LLMServiceLocal:
                     image.thumbnail((max_size, max_size), Image.LANCZOS)
                     print(f"已调整图像 {image_path} 大小: {image.size}")
                     
-                    # 添加图像到消息
-                    vlm_messages[0]["content"].append({"type": "image", "image": image})
+                    # 添加图像到列表
+                    images.append(image)
                     
                 except Exception as e:
                     print(f"处理图像 {image_path} 失败: {e}")
                     continue
             
-            # 编码输入
-            inputs = self.vlm_processor.apply_chat_template(
-                vlm_messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_dict=True,
-                return_tensors="pt"
-            ).to(self.vlm_model.device)
-            
-            # 移除可能不需要的参数
-            inputs.pop("token_type_ids", None)
+            # 构建消息格式（适配 MiniCPM-V 2.6 int4）
+            msgs = [{'role': 'user', 'content': images + [prompt]}]
             
             # 生成响应
             start_time = time.time()
-            generated_ids = self.vlm_model.generate(**inputs, max_new_tokens=512)
-            output_text = self.vlm_processor.decode(
-                generated_ids[0][inputs["input_ids"].shape[1]:], 
-                skip_special_tokens=False
+            res = self.vlm_model.chat(
+                image=None,
+                msgs=msgs,
+                tokenizer=self.vlm_tokenizer
             )
             end_time = time.time()
             print(f"VLM分析完成，耗时: {(end_time - start_time):.2f}秒")
             
-            # 构建响应格式
+            # 构建响应格式（适配 _extract_content_from_vlm_result 方法）
             response_data = {
-                "text": output_text
+                "choices": [
+                    {
+                        "message": {
+                            "content": res
+                        }
+                    }
+                ]
             }
             
             # 释放内存

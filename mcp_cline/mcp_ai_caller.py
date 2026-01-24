@@ -735,6 +735,24 @@ class MCPAICaller(QMainWindow):
         start_time = time.time()
         print(f"[LLM] 处理用户输入（带工具）: {input_text[:30]}...")
 
+        # 检查工具列表是否已加载
+        if not self.tools_loaded_once or len(self.tools_list) == 0:
+            print("[警告] 工具列表未加载，正在重新加载...")
+            self.add_caption_line("[系统] 工具列表未加载，正在重新加载...")
+            # 同步加载工具
+            self._load_tools_list()
+            # 等待工具加载完成
+            import time
+            wait_time = 0
+            max_wait_time = 10
+            while not self.tools_loaded_once and wait_time < max_wait_time:
+                time.sleep(1)
+                wait_time += 1
+            if not self.tools_loaded_once:
+                print("[错误] 工具加载超时，无法使用function calling")
+                self.add_caption_line("[错误] 工具加载超时，无法使用function calling")
+                return
+
         # 构建工具列表格式（OpenAI function calling 格式）
         tools = self._convert_tools_to_openai_format()
 
