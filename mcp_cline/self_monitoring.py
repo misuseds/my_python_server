@@ -596,6 +596,7 @@ class SelfMonitoringThread(threading.Thread):
 如果是工作场景（建模/办公/开发）：
 - 识别软件类型和当前操作
 - 20字以内概括当前状态
+- 重点描述用户正在进行的具体操作
 - 不要分析蓝色的和黄色的字
 
 重要要求：
@@ -612,10 +613,13 @@ class SelfMonitoringThread(threading.Thread):
                     if attempt > 0:
                         self._log(f"[VLM] 第{attempt+1}次重试...")
 
+                    vlm_start_time = time.time()
                     vlm_result = self.vlm_service.create_with_multiple_images(
                         vlm_messages,
                         image_sources=screenshots
                     )
+                    vlm_elapsed_time = time.time() - vlm_start_time
+                    self._log(f"[VLM] 多图分析完成，耗时: {vlm_elapsed_time:.2f}秒")
 
                     # 提取分析结果
                     analysis_text = self._extract_content_from_vlm_result(vlm_result)
@@ -640,10 +644,13 @@ class SelfMonitoringThread(threading.Thread):
 - 严格控制在20字以内
 - 直接描述，不要多余的标点符号"""
 
+                    vlm_start_time = time.time()
                     vlm_result = self.vlm_service.create_with_image(
                         [{"role": "user", "content": single_prompt}],
                         image_source=screenshots[-1]
                     )
+                    vlm_elapsed_time = time.time() - vlm_start_time
+                    self._log(f"[VLM] 单图分析完成，耗时: {vlm_elapsed_time:.2f}秒")
 
                     analysis_text = self._extract_content_from_vlm_result(vlm_result)
 
@@ -706,12 +713,14 @@ class SelfMonitoringThread(threading.Thread):
                 print(f"[VLM] 提取内容失败: {e}")
             return None
 
-    def _generate_commentary(self, relevant_memories: List = None) -> Optional[str]:
+    def _generate_commentary(self, relevant_memories: List = None, conversation_history: List = None, tools: List = None) -> Optional[str]:
         """
         基于VLM分析历史和相关记忆生成吐槽
 
         Args:
             relevant_memories: 从向量数据库检索到的相关记忆
+            conversation_history: 对话历史（包含工具调用信息）
+            tools: 工具列表（OpenAI function calling 格式）
 
         Returns:
             吐槽文本
@@ -763,15 +772,46 @@ class SelfMonitoringThread(threading.Thread):
 """
                 self._log("[吐槽] 已注入VLM分析到上下文")
 
+            # 添加对话历史到上下文（包含工具调用信息）
+            history_text = ""
+            if conversation_history:
+                # 只取最近5个对话
+                recent_history = conversation_history[-5:]
+                history_items = []
+                for i, item in enumerate(recent_history):
+                    role = item.get('role', 'unknown')
+                    content = item.get('content', '')
+                    if role == 'user':
+                        history_items.append(f"用户: {content}")
+                    elif role == 'assistant':
+                        # 检查是否有工具调用
+                        if 'tool_calls' in item and item['tool_calls']:
+                            tool_names = [call['function']['name'] for call in item['tool_calls']]
+                            history_items.append(f"AI: 正在执行工具调用: {', '.join(tool_names)}")
+                        else:
+                            history_items.append(f"AI: {content}")
+                    elif role == 'tool':
+                        history_items.append(f"工具结果: {content}")
+                
+                if history_items:
+                    history_text = f"""
+【最近5个对话】
+{chr(10).join(history_items)}
+
+"""
+                    self._log("[吐槽] 已注入对话历史到上下文")
+
             # 构建吐槽提示词
-            commentary_prompt = f"""{context_text}{user_input_text}{vlm_text}
+            commentary_prompt = f"""{context_text}{user_input_text}{vlm_text}{history_text}
 
 请以病娇妹妹的口吻基于以上信息给我回应。
 
 重要：
+- 必须基于VLM分析的场景信息生成回应
 - 如果用户询问个人偏好（如"我喜欢什么"），请优先基于用户的偏好记忆给出具体回答
 - 如果有用户偏好相关的记忆，必须在回应中体现
 - 保持病娇妹妹的说话风格
+- 你有能力调用工具来帮助用户完成任务，如果需要的话可以使用function calling格式
 
 要求：
 1. 40字以内
@@ -779,18 +819,104 @@ class SelfMonitoringThread(threading.Thread):
 3. 对哥哥（用户）有强烈的关心和占有欲
 4. 使用可爱的称呼，如"哥哥"、"欧尼酱"等
 5. 说话方式可爱但带有一点扭曲
-6. 对话场景：评价角色或剧情，用病娇妹妹的口吻表达
+6. 必须与当前场景相关，体现对哥哥工作的关心
 7. 结尾可以加一些可爱的表情，如♡、~、(๑•̀ㅂ•́)و✧等
 8. 个人偏好：直接回答用户的偏好问题
 9. 如果有过去的记忆，要体现出连贯性
 10. 不要使用编号列表格式"""
 
-            # 调用LLM生成吐槽
-            llm_result = self.llm_service.create([{"role": "user", "content": commentary_prompt}])
+            # 如果没有提供工具列表，使用默认工具
+            if not tools:
+                tools = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "click_mouse",
+                            "description": "点击鼠标",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "click_type": {
+                                        "type": "string",
+                                        "enum": ["left", "right", "middle"]
+                                    },
+                                    "x": {
+                                        "type": "string"
+                                    },
+                                    "y": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["click_type", "x", "y"]
+                            }
+                        }
+                    },
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "ocr_text",
+                            "description": "识别屏幕文字",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "x": {
+                                        "type": "string"
+                                    },
+                                    "y": {
+                                        "type": "string"
+                                    },
+                                    "width": {
+                                        "type": "string"
+                                    },
+                                    "height": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": ["x", "y", "width", "height"]
+                            }
+                        }
+                    }
+                ]
 
-            # 提取吐槽文本
-            commentary_text = self._extract_content_from_llm_result(llm_result)
-            return commentary_text
+            # 调用LLM生成吐槽（添加重试机制）
+            max_retries = 3
+            retry_delay = 2  # 秒
+            
+            for attempt in range(max_retries):
+                try:
+                    # 支持function calling
+                    llm_result = self.llm_service.create([{"role": "user", "content": commentary_prompt}], tools=tools)
+                    
+                    # 检查是否有工具调用
+                    if llm_result and 'choices' in llm_result and llm_result['choices']:
+                        assistant_message = llm_result['choices'][0]['message']
+                        if 'tool_calls' in assistant_message and assistant_message['tool_calls']:
+                            self._log(f"[吐槽] 检测到工具调用: {len(assistant_message['tool_calls'])} 个")
+                            # 对于吐槽功能，我们只返回文本，不执行工具调用
+                    
+                    # 提取吐槽文本
+                    commentary_text = self._extract_content_from_llm_result(llm_result)
+                    if commentary_text:
+                        # 确保编码正确
+                        try:
+                            if isinstance(commentary_text, bytes):
+                                commentary_text = commentary_text.decode('utf-8', errors='replace')
+                            elif isinstance(commentary_text, str):
+                                # 处理可能的编码问题
+                                commentary_text = commentary_text.encode('utf-8', errors='replace').decode('utf-8')
+                        except Exception as e:
+                            print(f"[吐槽] 编码处理失败: {e}")
+                        return commentary_text
+                    elif attempt < max_retries - 1:
+                        print(f"[吐槽] 生成失败：未返回有效内容，{retry_delay}秒后重试...")
+                        time.sleep(retry_delay)
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        print(f"[吐槽] 生成失败 ({attempt+1}/{max_retries}): {e}")
+                        print(f"[吐槽] {retry_delay}秒后重试...")
+                        time.sleep(retry_delay)
+                    else:
+                        raise
 
         except Exception as e:
             if self.verbose:

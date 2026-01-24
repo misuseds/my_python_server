@@ -218,19 +218,19 @@ class MCPAICaller(QMainWindow):
         """初始化LLM和VLM服务"""
         print("[初始化] 初始化服务...")
 
-        # 动态导入LLM服务
+        # 动态导入本地LLM服务
         llm_spec = importlib.util.spec_from_file_location(
-            "llm_class",
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "llm_server", "llm_class.py")
+            "llm_class_local",
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "llm_server", "llm_class_local.py")
         )
         llm_module = importlib.util.module_from_spec(llm_spec)
         llm_spec.loader.exec_module(llm_module)
-        self.LLMService = llm_module.LLMService
+        self.LLMService = llm_module.LLMServiceLocal
         self.llm_service = self.LLMService()
 
-        # 初始化VLM服务（用于战术分析师模式的视觉分析）
-        self.VLMService = llm_module.VLMService
-        self.vlm_service = self.VLMService()
+        # 初始化VLM服务（使用本地LLM服务的VLM功能）
+        self.VLMService = llm_module.LLMServiceLocal
+        self.vlm_service = self.llm_service  # 复用本地LLM服务的VLM功能
 
     def _initialize_clients(self):
         """初始化MCP客户端"""
@@ -473,17 +473,26 @@ class MCPAICaller(QMainWindow):
 
     def add_caption_line(self, text):
         """添加字幕行"""
-        print(f"[UI DEBUG] 尝试添加文本: {text}")
+        try:
+            print(f"[UI DEBUG] 尝试添加文本: {text}")
+        except UnicodeEncodeError:
+            print(f"[UI DEBUG] 尝试添加文本: {repr(text)}")
         # 检查是否在主线程
         if QThread.currentThread() == self.thread():
-            print(f"[UI DEBUG] 当前线程: {QThread.currentThread()}, 主线程: {self.thread()}  ")
-            print("[UI DEBUG] 在主线程，直接添加")
+            try:
+                print(f"[UI DEBUG] 当前线程: {QThread.currentThread()}, 主线程: {self.thread()}  ")
+                print("[UI DEBUG] 在主线程，直接添加")
+            except UnicodeEncodeError:
+                pass
             # 在主线程，直接添加
             # 只显示当前回合的内容，不保留历史
             self.caption_display.setPlainText(text)
             # 滚动到底部
             self.caption_display.verticalScrollBar().setValue(self.caption_display.verticalScrollBar().maximum())
-            print("[UI DEBUG] 文本已添加，只显示当前回合内容")
+            try:
+                print("[UI DEBUG] 文本已添加，只显示当前回合内容")
+            except UnicodeEncodeError:
+                pass
             
             # 设置定时器，10秒后清空字幕
             self.caption_timer = QTimer(self)
@@ -491,8 +500,11 @@ class MCPAICaller(QMainWindow):
             self.caption_timer.timeout.connect(self.clear_caption)
             self.caption_timer.start(10000)  # 10秒后清空
         else:
-            print(f"[UI DEBUG] 当前线程: {QThread.currentThread()}, 主线程: {self.thread()}  ")
-            print("[UI DEBUG] 不在主线程，使用信号转发")
+            try:
+                print(f"[UI DEBUG] 当前线程: {QThread.currentThread()}, 主线程: {self.thread()}  ")
+                print("[UI DEBUG] 不在主线程，使用信号转发")
+            except UnicodeEncodeError:
+                pass
             # 不在主线程，使用信号转发
             self.add_caption_signal.emit(text)
 
@@ -593,6 +605,8 @@ class MCPAICaller(QMainWindow):
                 # /r 命令：直接发送给 LLM 执行（支持 function calling）
                 query = command[2:].strip()
                 if query:
+                    # 无论什么命令，都调用LLM服务
+                    # 但对于Blender相关命令，确保使用完全独立的进程
                     self._send_user_input_to_llm_with_tools(query)
                 else:
                     self.add_caption_line(f"[命令] 用法: /r <问题描述>")
@@ -611,9 +625,61 @@ class MCPAICaller(QMainWindow):
                 self.self_monitoring_thread.add_user_input(input_text)
                 print(f"[用户输入] 已添加到自我监控线程历史记录: {input_text[:30]}...")
 
+    def _start_blender_directly(self):
+        """直接启动Blender，不依赖LLM服务"""
+        try:
+            import subprocess
+            import os
+            import sys
+            
+            blender_path = r"D:\blender\blender.exe"
+            
+            if not os.path.exists(blender_path):
+                error_msg = f"错误: 找不到Blender可执行文件: {blender_path}"
+                print(error_msg)
+                self.add_caption_line(f"[错误] {error_msg}")
+                return
+            
+            print("正在启动Blender...")
+            self.add_caption_line("[AI] 正在启动Blender...")
+            
+            if sys.platform == 'win32':
+                # Windows平台使用CREATE_NEW_PROCESS_GROUP
+                CREATE_NEW_PROCESS_GROUP = 0x00000200
+                DETACHED_PROCESS = 0x00000008
+                
+                # 在新的命令提示符窗口中启动Blender，完全独立
+                subprocess.Popen(
+                    ['start', 'cmd', '/k', blender_path], 
+                    shell=True,
+                    creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
+                    close_fds=True
+                )
+            else:
+                # 其他平台
+                subprocess.Popen(
+                    [blender_path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    close_fds=True
+                )
+            
+            success_msg = f"Blender已在完全独立的进程中启动: {blender_path}"
+            print(success_msg)
+            self.add_caption_line(f"[AI] {success_msg}")
+            
+        except Exception as e:
+            error_msg = f"启动Blender时出错: {e}"
+            print(error_msg)
+            import traceback
+            print(f"详细错误信息: {traceback.format_exc()}")
+            self.add_caption_line(f"[错误] {error_msg}")
 
     def _send_user_input_to_llm(self, input_text):
         """将用户输入发送给LLM处理"""
+        import time
+        start_time = time.time()
         print(f"[LLM] 处理用户输入: {input_text[:30]}...")
         
         # 将用户输入添加到对话历史
@@ -638,7 +704,11 @@ class MCPAICaller(QMainWindow):
         
         # 调用LLM服务
         try:
+            llm_start_time = time.time()
             response = self.llm_service.create(messages)
+            llm_elapsed_time = time.time() - llm_start_time
+            print(f"[LLM] 调用完成，耗时: {llm_elapsed_time:.2f}秒")
+            
             if response:
                 # 提取回复内容
                 content = response['choices'][0]['message']['content']
@@ -655,9 +725,14 @@ class MCPAICaller(QMainWindow):
         except Exception as e:
             print(f"[错误] 调用LLM服务失败: {e}")
             self.add_caption_line(f"[错误] 处理请求失败: {e}")
+        finally:
+            total_elapsed_time = time.time() - start_time
+            print(f"[LLM处理] 完成，总耗时: {total_elapsed_time:.2f}秒")
 
     def _send_user_input_to_llm_with_tools(self, input_text):
         """将用户输入发送给LLM处理（支持 function calling）"""
+        import time
+        start_time = time.time()
         print(f"[LLM] 处理用户输入（带工具）: {input_text[:30]}...")
 
         # 构建工具列表格式（OpenAI function calling 格式）
@@ -669,11 +744,25 @@ class MCPAICaller(QMainWindow):
             'content': input_text
         })
 
+        # 将用户输入添加到自我监控线程的历史记录中，以便吐槽llm能够使用
+        if hasattr(self, 'self_monitoring_thread') and self.self_monitoring_thread:
+            self.self_monitoring_thread.add_user_input(input_text)
+            print(f"[用户输入] 已添加到自我监控线程历史记录: {input_text[:30]}...")
+
         # 构建messages格式，用于LLM服务
         messages = []
 
+        # 读取knowledge.txt文件
+        knowledge_content = ""
+        knowledge_path = os.path.join(os.path.dirname(__file__), 'knowledge.txt')
+        try:
+            with open(knowledge_path, 'r', encoding='utf-8') as f:
+                knowledge_content = f.read().strip()
+        except Exception as e:
+            print(f"[警告] 读取knowledge.txt失败: {e}")
+
         # 添加系统消息
-        system_prompt = """你是一个智能助手，可以调用各种工具来帮助用户完成任务。
+        system_prompt = f"""你是一个智能助手，可以调用各种工具来帮助用户完成任务。
 
 可用工具包括：
 - Blender工具：3D模型处理、导入导出、骨骼绑定等
@@ -683,7 +772,14 @@ class MCPAICaller(QMainWindow):
 - 浏览器工具：打开URL
 - 点赞收藏检测工具：检测点赞和收藏按钮
 
-根据用户的需求，选择合适的工具来执行任务。如果需要调用工具，请使用function calling格式。"""
+重要规则：
+1. 对于一般性问题（如"下一步做什么"、"如何操作"等），请先给出详细的建议和步骤，不要直接调用工具
+2. 只有当用户明确要求执行具体操作时，才使用工具调用
+3. 如果需要调用工具，请确保用户已经明确了操作细节
+
+以下是相关的流程知识：
+{knowledge_content}
+"""
         messages.append({
             'role': 'system',
             'content': system_prompt
@@ -694,41 +790,99 @@ class MCPAICaller(QMainWindow):
         for item in recent_history:
             messages.append(item)
 
-        # 调用LLM服务
-        try:
-            response = self.llm_service.create(messages, tools=tools)
-            if response:
-                # 提取回复内容
-                assistant_message = response['choices'][0]['message']
+        # 调用LLM服务（添加循环处理，支持多轮工具调用）
+        max_rounds = 10  # 最大循环轮数
+        current_round = 0
+        
+        while current_round < max_rounds:
+            try:
+                # 重新构建messages，包含最新的对话历史
+                messages = []
+                
+                # 添加系统消息
+                messages.append({
+                    'role': 'system',
+                    'content': system_prompt
+                })
+                
+                # 添加最近的对话历史（最多10条）
+                recent_history = self.conversation_history[-10:]
+                for item in recent_history:
+                    messages.append(item)
+                
+                llm_start_time = time.time()
+                response = self.llm_service.create(messages, tools=tools)
+                llm_elapsed_time = time.time() - llm_start_time
+                print(f"[LLM] 调用完成，耗时: {llm_elapsed_time:.2f}秒")
+                
+                if response:
+                    # 提取回复内容
+                    assistant_message = response['choices'][0]['message']
 
-                # 检查是否有工具调用
-                if 'tool_calls' in assistant_message and assistant_message['tool_calls']:
-                    print(f"[LLM] 检测到工具调用: {len(assistant_message['tool_calls'])} 个")
+                    # 检查是否有工具调用
+                    if 'tool_calls' in assistant_message and assistant_message['tool_calls']:
+                        print(f"[LLM] 检测到工具调用: {len(assistant_message['tool_calls'])} 个")
 
-                    # 处理工具调用
-                    self._execute_tool_calls(assistant_message['tool_calls'])
+                        # 处理工具调用
+                        tool_results = self._execute_tool_calls(assistant_message['tool_calls'])
 
-                    # 将工具调用消息添加到对话历史
-                    self.conversation_history.append(assistant_message)
+                        # 将工具调用消息添加到对话历史
+                        self.conversation_history.append(assistant_message)
 
-                    # 显示在主窗口中
-                    self.add_caption_line(f"[AI] 正在执行 {len(assistant_message['tool_calls'])} 个工具调用...")
-                else:
-                    # 普通文本回复
-                    content = assistant_message.get('content', '')
-                    print(f"[LLM] 生成回复完成: {content[:30]}...")
+                        # 显示在主窗口中
+                        self.add_caption_line(f"[AI] 正在执行 {len(assistant_message['tool_calls'])} 个工具调用...")
+                        
+                        # 将工具结果添加到对话历史，供下一轮使用
+                        for tool_call, result in tool_results.items():
+                            self.conversation_history.append({
+                                'role': 'tool',
+                                'tool_call_id': tool_call,
+                                'content': result
+                            })
+                        
+                        # 继续循环，处理下一轮
+                        current_round += 1
+                    else:
+                        # 普通文本回复，任务完成
+                        content = assistant_message.get('content', '')
+                        print(f"[LLM] 生成回复完成: {content[:30]}...")
 
-                    # 将LLM回复添加到对话历史
-                    self.conversation_history.append({
-                        'role': 'assistant',
-                        'content': content
-                    })
+                        # 将LLM回复添加到对话历史
+                        self.conversation_history.append({
+                            'role': 'assistant',
+                            'content': content
+                        })
 
-                    # 显示在主窗口中
-                    self.add_caption_line(f"[AI] {content}")
-        except Exception as e:
-            print(f"[错误] 调用LLM服务失败: {e}")
-            self.add_caption_line(f"[错误] 处理请求失败: {e}")
+                        # 显示在主窗口中
+                        self.add_caption_line(f"[AI] {content}")
+                        
+                        # 任务完成，退出循环
+                        break
+            except Exception as e:
+                print(f"[错误] 调用LLM服务失败: {e}")
+                self.add_caption_line(f"[错误] 处理请求失败: {e}")
+                break
+        
+        if current_round >= max_rounds:
+            self.add_caption_line(f"[AI] 已达到最大处理轮数，任务可能未完成")
+        
+        # 触发吐槽llm生成回复，传递工具列表和对话历史
+        if hasattr(self, 'self_monitoring_thread') and self.self_monitoring_thread:
+            # 调用自我监控线程的方法生成吐槽，传递工具列表和对话历史
+            try:
+                # 检查self_monitoring_thread是否有_generate_commentary方法
+                if hasattr(self.self_monitoring_thread, '_generate_commentary'):
+                    # 传递工具列表和对话历史给吐槽llm
+                    self.self_monitoring_thread._generate_commentary(
+                        conversation_history=self.conversation_history,
+                        tools=tools
+                    )
+                    print("[吐槽] 已触发吐槽llm生成回复，支持function calling")
+            except Exception as e:
+                print(f"[错误] 触发吐槽失败: {e}")
+        
+        total_elapsed_time = time.time() - start_time
+        print(f"[/r命令] 处理完成，总耗时: {total_elapsed_time:.2f}秒")
 
     def _convert_tools_to_openai_format(self):
         """将工具列表转换为 OpenAI function calling 格式"""
@@ -753,12 +907,17 @@ class MCPAICaller(QMainWindow):
         return tools
 
     def _execute_tool_calls(self, tool_calls):
-        """执行工具调用"""
+        """执行工具调用并返回结果"""
         import asyncio
+        import time
+        start_time = time.time()
 
         async def execute_single_tool(tool_call):
             """执行单个工具调用"""
+            tool_call_id = tool_call.get('id', f"tool_{int(time.time())}")
             tool_name = tool_call['function']['name']
+            tool_start_time = time.time()
+            
             try:
                 arguments_str = tool_call['function'].get('arguments', '{}')
                 arguments = json.loads(arguments_str) if isinstance(arguments_str, str) else arguments_str
@@ -783,31 +942,30 @@ class MCPAICaller(QMainWindow):
                     asyncio.set_event_loop(loop)
                     try:
                         result = await self.mcp_client.call_tool(server_name, tool_name, arguments)
-                        print(f"[工具调用] 执行成功: {result}")
-
-                        # 将工具调用结果添加到对话历史
-                        self.conversation_history.append({
-                            'role': 'tool',
-                            'name': tool_name,
-                            'content': str(result)
-                        })
+                        try:
+                            print(f"[工具调用] 执行成功: {result}")
+                        except UnicodeEncodeError:
+                            print(f"[工具调用] 执行成功: {repr(result)}")
 
                         # 获取 LLM 对工具结果的总结
-                        self._get_llm_summary_for_tool_result(tool_name, result)
-
-                        return result
+                        summary = self._get_llm_summary_for_tool_result(tool_name, result)
+                        
+                        return tool_call_id, str(summary) if summary else str(result)
                     finally:
                         loop.close()
                 else:
                     print(f"[工具调用] 未找到工具 {tool_name} 所属的服务器")
                     self.add_caption_line(f"[错误] 未找到工具: {tool_name}")
-                    return None
+                    return tool_call_id, f"错误: 未找到工具 {tool_name}"
             except Exception as e:
                 print(f"[工具调用] 执行失败: {e}")
                 import traceback
                 traceback.print_exc()
                 self.add_caption_line(f"[错误] 工具执行失败: {e}")
-                return None
+                return tool_call_id, f"错误: {str(e)}"
+            finally:
+                tool_elapsed_time = time.time() - tool_start_time
+                print(f"[工具调用] {tool_name} 执行完成，耗时: {tool_elapsed_time:.2f}秒")
 
         # 创建事件循环并执行所有工具调用
         loop = asyncio.new_event_loop()
@@ -822,11 +980,24 @@ class MCPAICaller(QMainWindow):
         try:
             results = loop.run_until_complete(execute_all_tools())
             print(f"[工具调用] 所有工具执行完成")
+            
+            # 构建结果字典
+            tool_results = {}
+            for result in results:
+                if isinstance(result, tuple) and len(result) == 2:
+                    tool_call_id, tool_result = result
+                    tool_results[tool_call_id] = tool_result
+                else:
+                    print(f"[工具调用] 无效的结果格式: {result}")
+            
+            return tool_results
         finally:
             loop.close()
+            total_elapsed_time = time.time() - start_time
+            print(f"[工具调用] 全部执行完成，总耗时: {total_elapsed_time:.2f}秒")
 
     def _get_llm_summary_for_tool_result(self, tool_name, tool_result):
-        """获取 LLM 对工具执行结果的总结"""
+        """获取 LLM 对工具执行结果的总结并返回"""
         try:
             # 构建系统消息
             system_prompt = "你是一个智能助手，请简要总结工具执行的结果。"
@@ -844,21 +1015,29 @@ class MCPAICaller(QMainWindow):
 
             if response:
                 summary = response['choices'][0]['message']['content']
-                print(f"[LLM] 工具结果总结: {summary[:50]}...")
-
-                # 将总结添加到对话历史
-                self.conversation_history.append({
-                    'role': 'assistant',
-                    'content': summary
-                })
+                try:
+                    print(f"[LLM] 工具结果总结: {summary[:50]}...")
+                except UnicodeEncodeError:
+                    print(f"[LLM] 工具结果总结: {repr(summary[:50])}...")
 
                 # 显示在主窗口中
                 self.add_caption_line(f"[AI] {summary}")
+                
+                return summary
 
         except Exception as e:
-            print(f"[错误] 获取工具结果总结失败: {e}")
+            try:
+                print(f"[错误] 获取工具结果总结失败: {e}")
+            except UnicodeEncodeError:
+                print(f"[错误] 获取工具结果总结失败: {repr(e)}")
             # 如果总结失败，直接显示结果
-            self.add_caption_line(f"[工具] {tool_name}: {str(tool_result)[:100]}...")
+            try:
+                fallback_message = f"{tool_name} 执行完成: {str(tool_result)[:100]}..."
+                self.add_caption_line(f"[工具] {fallback_message}")
+            except UnicodeEncodeError:
+                fallback_message = f"{tool_name} 执行完成: {repr(str(tool_result)[:100])}..."
+                self.add_caption_line(f"[工具] {fallback_message}")
+            return fallback_message
 
     def auto_record_game_state(self):
         """自动记录游戏状态"""

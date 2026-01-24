@@ -209,23 +209,25 @@ class BlenderHTTPServer:
             ready, _, _ = select.select([self.socket], [], [], 0)  # 非阻塞检查
             
             if ready:
-                client_socket, address = self.socket.accept()
-                
-                # 设置客户端socket为非阻塞模式
-                client_socket.setblocking(False)
-                
-                # 读取请求数据
-                request_data = self._read_request(client_socket)
-                
-                if request_data:
-                    # 创建处理线程
-                    thread = threading.Thread(
-                        target=self._process_request_data,
-                        args=(request_data, client_socket, address)
-                    )
-                    thread.daemon = True
-                    thread.start()
-                
+                try:
+                    client_socket, address = self.socket.accept()
+                    
+                    # 设置客户端socket为非阻塞模式
+                    client_socket.setblocking(False)
+                    
+                    # 读取请求数据
+                    request_data = self._read_request(client_socket)
+                    
+                    if request_data:
+                        # 创建处理线程
+                        thread = threading.Thread(
+                            target=self._process_request_data,
+                            args=(request_data, client_socket, address)
+                        )
+                        thread.daemon = True
+                        thread.start()
+                except Exception as e:
+                    print(f"Error accepting connection: {e}")
         except socket.error as e:
             if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
                 print(f"Socket error: {e}")
@@ -276,17 +278,22 @@ class BlenderHTTPServer:
             return None
     
     def _process_request_data(self, request_data, client_socket, address):  
-        """处理请求数据"""  
+        """处理请求数据"""
         try:  
             # 创建处理器  
             handler = BlenderAPIHandler(request_data, client_socket, address)  
             
-            # 在主线程上调度执行  
-            def execute_on_main_thread():  
-                handler.handle_request()  
-                return None  # 停止定时器  
+            # 直接在新线程中处理请求，避免阻塞主线程
+            def process_in_thread():
+                try:
+                    handler.handle_request()
+                except Exception as e:
+                    print(f"Error processing request in thread: {e}")
             
-            bpy.app.timers.register(execute_on_main_thread, first_interval=0.0)  
+            # 创建并启动处理线程
+            process_thread = threading.Thread(target=process_in_thread)
+            process_thread.daemon = True
+            process_thread.start()
             
         except Exception as e:  
             print(f"Error processing request: {e}")

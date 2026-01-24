@@ -54,6 +54,10 @@ class MCPClient:
                 'description': '点赞收藏检测工具服务器'
             }
         }
+        
+        # 会话池，用于保持长连接
+        self.session_pool = {}
+        self.session_lock = asyncio.Lock()
 
     async def list_tools(self, server_name):
         """列出指定服务器的所有可用工具"""
@@ -97,6 +101,45 @@ class MCPClient:
             print(f"详细错误信息: {traceback.format_exc()}")
             return []
 
+    async def _get_or_create_session(self, server_name):
+        """获取或创建服务器会话"""
+        async with self.session_lock:
+            if server_name in self.session_pool:
+                session, read, write = self.session_pool[server_name]
+                try:
+                    # 测试会话是否仍然有效
+                    await session.list_tools()
+                    return session
+                except Exception as e:
+                    print(f"会话已失效，创建新会话: {e}")
+                    # 清理失效会话
+                    if server_name in self.session_pool:
+                        del self.session_pool[server_name]
+
+            # 创建新会话
+            server_config = self.servers[server_name]
+            script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), *server_config['args'])
+            if not os.path.exists(script_path):
+                print(f"错误：找不到服务器脚本 '{script_path}'")
+                return None
+
+            server_params = StdioServerParameters(
+                command=server_config['command'],
+                args=server_config['args'],
+                env=None
+            )
+
+            try:
+                read, write = await stdio_client(server_params)
+                session = ClientSession(read, write)
+                await session.initialize()
+                self.session_pool[server_name] = (session, read, write)
+                print(f"已创建新会话: {server_name}")
+                return session
+            except Exception as e:
+                print(f"创建会话时出错: {e}")
+                return None
+
     async def call_tool(self, server_name, tool_name, arguments=None):
         """调用指定服务器的指定工具"""
         if server_name not in self.servers:
@@ -106,40 +149,32 @@ class MCPClient:
         if arguments is None:
             arguments = {}
 
-        server_config = self.servers[server_name]
-        
-        # 检查脚本文件是否存在
-        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), *server_config['args'])
-        if not os.path.exists(script_path):
-            print(f"错误：找不到服务器脚本 '{script_path}'")
-            return None
-
-        server_params = StdioServerParameters(
-            command=server_config['command'],
-            args=server_config['args'],
-            env=None
-        )
-
         try:
-            async with stdio_client(server_params) as (read, write):
-                async with ClientSession(read, write) as session:
-                    # 初始化会话
-                    await session.initialize()
+            # 获取或创建会话
+            session = await self._get_or_create_session(server_name)
+            if not session:
+                return None
 
-                    # 调用工具
-                    result = await session.call_tool(tool_name, arguments)
+            # 调用工具
+            result = await session.call_tool(tool_name, arguments)
 
-                    print(f"\n调用 {server_name} 的 {tool_name} 工具结果：")
-                    for content in result.content:
-                        if hasattr(content, 'text'):
-                            print(content.text)
-                        elif hasattr(content, 'type'):
-                            print(f"[{content.type}]: {content}")
+            print(f"\n调用 {server_name} 的 {tool_name} 工具结果：")
+            for content in result.content:
+                if hasattr(content, 'text'):
+                    print(content.text)
+                elif hasattr(content, 'type'):
+                    print(f"[{content.type}]: {content}")
 
-                    return result
+            return result
 
         except Exception as e:
             print(f"调用 {server_name} 的 {tool_name} 时出错: {e}")
             import traceback
             print(f"详细错误信息: {traceback.format_exc()}")
+            
+            # 会话可能已失效，从会话池中移除
+            async with self.session_lock:
+                if server_name in self.session_pool:
+                    del self.session_pool[server_name]
+            
             return None

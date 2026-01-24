@@ -21,14 +21,19 @@ def call_blender_api(endpoint, code):
     }
     
     try:
-        response = requests.post(url, json=payload)
+        # 添加超时处理，避免阻塞
+        response = requests.post(url, json=payload, timeout=30)
         return response.json()
     except requests.exceptions.RequestException as e:
         print(f"请求错误: {e}")
-        return None
+        # 返回错误信息，而不是None
+        return {"status": "error", "message": str(e)}
+    except Exception as e:
+        print(f"未知错误: {e}")
+        return {"status": "error", "message": str(e)}
 def start_blender():
     """
-    在命令提示符中启动Blender
+    在完全独立的进程中启动Blender
     """
     blender_path = r"D:\blender\blender.exe"
 
@@ -37,13 +42,40 @@ def start_blender():
         return False
 
     try:
-        # 在新的命令提示符窗口中启动Blender
-        subprocess.Popen(['start', 'cmd', '/k', blender_path], shell=True)
-        print(f"Blender已在新终端中启动: {blender_path}")
-
+        # 在完全独立的进程中启动Blender
+        # 使用creationflags=CREATE_NEW_PROCESS_GROUP确保进程完全独立
+        import subprocess
+        import os
+        import sys
+        
+        if sys.platform == 'win32':
+            # Windows平台使用CREATE_NEW_PROCESS_GROUP
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            DETACHED_PROCESS = 0x00000008
+            
+            # 在新的命令提示符窗口中启动Blender，完全独立
+            subprocess.Popen(
+                ['start', 'cmd', '/k', blender_path], 
+                shell=True,
+                creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
+                close_fds=True
+            )
+        else:
+            # 其他平台
+            subprocess.Popen(
+                [blender_path],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                close_fds=True
+            )
+        
+        print(f"Blender已在完全独立的进程中启动: {blender_path}")
         return True
     except Exception as e:
         print(f"启动Blender时出错: {e}")
+        import traceback
+        print(f"详细错误信息: {traceback.format_exc()}")
         return False
 
 @mcp.tool()
