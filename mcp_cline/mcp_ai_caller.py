@@ -220,17 +220,17 @@ class MCPAICaller(QMainWindow):
 
         # 动态导入本地LLM服务
         llm_spec = importlib.util.spec_from_file_location(
-            "llm_class_local",
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "llm_server", "llm_class_local.py")
+            "llm_class",
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "llm_server", "llm_class.py")
         )
         llm_module = importlib.util.module_from_spec(llm_spec)
         llm_spec.loader.exec_module(llm_module)
-        self.LLMService = llm_module.LLMServiceLocal
+        self.LLMService = llm_module.LLMService
         self.llm_service = self.LLMService()
 
-        # 初始化VLM服务（使用本地LLM服务的VLM功能）
-        self.VLMService = llm_module.LLMServiceLocal
-        self.vlm_service = self.llm_service  # 复用本地LLM服务的VLM功能
+        # 初始化VLM服务（使用本地VLM服务）
+        self.VLMService = llm_module.VLMService
+        self.vlm_service = self.VLMService()  # 使用独立的VLM服务
 
     def _initialize_clients(self):
         """初始化MCP客户端"""
