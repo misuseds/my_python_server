@@ -210,7 +210,7 @@ class VLMService:
     def __init__(self):
         # 使用 WSL 本地服务
         self.api_url = 'http://localhost:8001/v1'
-        self.model_name = './models/Qwen_Qwen2.5-0.5B'
+        self.model_name = '/root/models/OpenBMB_MiniCPM-V-2_6-int4'
         self.api_key = 'sk-xxx'  # 本地服务不需要真实 API 密钥
 
         print(f"VLM服务初始化完成，模型: {self.model_name}")
