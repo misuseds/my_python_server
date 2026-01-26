@@ -13,13 +13,14 @@ import requests
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 debug = False
-
+LLM_DIR = f"/root/my_python_server/models/OpenBMB_MiniCPM4-0.5B-QAT-Int4-GPTQ-format"
+VLM_DIR = f"/root/my_python_server/models/OpenBMB_MiniCPM-V-2_6-int4"
 
 class LLMService:
     def __init__(self):
         # 使用 WSL 本地服务
         self.api_url = 'http://localhost:8000/v1'
-        self.model_name = '/root/models/Qwen_Qwen2.5-0.5B-Instruct'
+        self.model_name = LLM_DIR
         self.api_key = 'sk-xxx'  # 本地服务不需要真实 API 密钥
 
         # 配置 HTTP 会话，添加重试和 SSL 优化
@@ -210,7 +211,7 @@ class VLMService:
     def __init__(self):
         # 使用 WSL 本地服务
         self.api_url = 'http://localhost:8001/v1'
-        self.model_name = '/root/models/OpenBMB_MiniCPM-V-2_6-int4'
+        self.model_name = VLM_DIR
         self.api_key = 'sk-xxx'  # 本地服务不需要真实 API 密钥
 
         print(f"VLM服务初始化完成，模型: {self.model_name}")
