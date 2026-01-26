@@ -39,3 +39,5 @@ vector_memory_db*
 *checkpoint*pth
 *cnn_masks*
 *test_results*
+models*
+vllm-env*
