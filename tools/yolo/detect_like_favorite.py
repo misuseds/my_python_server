@@ -16,7 +16,7 @@ def detect_like_favorite():
     """
     # 获取项目根目录
     current_dir = Path(__file__).parent
-    model_path = current_dir.parent / "models" / "like_favorite.pt"
+    model_path = current_dir.parent / "my_models" / "like_favorite.pt"
     
     if not model_path.exists():
         return f"错误: 模型文件不存在 - {model_path}"

@@ -25,9 +25,15 @@ if sys.stdout.encoding != 'utf-8':
 if sys.stderr.encoding != 'utf-8':
     sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
 
+# 禁用所有print语句，以确保MCP服务器只输出JSON格式的消息
+import builtins
+original_print = builtins.print
+def silent_print(*args, **kwargs):
+    pass
+builtins.print = silent_print
+
 # 总是导入 pytesseract 作为备用
 import pytesseract
-print("[OCR] Tesseract 已加载")
 
 # 尝试导入 EasyOCR
 try:
@@ -35,13 +41,10 @@ try:
     EASYOCR_AVAILABLE = True
     # 初始化 EasyOCR 阅读器（支持中英文）
     reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)  # 设置 gpu=True 以使用 GPU
-    print("[OCR] EasyOCR 初始化成功")
 except ImportError:
     EASYOCR_AVAILABLE = False
-    print("[OCR] EasyOCR 未安装，将使用 Tesseract")
 except Exception as e:
     EASYOCR_AVAILABLE = False
-    print(f"[OCR] EasyOCR 初始化失败: {e}")
 
 mcp = FastMCP("ocr_tools")
 
