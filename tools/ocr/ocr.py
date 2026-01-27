@@ -25,21 +25,6 @@ if sys.stdout.encoding != 'utf-8':
 if sys.stderr.encoding != 'utf-8':
     sys.stderr = open(sys.stderr.fileno(), mode='w', encoding='utf-8', buffering=1)
 
-# 禁用 onednn 以避免错误
-os.environ['OMP_NUM_THREADS'] = '1'
-os.environ['MKL_NUM_THREADS'] = '1'
-os.environ['USE_ONEDNN'] = '0'
-os.environ['PADDLE_DISABLE_ONEDNN'] = '1'
-
-# 尝试导入PaddleOCR
-try:
-    from paddleocr import PaddleOCR
-    PADDLEOCR_AVAILABLE = True
-    print("[OCR] PaddleOCR 已加载")
-except ImportError:
-    PADDLEOCR_AVAILABLE = False
-    print("[OCR] 警告: PaddleOCR 未安装，将使用 Tesseract OCR")
-
 # 总是导入 pytesseract 作为备用
 import pytesseract
 print("[OCR] Tesseract 已加载")
@@ -57,36 +42,6 @@ except ImportError:
 except Exception as e:
     EASYOCR_AVAILABLE = False
     print(f"[OCR] EasyOCR 初始化失败: {e}")
-
-# 初始化 PaddleOCR（延迟初始化）
-paddleocr_instance = None
-
-def get_paddleocr():
-    """获取或初始化PaddleOCR实例"""
-    global paddleocr_instance
-    if paddleocr_instance is None and PADDLEOCR_AVAILABLE:
-        try:
-            print("[OCR] 正在初始化 PaddleOCR...")
-            # 禁用 mkldnn 以避免 onednn 错误
-            paddleocr_instance = PaddleOCR(
-                use_angle_cls=True,  # 启用方向分类
-                lang='ch',  # 中文模型
-                enable_mkldnn=False  # 禁用 mkldnn 以避免 onednn 错误
-            )
-            print("[OCR] PaddleOCR 初始化成功")
-        except Exception as e:
-            print(f"[OCR] PaddleOCR 初始化失败: {e}")
-            # 尝试使用最简单的初始化方式
-            try:
-                print("[OCR] 尝试使用简化参数初始化 PaddleOCR...")
-                paddleocr_instance = PaddleOCR(
-                    enable_mkldnn=False  # 禁用 mkldnn 以避免 onednn 错误
-                )
-                print("[OCR] PaddleOCR 简化初始化成功")
-            except Exception as e2:
-                print(f"[OCR] PaddleOCR 简化初始化也失败: {e2}")
-                paddleocr_instance = None
-    return paddleocr_instance
 
 mcp = FastMCP("ocr_tools")
 
@@ -120,128 +75,6 @@ def preprocess_image(image: Image.Image) -> Image.Image:
     img_binary = img_denoised.point(lambda x: 0 if x < 128 else 255)
     
     return img_binary
-
-
-def paddleocr_ocr(image: Image.Image) -> Dict:
-    """使用PaddleOCR进行识别"""
-    try:
-        start_time = time.time()
-        
-        # 获取PaddleOCR实例
-        ocr = get_paddleocr()
-        if ocr is None:
-            raise Exception("PaddleOCR 不可用")
-        
-        # 转换为numpy数组（RGB格式）
-        img_array = np.array(image)
-        
-        # 保存调试图像
-        output_dir = os.path.join(os.path.dirname(__file__), "output")
-        os.makedirs(output_dir, exist_ok=True)
-        debug_path = os.path.join(output_dir, f"debug_original_{int(time.time())}.png")
-        image.save(debug_path)
-        print(f"[OCR] 调试图像已保存: {debug_path}")
-        print(f"[OCR] 图像形状: {img_array.shape}")
-        print(f"[OCR] 图像类型: {img_array.dtype}")
-        
-        # 如果是RGBA，转换为RGB
-        if len(img_array.shape) == 3 and img_array.shape[2] == 4:
-            print("[OCR] 转换图像格式: RGBA -> RGB")
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
-        elif len(img_array.shape) == 3:
-            print("[OCR] 转换图像格式: RGB -> BGR")
-            img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-        
-        # 调整图像大小以提高性能
-        print("[OCR] 调整图像大小...")
-        height, width = img_array.shape[:2]
-        max_size = 1024
-        if max(height, width) > max_size:
-            scale = max_size / max(height, width)
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            img_array = cv2.resize(img_array, (new_width, new_height))
-            print(f"[OCR] 调整后图像大小: {new_width}x{new_height}")
-        
-        # 保存调整后的图像
-        resized_path = os.path.join(output_dir, f"debug_resized_{int(time.time())}.png")
-        cv2.imwrite(resized_path, img_array)
-        print(f"[OCR] 调整后图像已保存: {resized_path}")
-        
-        # 执行OCR识别，移除 cls 参数
-        print("[OCR] 开始执行 PaddleOCR 识别...")
-        result = ocr.ocr(img_array)
-        print("[OCR] PaddleOCR 识别完成")
-        
-        ocr_result = []
-        confidence_threshold = 60  # PaddleOCR置信度阈值（百分比）
-        
-        print(f"[OCR] 使用 PaddleOCR 识别")
-        print(f"[OCR] 使用置信度阈值: {confidence_threshold}%")
-        
-        # 解析PaddleOCR结果
-        if result and result[0]:
-            for line in result[0]:
-                if line is None:
-                    continue
-                    
-                # 提取文本和置信度
-                text_info = line[1]
-                text = text_info[0].strip()
-                confidence = float(text_info[1]) * 100  # 转换为百分比
-                
-                # 提取坐标信息
-                points = line[0]  # 四个角点坐标
-                
-                # 计算边界框
-                x_coords = [p[0] for p in points]
-                y_coords = [p[1] for p in points]
-                x_min, x_max = int(min(x_coords)), int(max(x_coords))
-                y_min, y_max = int(min(y_coords)), int(max(y_coords))
-                
-                width = x_max - x_min
-                height = y_max - y_min
-                center_x = (x_min + x_max) // 2
-                center_y = (y_min + y_max) // 2
-                
-                # 无效字符模式（特殊符号、乱码）
-                invalid_pattern = re.compile(r'^[`\'"\-_=+\[\]{}\\|<>~^%$#@&*!?,.;:]+|^[^\w\u4e00-\u9fff\s]+$')
-                
-                # 过滤条件
-                if (text and
-                    confidence >= confidence_threshold and
-                    len(text) > 0 and
-                    not invalid_pattern.match(text) and
-                    width > 10 and height > 10 and
-                    width < 2000 and height < 1000):
-                    
-                    ocr_result.append({
-                        'text': text,
-                        'center_x': center_x,
-                        'center_y': center_y,
-                        'width': width,
-                        'height': height,
-                        'confidence': confidence,
-                        'box': points  # 保存四角点坐标用于调试
-                    })
-                    print(f"[OCR] 识别到文本: '{text}' (置信度: {confidence:.1f}%, 位置: ({center_x},{center_y}), 大小: {width}x{height})")
-        
-        elapsed_time = time.time() - start_time
-        print(f"[OCR] PaddleOCR 完成，耗时: {elapsed_time:.2f}秒")
-        print(f"[OCR] 识别到 {len(ocr_result)} 条文本")
-        
-        return {
-            'success': True,
-            'results': ocr_result,
-            'elapsed_time': elapsed_time,
-            'method': 'paddleocr'
-        }
-    except Exception as e:
-        print(f"[OCR] PaddleOCR 失败: {e}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
 
 
 def easyocr_ocr(image: Image.Image) -> Dict:
@@ -928,7 +761,7 @@ def get_all_text(image_path: str = None, left: int = None, top: int = None,
         print(f"[OCR] 总耗时: {total_elapsed_time:.2f}秒")
 
         method = local_result.get('method', 'unknown')
-        method_name = 'PaddleOCR' if method == 'paddleocr' else 'Tesseract' if method == 'tesseract' else '未知'
+        method_name = 'EasyOCR' if method == 'easyocr' else 'Tesseract' if method == 'tesseract' else '未知'
         return f"识别结果:\n{ocr_result}\n\n耗时: {total_elapsed_time:.2f}秒\n方法: {method_name}"
 
     except Exception as e:

@@ -70,19 +70,6 @@ if __name__ == "__main__":
     
     download_models()
     
-    llm_cmd = (
-        f"/root/my_python_server/vllm-env/bin/python -m vllm.entrypoints.openai.api_server "
-        f"--model {LLM_DIR} "
-        f"--host 0.0.0.0 --port 8000 "
-        f"--quantization gptq_marlin "
-        f"--trust-remote-code "
-        f"--dtype bfloat16 "
-        f"--gpu-memory-utilization 0.1 "
-        f"--max-num-batched-tokens 512 "
-        f"--enable-auto-tool-choice "
-        f"--tool-call-parser auto"
-    )
-    
     vlm_cmd = (
         f"/root/my_python_server/vllm-env/bin/python -m vllm.entrypoints.openai.api_server "
         f"--model {VLM_DIR} "
@@ -95,14 +82,14 @@ if __name__ == "__main__":
     )
     
     print("\n🌐 访问地址:")
-    print(f"   - LLM: http://localhost:8000/v1")
     print(f"   - VLM: http://localhost:8001/v1")
     
  
-    llm_process = start_process(llm_cmd, "LLM 服务 (端口 8000)")
+    # 只启动VLM服务，所有LLM的活由VLM干
+    vlm_process = start_process(vlm_cmd, "VLM 服务 (端口 8001)")
     
-    print("\n✅ 所有服务已启动")
-    print("📝 按 Ctrl+C 停止所有服务...")
+    print("\n✅ VLM服务已启动")
+    print("📝 按 Ctrl+C 停止VLM服务...")
     
     # 等待进程结束
     try:

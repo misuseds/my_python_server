@@ -25,32 +25,32 @@ class MCPClient:
         self.servers = {
             'blender-tool': {
                 'command': sys.executable,
-                'args': [os.path.join(project_root, 'my_python_server', 'blender_cline', 'blender_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'tools', 'blender_cline', 'blender_api_tool.py')],
                 'description': 'Blender工具服务器'
             },
             'ue-tool': {
                 'command': sys.executable,
-                'args': [os.path.join(project_root, 'my_python_server', 'ue_cline', 'ue_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server',  'tools', 'ue_cline', 'ue_api_tool.py')],
                 'description': 'Unreal Engine工具服务器'
             },
             'browser-tool': {
                 'command': sys.executable,
-                'args': [os.path.join(project_root, 'my_python_server', 'browser_cline', 'browser_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server',  'tools', 'browser_cline', 'browser_api_tool.py')],
                 'description': '浏览器工具服务器'
             },
             'computer-tool': {
                 'command': sys.executable,
-                'args': [os.path.join(project_root, 'my_python_server', 'computer_cline', 'computer_api_tool.py')],
+                'args': [os.path.join(project_root, 'my_python_server',  'tools', 'computer_cline', 'computer_api_tool.py')],
                 'description': '计算机控制工具服务器'
             },
             'ocr-tool': {
                 'command': sys.executable,
-                'args': [os.path.join(project_root, 'my_python_server', 'ocr', 'ocr.py')],
+                'args': [os.path.join(project_root, 'my_python_server', 'tools',  'ocr', 'ocr.py')],
                 'description': 'OCR工具服务器'
             },
             'likefavarite-tools': {
                 'command': sys.executable,
-                'args': [os.path.join(project_root, 'my_python_server', 'yolo', 'detect_like_favorite.py')],
+                'args': [os.path.join(project_root, 'my_python_server',  'tools', 'yolo', 'detect_like_favorite.py')],
                 'description': '点赞收藏检测工具服务器'
             }
         }

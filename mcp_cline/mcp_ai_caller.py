@@ -21,14 +21,7 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QObject, QThread, QMetaObject, 
 from PyQt6.QtGui import QKeySequence, QShortcut, QColor
 import importlib.util
 
-# 导入记忆窗口 (使用绝对导入)
-try:
-    from memory_window import MemoryWindow
-except ImportError:
-    MemoryWindow = None
-
 # 导入拆分出来的组件
-from components.monitoring_window import MonitoringWindow
 from components.content_extractor import ContentExtractor
 from components.tools_dialog import ToolsDialog
 from components.tool_loader import ToolLoader
@@ -52,9 +45,6 @@ class MCPAICaller(QMainWindow):
         # 初始化变量
         self._initialize_variables()
 
-        # 设置记忆系统
-        self._setup_memory_system()
-
         # 设置定时器
         self._setup_timers()
 
@@ -66,12 +56,6 @@ class MCPAICaller(QMainWindow):
 
         # 初始化客户端
         self._initialize_clients()
-
-        # 设置知识库
-        self._setup_knowledge_base()
-
-        # 设置监控窗口
-        self._setup_monitoring_windows()
 
         # 设置UI
         self._setup_ui()
@@ -130,18 +114,6 @@ class MCPAICaller(QMainWindow):
         # 工具调用状态
         self.tool_calling = False
 
-        # 记忆窗口对象
-        self.memory_window = None
-
-        # 吐槽窗口对象
-        self.commentary_window = None
-
-        # 记忆系统
-        self.vector_memory = None
-
-        # 知识库
-        self.knowledge_base = None
-
         # 工具加载器
         self.tool_loader = None
 
@@ -157,22 +129,6 @@ class MCPAICaller(QMainWindow):
         # 工具加载间隔（秒）
         self.tools_load_interval = 60
 
-    def _setup_memory_system(self):
-        """设置记忆系统"""
-        print("[初始化] 设置记忆系统...")
-
-        # 尝试导入向量记忆系统
-        try:
-            from vector_memory import VectorMemory
-            self.vector_memory = VectorMemory()
-            print("[初始化] 向量记忆系统已加载")
-        except ImportError:
-            print("[警告] 向量记忆系统未找到，将使用简单记忆模式")
-            self.vector_memory = None
-        except Exception as e:
-            print(f"[错误] 初始化向量记忆系统失败: {e}")
-            self.vector_memory = None
-
     def _setup_timers(self):
         """设置定时器"""
         print("[初始化] 设置定时器...")
@@ -181,6 +137,16 @@ class MCPAICaller(QMainWindow):
         self.auto_record_timer = QTimer(self)
         self.auto_record_timer.timeout.connect(self.auto_record_game_state)
         self.auto_record_timer.start(30000)  # 30秒
+
+        # 设置定时器，每1秒自动截图并调用VLM
+        self.auto_screenshot_timer = QTimer(self)
+        self.auto_screenshot_timer.timeout.connect(self.auto_screenshot_and_vlm)
+        self.auto_screenshot_timer.start(1000)  # 1秒
+
+        # 存储VLM回复的列表
+        self.vlm_responses = []
+        # 最大存储的VLM回复数量
+        self.max_vlm_responses = 3
 
     def _setup_window(self):
         """设置窗口属性"""
@@ -191,28 +157,8 @@ class MCPAICaller(QMainWindow):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         # 主窗口放在屏幕中间偏上的位置，避免与游戏UI重叠
         self.setGeometry(800, 100, 300, 180)  # 增加高度以容纳输入栏
-        self.min_height = 180  # 增加最小高度
+        self.min_height = 180
         self.max_height = 500
-
-    def _setup_monitoring_windows(self):
-        """设置监控显示窗口（吐槽窗口和记忆窗口）"""
-        print("[初始化] 设置监控窗口...")
-
-        # 创建吐槽窗口
-        self.commentary_window = MonitoringWindow("吐槽窗口", "commentary")
-        # 吐槽窗口放在屏幕中间偏左的位置，避免与游戏UI重叠
-        self.commentary_window.setGeometry(300, 100, 500, 200)
-        self.commentary_window.show()  # 初始显示
-
-        # 创建记忆窗口 (如果可用)
-        if MemoryWindow is not None:
-            self.memory_window = MemoryWindow()
-            # 记忆窗口放在屏幕中间偏下的位置，变小一点，避免与游戏UI重叠
-            self.memory_window.setGeometry(300, 350, 800, 180)
-            self.memory_window.show()  # 初始显示
-        else:
-            self.memory_window = None
-            print("[警告] 记忆窗口不可用")
 
     def _initialize_services(self):
         """初始化LLM和VLM服务"""
@@ -250,22 +196,6 @@ class MCPAICaller(QMainWindow):
         # 启动时自动加载工具
         self.tools_loaded_once = False
 
-    def _setup_knowledge_base(self):
-        """设置知识库"""
-        print("[初始化] 设置知识库...")
-
-        # 尝试导入知识库
-        try:
-            from knowledge_base import KnowledgeBase
-            self.knowledge_base = KnowledgeBase()
-            print("[初始化] 知识库已加载")
-        except ImportError:
-            print("[警告] 知识库未找到，将使用简单模式")
-            self.knowledge_base = None
-        except Exception as e:
-            print(f"[错误] 初始化知识库失败: {e}")
-            self.knowledge_base = None
-
     def _setup_ui(self):
         """设置UI"""
         print("[初始化] 设置UI...")
@@ -280,7 +210,16 @@ class MCPAICaller(QMainWindow):
         self.caption_display.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.caption_display.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.caption_display.setStyleSheet(
-            "QTextEdit { background-color: transparent; color: #ff0000; font-size: 20px; padding: 10px; }"
+            """
+            QTextEdit {
+                background-color: transparent;
+                color: #ff0000;
+                font-size: 28px;
+                font-weight: 900;
+                font-family: 'Arial Black', 'Impact', 'Microsoft YaHei', sans-serif;
+                padding: 10px;
+            }
+            """
         )
         main_layout.addWidget(self.caption_display)
 
@@ -308,21 +247,21 @@ class MCPAICaller(QMainWindow):
         self.input_line.setPlaceholderText("输入命令，例如：/h 打开工具窗口")
         self.input_line.setFixedHeight(30)
         self.input_line.setStyleSheet(
-            "QLineEdit { background-color: rgba(30, 30, 30, 200); color: white; font-size: 14px; padding: 5px; border: 1px solid rgba(100, 100, 100, 150); border-radius: 4px; }"
+            "QLineEdit { background-color: white; color: black; font-size: 14px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; }"
         )
         self.input_line.returnPressed.connect(self.on_input_submitted)
         input_layout.addWidget(self.input_line)
 
         self.input_window.setLayout(input_layout)
 
-        # 设置输入窗口在屏幕左下角（任务栏上方）
+        # 设置输入窗口在屏幕左下角（x偏移200px，y离底部10px）
         screen = QApplication.primaryScreen()
-        screen_geometry = screen.availableGeometry()
+        screen_geometry = screen.geometry()
         input_window_width = 300
         input_window_height = 40
         self.input_window.setGeometry(
-            screen_geometry.left() + 10,  # 左边距 10px
-            screen_geometry.bottom() - input_window_height - 10,  # 距离底部 10px
+            screen_geometry.left() + 10 + 200,  # 左边距 10px，再向右偏移 200px
+            screen_geometry.bottom() - input_window_height -2,  # 距离底部 10px
             input_window_width,
             input_window_height
         )
@@ -367,15 +306,11 @@ class MCPAICaller(QMainWindow):
                 callback_analysis=self._on_self_monitoring_analysis,
                 callback_commentary=self._on_self_monitoring_commentary,
                 verbose=True,  # 输出详细日志以便调试
-                enable_memory=True,  # 启用向量记忆系统
-                enable_memory_retrieval=True,  # 启用记忆检索功能
-                callback_memory_retrieved=self._on_memory_retrieved,  # 记忆检索回调
-                callback_memory_saved=self._on_memory_saved,  # 记忆保存回调
                 callback_hide_windows=self._hide_windows,  # 截图前隐藏窗口回调
                 callback_show_windows=self._show_windows,  # 截图后显示窗口回调
-                blocked_windows=["MCP AI Caller", "吐槽窗口", "记忆窗口", "任务管理器", "资源管理器", "命令提示符", "PowerShell"],  # 要屏蔽的窗口
+                blocked_windows=["MCP AI Caller", "任务管理器", "资源管理器", "命令提示符", "PowerShell"],  # 要屏蔽的窗口
             )
-            print("[自我监控] 线程已创建（未启动，已启用向量记忆系统和记忆检索功能）")
+            print("[自我监控] 线程已创建")
 
             # 启动自我监控线程
             self.self_monitoring_thread.start_monitoring()
@@ -452,22 +387,6 @@ class MCPAICaller(QMainWindow):
         except Exception as e:
             print(f"[错误] 打开工具窗口失败: {e}")
 
-    def open_memory_window(self):
-        """打开记忆窗口"""
-        if self.memory_window:
-            self.memory_window.show()
-            self.memory_window.raise_()
-        else:
-            QMessageBox.information(self, "提示", "记忆窗口不可用")
-
-    def open_commentary_window(self):
-        """打开吐槽窗口"""
-        if self.commentary_window:
-            self.commentary_window.show()
-            self.commentary_window.raise_()
-        else:
-            QMessageBox.information(self, "提示", "吐槽窗口不可用")
-
     def add_caption_line(self, text):
         """添加字幕行"""
         try:
@@ -509,7 +428,7 @@ class MCPAICaller(QMainWindow):
         """VLM结果回调"""
         print(f"[VLM] 分析结果: {result}")
         # 直接设置文本，避免add_caption_line的定时器问题
-        self.caption_display.setPlainText(f"[分析] {result}")
+        self.caption_display.setPlainText(f" {result}")
         # 设置定时器，10秒后清空字幕
         self.caption_timer = QTimer(self)
         self.caption_timer.setSingleShot(True)
@@ -545,59 +464,6 @@ class MCPAICaller(QMainWindow):
                 # 打开工具窗口显示工具列表
                 self.open_tools_window()
                 self.add_caption_line(f"[命令] 打开工具窗口")
-            elif command == 'showmemory':
-                # 显示数据库中的记忆
-                if hasattr(self, 'vector_memory') and self.vector_memory:
-                    stats = self.vector_memory.get_stats()
-                    memories = self.vector_memory.get_all_memories()
-                    memory_info = f"数据库统计:\n"
-                    memory_info += f"总记忆数: {stats.get('total_memories', 0)}\n"
-                    memory_info += f"使用模型: {stats.get('model', '未知')}\n"
-                    memory_info += f"版本: {stats.get('version', '未知')}\n\n"
-                    memory_info += "最近记忆:\n"
-
-                    for i, mem in enumerate(memories[:5]):  # 显示最近5组记忆
-                        # 检查是否为分组后的记忆
-                        if 'main' in mem:
-                            # 新格式：分组记忆
-                            main_mem = mem['main']
-                            memory_info += f"\n[{i+1}] 主记忆 (时间: {main_mem['metadata'].get('datetime', '未知')})\n"
-                            memory_info += f"    VLM分析: {main_mem['document'][:100]}...\n"
-
-                            # 显示吐槽（由VLM生成）
-                            commentary_id = main_mem['id'].replace('mem_', 'roast_')
-                            related_commentary = [m for m in memories if 'id' in m and m['id'] == commentary_id]
-                            if related_commentary:
-                                memory_info += f"    吐槽: {related_commentary[0]['document'][:100]}...\n"
-
-                            # 显示用户输入
-                            if mem['user_inputs']:
-                                memory_info += f"    用户输入 ({len(mem['user_inputs'])}条):\n"
-                                for idx, user_input in enumerate(mem['user_inputs'][:3]):  # 最多显示3条
-                                    memory_info += f"      - {user_input['document'][:80]}...\n"
-
-                            # 显示VLM分析历史
-                            if mem['vlm_analyses']:
-                                memory_info += f"    VLM分析历史 ({len(mem['vlm_analyses'])}条):\n"
-                                for idx, vlm_analysis in enumerate(mem['vlm_analyses'][:3]):  # 最多显示3条
-                                    memory_info += f"      - {vlm_analysis['document'][:80]}...\n"
-                        else:
-                            # 旧格式：简单记忆
-                            memory_info += f"\n[{i+1}] 记忆 (时间: {mem['metadata'].get('datetime', '未知')})\n"
-                            memory_info += f"    类型: {mem.get('type', 'unknown')}\n"
-                            memory_info += f"    内容: {mem['document'][:100]}...\n"
-
-                    QMessageBox.information(self, "数据库记忆", memory_info)
-                else:
-                    QMessageBox.information(self, "提示", "向量记忆系统不可用")
-                self.add_caption_line(f"[命令] 显示数据库记忆")
-            elif command == 'clearmemory':
-                # 清空数据库
-                if hasattr(self, 'vector_memory') and self.vector_memory:
-                    self.vector_memory.clear_all()
-                    self.add_caption_line(f"[命令] 数据库已清空")
-                else:
-                    self.add_caption_line(f"[命令] 向量记忆系统不可用，无法清空数据库")
             elif command.startswith('r '):
                 # /r 命令：直接发送给 LLM 执行（支持 function calling）
                 query = command[2:].strip()
@@ -1061,6 +927,111 @@ class MCPAICaller(QMainWindow):
         # 这里可以添加自动记录游戏状态的逻辑
         # 例如，使用VLM分析当前屏幕，记录游戏状态
 
+    def auto_screenshot_and_vlm(self):
+        """每1秒自动截图并调用VLM"""
+        try:
+            # 导入截图模块
+            from PIL import ImageGrab
+
+            # 隐藏窗口以便截图
+            self._hide_windows()
+
+            # 截图当前屏幕
+            screenshot = ImageGrab.grab()
+
+            # 显示窗口
+            self._show_windows()
+
+            # 将截图保存到临时文件
+            import tempfile
+            import os
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
+                screenshot.save(tmp_file, format='PNG')
+                temp_image_path = tmp_file.name
+
+            print(f"[自动截图] 已保存截图: {temp_image_path}")
+
+            # 调用VLM分析截图
+            self.analyze_screenshot_with_vlm(temp_image_path)
+
+            # 删除临时文件
+            os.unlink(temp_image_path)
+
+        except Exception as e:
+            print(f"[错误] 自动截图失败: {e}")
+
+    def analyze_screenshot_with_vlm(self, image_path):
+        """使用VLM分析截图"""
+        try:
+            print(f"[VLM分析] 开始分析截图...")
+
+            # 构建messages格式，用于VLM服务
+            messages = [
+                {
+                    'role': 'system',
+                    'content': '你是一个智能助手，分析当前屏幕截图并描述画面内容'
+                },
+                {
+                    'role': 'user',
+                    'content': '请分析当前屏幕截图，描述画面中的内容'
+                }
+            ]
+
+            # 调用VLM服务
+            response = self.vlm_service.create_with_image(messages, image_source=image_path)
+
+            if response:
+                # 提取回复内容
+                content = response['choices'][0]['message']['content']
+                print(f"[VLM分析] 分析结果: {content[:50]}...")
+
+                # 存储VLM回复
+                self.vlm_responses.append(content)
+                
+                # 保持回复列表长度不超过最大限制
+                if len(self.vlm_responses) > self.max_vlm_responses:
+                    self.vlm_responses.pop(0)
+
+                print(f"[VLM分析] 已存储 {len(self.vlm_responses)}/{self.max_vlm_responses} 个回复")
+
+                # 当收集到3个回复时，发送给角色扮演VLM
+                if len(self.vlm_responses) == self.max_vlm_responses:
+                    self.send_to_role_play_vlm()
+
+        except Exception as e:
+            print(f"[错误] VLM分析失败: {e}")
+
+    def send_to_role_play_vlm(self):
+        """将收集到的VLM回复发送给角色扮演VLM"""
+        try:
+            print("[角色扮演] 开始角色扮演分析...")
+
+            # 构建messages格式，用于角色扮演VLM
+            messages = [
+                {
+                    'role': 'system',
+                    'content': '你是一个角色扮演助手，根据提供的屏幕分析结果，生成符合游戏角色的回应'
+                },
+                {
+                    'role': 'user',
+                    'content': f"请根据以下屏幕分析结果，生成符合游戏角色的回应:\n{chr(10).join(self.vlm_responses)}"
+                }
+            ]
+
+            # 调用VLM服务
+            response = self.vlm_service.create_with_image(messages, image_source=None)
+
+            if response:
+                # 提取回复内容
+                content = response['choices'][0]['message']['content']
+                print(f"[角色扮演] 生成回应: {content[:50]}...")
+
+                # 显示在主窗口中
+                self.add_caption_line(f"[角色] {content}")
+
+        except Exception as e:
+            print(f"[错误] 角色扮演分析失败: {e}")
+
     def _on_self_monitoring_analysis(self, analysis: str):
         """
         自我监控VLM分析结果回调 - 显示在主窗口字幕区
@@ -1074,46 +1045,14 @@ class MCPAICaller(QMainWindow):
 
     def _on_self_monitoring_commentary(self, commentary: str):
         """
-        自我监控吐槽结果回调 - 显示在吐槽窗口
+        自我监控吐槽结果回调 - 显示在主窗口字幕区
 
         Args:
             commentary: 吐槽文本
         """
-        # 添加到吐槽窗口
-        try:
-            # 添加文本（add_text 方法会通过信号机制安全地显示窗口）
-            self.commentary_window.add_text(f"{commentary}")
-            print(f"[回调] 吐槽已添加到吐槽窗口: {commentary[:30]}...")
-        except Exception as e:
-            print(f"[错误] 添加吐槽到窗口失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def _on_memory_retrieved(self, query_type: str, query_text: str, results: List):
-        """
-        系统监控回调 - 显示在监控窗口
-
-        Args:
-            query_type: 检索类型（用户输入/VLM分析/联合查询）
-            query_text: 查询文本
-            results: 检索结果
-        """
-        if hasattr(self, 'memory_window') and self.memory_window:
-            # 显示检索到的记忆（log_retrieved_memory 方法会通过信号机制安全地显示窗口）
-            self.memory_window.log_retrieved_memory(query_type, query_text, results)
-
-    def _on_memory_saved(self, memory_id: str, vlm_analysis: str, llm_commentary: str):
-        """
-        系统监控回调 - 显示在监控窗口
-
-        Args:
-            memory_id: 记忆ID
-            vlm_analysis: VLM分析结果
-            llm_commentary: 吐槽内容（由VLM生成）
-        """
-        if hasattr(self, 'memory_window') and self.memory_window:
-            # 由于我们已经禁用了记忆保存，这里不再记录
-            pass
+        # 使用信号在主线程中添加到字幕区
+        self.vlm_result_ready.emit(f"[吐槽] {commentary}")
+        print(f"[回调] 吐槽: {commentary[:30]}...")
 
     def _hide_windows(self):
         """
@@ -1128,16 +1067,6 @@ class MCPAICaller(QMainWindow):
             # 隐藏输入窗口
             if hasattr(self, 'input_window') and self.input_window:
                 self.input_window.hide()
-            # 设置吐槽窗口透明度为0
-            if hasattr(self, 'commentary_window') and self.commentary_window:
-                self.commentary_window.setWindowOpacity(0)
-                # 清空吐槽窗口内容
-                self.commentary_window.clear_text()
-            # 设置记忆窗口透明度为0
-            if hasattr(self, 'memory_window') and self.memory_window:
-                self.memory_window.setWindowOpacity(0)
-                # 清空记忆窗口内容
-                self.memory_window.clear_monitoring()
 
         # 在主线程中执行
         QTimer.singleShot(0, hide_windows_safe)
@@ -1153,12 +1082,6 @@ class MCPAICaller(QMainWindow):
             # 显示输入窗口
             if hasattr(self, 'input_window') and self.input_window:
                 self.input_window.show()
-            # 设置吐槽窗口透明度为1
-            if hasattr(self, 'commentary_window') and self.commentary_window:
-                self.commentary_window.setWindowOpacity(1)
-            # 设置记忆窗口透明度为1
-            if hasattr(self, 'memory_window') and self.memory_window:
-                self.memory_window.setWindowOpacity(1)
 
         # 在主线程中执行
         QTimer.singleShot(0, show_windows_safe)
