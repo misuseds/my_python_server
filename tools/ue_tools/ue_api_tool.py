@@ -9,17 +9,15 @@ import json
 import shutil
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
-
-mcp = FastMCP("ue_tool")
 
 def log(message=""):
-    """禁用日志输出，避免干扰 MCP 的 JSON-RPC 通信"""
-    # 完全禁用日志输出，不执行任何操作
-    pass
+    """日志输出"""
+    print(message)
+
+
 def activate_ue_window():
     """
-    激活ue窗口（精确匹配窗口标题），如果没有运行则启动ue
+    激活UE窗口（精确匹配窗口标题），如果没有运行则启动UE
     """
     try:
         import pygetwindow as gw
@@ -67,17 +65,18 @@ def activate_ue_window():
                 if hasattr(ue_window, 'isMinimized') and ue_window.isMinimized:
                     ue_window.restore()
                 ue_window.activate()
-                log("ue窗口已激活（使用pygetwindow方法）")
+                log("UE窗口已激活（使用pygetwindow方法）")
                 return True
         else:
-            log("未找到ue窗口，正在启动ue...")
-            # 启动ue
+            log("未找到UE窗口，正在启动UE...")
+            # 启动UE
             start_ue()
             return False
 
     except Exception as e:
-        log(f"激活ue窗口时出错: {e}")
+        log(f"激活UE窗口时出错: {e}")
         return False
+
 
 def send_python_code_request(code=None, host="localhost", port=8070):
     """
@@ -107,6 +106,7 @@ def send_python_code_request(code=None, host="localhost", port=8070):
     except Exception as e:
         log(f"发送请求时出错: {str(e)}")
         return {"status": "error", "message": str(e)}
+
 
 def send_fbx_import_request(host="localhost", port=8070):
     """
@@ -168,6 +168,7 @@ result
 """
     return send_python_code_request(code, host, port)
 
+
 def delete_materials_in_folder():
     """
     删除指定文件夹中的材质文件
@@ -208,6 +209,7 @@ print(f"共删除 {len(deleted)} 个材质资产。")
 
 """
     return send_python_code_request(code)
+
 
 def move_and_rename_skeleton():
     """
@@ -275,6 +277,7 @@ else:
 '''
     return send_python_code_request(code)
 
+
 def create_material_instances_from_textures():
     """
     从纹理文件夹中的纹理创建材质实例，绑定到指定的主材质
@@ -333,14 +336,14 @@ for texture in texture_assets:
     parameter_info.name = base_color_param_name
  
     # 用MaterialEditingLibrary接口设置参数更安全
-    unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(mi, parameter_info.name, texture)
- 
+    unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value(mi, parameter_info.name, texture) 
     unreal.EditorAssetLibrary.save_asset(instance_path)
     unreal.log(f"已创建材质实例: {instance_path}，BaseColor设置为纹理: {texture.get_path_name()}")
  
 unreal.log(f"共创建 {len(texture_assets)} 个材质实例，路径: {materials_folder}")
 '''
     return send_python_code_request(code)
+
 
 def move_textures_to_folder():
     """
@@ -405,7 +408,7 @@ print(f"共移动 {moved_count} 个纹理资产到 {textures_folder}。")
 """
     return send_python_code_request(code)
 
-@mcp.tool()
+
 def import_fbx():
     """
     执行完整的FBX导入工作流并返回每个步骤的结果
@@ -444,30 +447,30 @@ def import_fbx():
         "results": results
     }
 
-@mcp.tool()
+
 def start_ue():
     """
-    启动ue（在后台进程启动，不阻塞当前线程）
+    启动UE（在后台进程启动，不阻塞当前线程）
     """
     ue_path = r"D:\UE_4.26\Engine\Binaries\Win64\UE4Editor.exe"
 
     if not os.path.exists(ue_path):
-        log(f"错误: 找不到ue可执行文件: {ue_path}")
+        log(f"错误: 找不到UE可执行文件: {ue_path}")
         return False
 
     try:
-        # 使用CREATE_NEW_CONSOLE标志启动ue，使其在独立的进程中运行
+        # 使用CREATE_NEW_CONSOLE标志启动UE，使其在独立的进程中运行
         subprocess.Popen([ue_path],
                         creationflags=subprocess.CREATE_NEW_CONSOLE | subprocess.DETACHED_PROCESS)
-        log(f"ue已在后台启动: {ue_path}")
+        log(f"UE已在后台启动: {ue_path}")
 
         time.sleep(2)  # 短暂延迟确保进程已开始启动
         return True
     except Exception as e:
-        log(f"启动ue时出错: {e}")
+        log(f"启动UE时出错: {e}")
         return False
 
-@mcp.tool()
+
 def build_sifu_mod():
     """
     执行Sifu MOD构建流程
@@ -579,56 +582,16 @@ def build_sifu_mod():
     if pak_file.exists():
         log(" .pak 文件已生成：")
         log(f"  {pak_file}")
+        return {"status": "success", "message": f"PAK文件已生成: {pak_file}"}
     else:
         log(" 打包失败：未生成 .pak 文件！")
         return {"status": "error", "message": "打包失败：未生成 .pak 文件"}
 
-    log()
 
-    # ================ 第四步：将 .pak 文件复制到游戏 MOD 目录 ================
-    target_mod_dir = Path(r"G:\Sifu\Sifu\Content\Paks\~mods")
-    target_pak = target_mod_dir / f"{pak_folder.name}.pak"
-
-    # 如果 ~mods 目录不存在，则创建它
-    target_mod_dir.mkdir(parents=True, exist_ok=True)
-    log(" MOD 目录已准备：")
-    log(f"  {target_mod_dir}")
-
-    try:
-        shutil.copy2(pak_file, target_pak)
-        log(" 已替换 MOD 文件到：")
-        log(f"  {target_pak}")
-    except Exception as e:
-        log(f" 复制 MOD 文件失败：{e}")
-        return {"status": "error", "message": f"复制 MOD 文件失败: {e}"}
-    try:
-        shutil.copy2(pak_file, target_pak)
-        log(" 已替换 MOD 文件到：")
-        log(f"  {target_pak}")
-    except Exception as e:
-        log(f" 复制 MOD 文件失败：{e}")
-        return {"status": "error", "message": f"复制 MOD 文件失败: {e}"}
-
-    # ================ 第五步：处理签名文件 ================
-    sig_filename = f"{pak_folder.name}.sig"
-    target_sig_path = target_mod_dir / sig_filename
-    source_sig_path = Path(r"G:\Sifu\Sifu\Content\Paks\pakchunk0-WindowsNoEditor.sig")
-
-    if not target_sig_path.exists():
-        if source_sig_path.exists():
-            try:
-                shutil.copy2(source_sig_path, target_sig_path)
-                log(" 已复制签名文件到：")
-                log(f"  {target_sig_path}")
-            except Exception as e:
-                log(f" 复制签名文件失败：{e}")
-                # 这里不返回错误，因为签名文件可能不是必需的
-        else:
-            log(f" 源签名文件不存在：{source_sig_path}")
-    else:
-        log(f" 签名文件已存在：{target_sig_path}")
-
-    return {"status": "success", "result": "MOD build completed and game launched"}
-
-if __name__ == "__main__":
-     mcp.run()
+if __name__ == '__main__':
+    print("UE API工具模块")
+    print("可用函数：")
+    print("  - activate_ue_window()")
+    print("  - import_fbx()")
+    print("  - start_ue()")
+    print("  - build_sifu_mod()")

@@ -6,10 +6,6 @@ import subprocess
 import platform
 
 
-from mcp.server.fastmcp import FastMCP
- 
-mcp = FastMCP("blender_tool")
-
 def call_blender_api(endpoint, code):
     """
     调用Blender API执行代码
@@ -31,6 +27,8 @@ def call_blender_api(endpoint, code):
     except Exception as e:
         print(f"未知错误: {e}")
         return {"status": "error", "message": str(e)}
+
+
 def start_blender():
     """
     在完全独立的进程中启动Blender
@@ -78,7 +76,7 @@ def start_blender():
         print(f"详细错误信息: {traceback.format_exc()}")
         return False
 
-@mcp.tool()
+
 def activate_blender_window():
     """
     激活Blender窗口（精确匹配窗口标题），如果没有运行则启动Blender
@@ -130,16 +128,14 @@ def activate_blender_window():
         else:
             print("未找到Blender窗口，正在启动Blender...")
             # 启动Blender
-            
-            return start_blender()
+            start_blender()
+            return False
 
     except Exception as e:
         print(f"激活Blender窗口时出错: {e}")
         return False
 
 
-
-@mcp.tool()
 def fix_model():
     """执行 Fix Model 操作"""
     code = '''
@@ -151,7 +147,6 @@ bpy.ops.cats_armature.fix()
     return call_blender_api('/api/exec', code)
 
 
-@mcp.tool()
 def import_pmx_file():
     """导入PMX文件"""
     code = '''
@@ -167,7 +162,7 @@ open_pmx_file_selector()
     '''
     return call_blender_api('/api/exec', code)
 
-@mcp.tool()
+
 def delete_all_objects():
     """删除所有对象和集合"""
     code = '''
@@ -194,7 +189,8 @@ for collection in collections_to_remove:
 print("所有对象和集合已删除")
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def parent_object_to_armature():
     """
     将选中的对象设置为骨骼绑定父级
@@ -211,7 +207,8 @@ else:
     print("错误: 请先选择要绑定的对象")
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def set_blender_scale_settings():
     """
     设置Blender场景的单位比例和当前对象的缩放
@@ -244,7 +241,8 @@ except Exception as e:
 print("Blender缩放设置已应用")
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def delete_objects_by_name(name_pattern):
     """
     删除名称包含指定模式的物体
@@ -271,7 +269,8 @@ for obj in objects_to_delete:
 print("已删除 "+str(deleted_count)+f"个包含 '{name_pattern}' 的物体")
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def clear_parent_keep_transform():
     """
     清除选中对象的父级关系，但保持变换（位置、旋转、缩放）
@@ -288,7 +287,8 @@ else:
     print("错误: 请先选择要清除父级的对象")
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def apply_armature_pose():
     """
     切换到姿态模式并应用选中的骨架
@@ -327,7 +327,8 @@ else:
     bpy.ops.object.posemode_toggle()
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def scale_objects_to_match_height():
     """
     将所有不包含"ObjectName"的物体缩放到与ObjectName物体相同的高度（三轴等比例缩放）
@@ -429,9 +430,10 @@ else:
     print(f"所有物体已缩放至与ObjectName物体相同的尺寸比例: {round(target_max_dimension, 6)}")
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def import_psk_file():
-    """导入PSK文件（外部选择文件路径）"""
+    """导入PSK文件（外部选择文件路径）"""   
    
     import tkinter as tk
     from tkinter import filedialog
@@ -473,7 +475,8 @@ result = import_psk(psk, bpy.context, options)
     else:
         print("未选择有效的PSK文件")
         return {"status": "error", "message": "未选择有效的PSK文件"}
-@mcp.tool()
+
+
 def parent_object_to_bone():
     """
     将选中的对象设置为骨骼父级
@@ -490,7 +493,8 @@ else:
     print("错误: 请先选择要绑定的对象并确保有一个活动对象")
 '''
     return call_blender_api('/api/exec', code)
-@mcp.tool()
+
+
 def add_data_transfer_modifier():
     """
     添加数据传输修改器并配置顶点组权重传输
@@ -520,4 +524,18 @@ else:
 
 
 if __name__ == "__main__":
-     mcp.run()
+    print("Blender API工具模块")
+    print("可用函数：")
+    print("  - activate_blender_window()")
+    print("  - delete_all_objects()")
+    print("  - fix_model()")
+    print("  - import_pmx_file()")
+    print("  - import_psk_file()")
+    print("  - parent_object_to_armature()")
+    print("  - set_blender_scale_settings()")
+    print("  - delete_objects_by_name()")
+    print("  - clear_parent_keep_transform()")
+    print("  - apply_armature_pose()")
+    print("  - scale_objects_to_match_height()")
+    print("  - parent_object_to_bone()")
+    print("  - add_data_transfer_modifier()")

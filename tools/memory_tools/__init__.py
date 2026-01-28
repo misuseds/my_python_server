@@ -8,10 +8,9 @@ import sys
 import os
 
 # 添加memory目录到路径
-current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-memory_dir = os.path.join(current_dir, "memory")
-if memory_dir not in sys.path:
-    sys.path.insert(0, memory_dir)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 # 导入memory管理器
 from memory_manager import MemoryManager

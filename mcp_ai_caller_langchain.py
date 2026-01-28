@@ -159,11 +159,33 @@ class MCPAICallerLangChain:
         """
         print("[初始化] 初始化工具...")
         
-        # 从tools/memory_tools导入工具
+        # 导入所有工具
         from tools.memory_tools import search_memory, write_memory, get_memory_stats
+        from tools.web_tools import (
+            open_webpage, ocr_recognize, click_position, scroll_down, 
+            yolo_detect, check_download_bar, wait_for_download
+        )
+        from tools.blender_tools import (
+            activate_blender_window, delete_all_objects, import_pmx, fix_model,
+            set_scale, import_psk, scale_to_object_name, set_parent_bone,
+            switch_pose_mode, add_vertex_group_transfer, delete_object, open_blender_folder
+        )
+        from tools.ue_tools import activate_ue_window, import_fbx, build_sifu_mod
         
-        # 将工具添加到列表
-        self.tools = [search_memory, write_memory, get_memory_stats]
+        # 将所有工具添加到列表
+        self.tools = [
+            # Memory工具
+            search_memory, write_memory, get_memory_stats,
+            # Web工具
+            open_webpage, ocr_recognize, click_position, scroll_down,
+            yolo_detect, check_download_bar, wait_for_download,
+            # Blender工具
+            activate_blender_window, delete_all_objects, import_pmx, fix_model,
+            set_scale, import_psk, scale_to_object_name, set_parent_bone,
+            switch_pose_mode, add_vertex_group_transfer, delete_object, open_blender_folder,
+            # UE工具
+            activate_ue_window, import_fbx, build_sifu_mod
+        ]
         print(f"[初始化] 成功创建 {len(self.tools)} 个工具")
 
     def process_user_input(self, input_text: str):
