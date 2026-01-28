@@ -159,19 +159,11 @@ class MCPAICallerLangChain:
         """
         print("[初始化] 初始化工具...")
         
-        # 使用@tool装饰器创建工具
-        @tool
-        def search_memory(query: str) -> str:
-            """搜索记忆文档"""
-            return f"搜索记忆: {query}"
-        
-        @tool
-        def write_memory(content: str) -> str:
-            """写入记忆文档"""
-            return f"写入记忆: {content}"
+        # 从tools/memory_tools导入工具
+        from tools.memory_tools import search_memory, write_memory, get_memory_stats
         
         # 将工具添加到列表
-        self.tools = [search_memory, write_memory]
+        self.tools = [search_memory, write_memory, get_memory_stats]
         print(f"[初始化] 成功创建 {len(self.tools)} 个工具")
 
     def process_user_input(self, input_text: str):
